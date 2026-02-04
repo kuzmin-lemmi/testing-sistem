@@ -1,0 +1,969 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Создать вариант - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="variant-create-page">
+    <div class="page-header">
+        <h1>➕ Создать вариант</h1>
+        <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">← Назад к списку</a>
+    </div>
+    
+    <div class="create-steps">
+        <!-- Шаг 1: Выбор типа -->
+        <div class="step-card card" id="step1">
+            <h2>1️⃣ Выберите тип варианта</h2>
+            <div class="type-options">
+                <label class="type-option">
+                    <input type="radio" name="variant_type" value="upload" onchange="updateType()">
+                    <div class="type-content">
+                        <div class="type-icon">📤</div>
+                        <div class="type-info">
+                            <h3>Загрузить готовый вариант</h3>
+                            <p>Загрузить скриншоты задач и создать вариант</p>
+                        </div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="variant_type" value="thematic" checked onchange="updateType()">
+                    <div class="type-content">
+                        <div class="type-icon">📝</div>
+                        <div class="type-info">
+                            <h3>Тематический вариант</h3>
+                            <p>Задачи только из одного номера ЕГЭ</p>
+                        </div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="variant_type" value="mixed" onchange="updateType()">
+                    <div class="type-content">
+                        <div class="type-icon">🎨</div>
+                        <div class="type-info">
+                            <h3>Смешанный вариант</h3>
+                            <p>Задачи из выбранных номеров ЕГЭ</p>
+                        </div>
+                    </div>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="variant_type" value="full" onchange="updateType()">
+                    <div class="type-content">
+                        <div class="type-icon">🎯</div>
+                        <div class="type-info">
+                            <h3>Полный вариант ЕГЭ</h3>
+                            <p>По одной задаче из каждого номера (1-27)</p>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Загрузка готового варианта -->
+        <div class="step-card card" id="uploadSettings" style="display: none;">
+            <h2>📤 Загрузка готового варианта</h2>
+            <p class="hint-text">Загрузите скриншоты заданий, укажите номера ЕГЭ и ответы. Задачи будут добавлены в банк и объединены в вариант.</p>
+            
+            <form action="{{ url_for('variant_upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+                <div class="form-group">
+                    <label for="uploadName">Название варианта</label>
+                    <input type="text" name="name" id="uploadName" placeholder="Например: Вариант СтатГрад от 20.01.2026" required>
+                </div>
+                
+                <div class="dropzone-upload" id="dropzoneUpload">
+                    <div class="dropzone-content">
+                        <span class="dropzone-icon">📁</span>
+                        <p>Перетащите PNG-файлы сюда</p>
+                        <p class="dropzone-hint">или нажмите для выбора (можно выбрать несколько)</p>
+                    </div>
+                    <input type="file" name="images" id="imagesInput" accept=".png,.jpg,.jpeg" multiple>
+                </div>
+                
+                <div id="tasksTable" style="display: none;">
+                    <h3>📋 Загруженные задания (<span id="tasksCount">0</span>)</h3>
+                    <div class="tasks-edit-list" id="tasksList">
+                        <!-- Задачи добавляются через JS -->
+                    </div>
+                </div>
+                
+                <div class="form-actions" id="uploadActions" style="display: none;">
+                    <button type="submit" class="btn btn-primary btn-large">
+                        ✨ Создать вариант и добавить в банк
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearUpload()">Очистить</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Шаг 2: Настройки -->
+        <div class="step-card card" id="step2">
+            <h2>2️⃣ Настройки варианта</h2>
+            
+            <form action="{{ url_for('variant_create') }}" method="POST" id="variantForm" novalidate>
+                <input type="hidden" name="variant_type" id="hiddenType" value="thematic">
+                
+                <div class="form-group">
+                    <label for="name">Название варианта</label>
+                    <input type="text" name="name" id="name" placeholder="Например: Тренировка №1 или Контрольная 10А" required>
+                </div>
+                
+                <!-- Настройки для тематического варианта -->
+                <div id="thematicSettings">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ege_number">Номер ЕГЭ</label>
+                            <select name="ege_number" id="ege_number" onchange="updateTasksList()">
+                                {% for num in range(1, 28) %}
+                                <option value="{{ num }}" data-count="{{ task_counts.get(num, 0) }}">
+                                    №{{ num }} ({{ task_counts.get(num, 0) }} задач)
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="tasks_count">Количество задач</label>
+                            <input type="number" name="tasks_count" id="tasks_count" value="10" min="1" max="50">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Настройки для смешанного варианта -->
+                <div id="mixedSettings" style="display: none;">
+                    <div class="form-group">
+                        <label>Выберите номера ЕГЭ и количество задач из каждого</label>
+                        <p class="hint-text">Отметьте нужные номера и укажите сколько задач взять из каждого</p>
+                        <div class="mixed-selection">
+                            {% for num in range(1, 28) %}
+                            <div class="mixed-row">
+                                <label class="mixed-checkbox">
+                                    <input type="checkbox" name="mixed_ege_{{ num }}" value="{{ num }}" onchange="updateMixedTotal()">
+                                    <span class="ege-num">№{{ num }}</span>
+                                </label>
+                                <input type="number" name="mixed_count_{{ num }}" value="1" min="1" max="{{ task_counts.get(num, 0) }}" class="mixed-count" onchange="updateMixedTotal()">
+                                <span class="available-info">({{ task_counts.get(num, 0) }} доступно)</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mixed-total">
+                            Всего задач в варианте: <span id="mixedTotalCount">0</span>
+                        </div>
+                        <div class="mixed-presets">
+                            <span>Быстрый выбор:</span>
+                            <button type="button" class="btn btn-small btn-outline" onclick="selectMixedPreset([1,2,3,4,5,6,7,8])">№1-8</button>
+                            <button type="button" class="btn btn-small btn-outline" onclick="selectMixedPreset([1,3,5,7,12,14,16])">Лёгкие</button>
+                            <button type="button" class="btn btn-small btn-outline" onclick="selectMixedPreset([17,18,19,20,21,22,23,24,25,26,27])">№17-27</button>
+                            <button type="button" class="btn btn-small btn-outline" onclick="clearMixedSelection()">Очистить</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Режим генерации -->
+                <div class="form-group">
+                    <label>Способ выбора задач</label>
+                    <div class="mode-options">
+                        <label class="mode-option">
+                            <input type="radio" name="generation_mode" value="random" checked onchange="updateMode()">
+                            <span class="mode-label">🎲 Случайный выбор</span>
+                        </label>
+                        <label class="mode-option">
+                            <input type="radio" name="generation_mode" value="manual" onchange="updateMode()">
+                            <span class="mode-label">✋ Ручной выбор</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Ручной выбор задач (тематический) -->
+                <div id="manualThematicSelection" style="display: none;">
+                    <div class="form-group">
+                        <label>Выберите задачи</label>
+                        <div class="tasks-selection" id="tasksSelection">
+                            <!-- Задачи будут загружены через JS -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ручной выбор задач (полный вариант) -->
+                <div id="manualFullSelection" style="display: none;">
+                    <div class="form-group">
+                        <label>Выберите по одной задаче для каждого номера</label>
+                        <div class="full-variant-selection">
+                            {% for ege_num in range(1, 28) %}
+                            <div class="ege-row">
+                                <span class="ege-label">№{{ ege_num }}</span>
+                                <select name="task_ege_{{ ege_num }}" class="task-select">
+                                    <option value="">— Не выбрано —</option>
+                                    {% for task in all_tasks.get(ege_num, []) %}
+                                    <option value="{{ task.id }}">#{{ task.id }} (ответ: {{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %})</option>
+                                    {% endfor %}
+                                </select>
+                                <span class="available-count">{{ all_tasks.get(ege_num, [])|length }} доступно</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-error" id="variantFormError" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">✨ Создать вариант</button>
+                    <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.create-steps {
+    max-width: 800px;
+}
+
+.step-card {
+    margin-bottom: 24px;
+}
+
+.step-card h2 {
+    margin-bottom: 24px;
+    font-size: 1.3em;
+}
+
+.form-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.type-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.hint-text {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.mixed-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--bg-sidebar);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.mixed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: white;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+}
+
+.mixed-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.mixed-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.ege-num {
+    font-weight: 600;
+    color: var(--primary);
+    min-width: 35px;
+}
+
+.mixed-count {
+    width: 50px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.available-info {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.mixed-total {
+    font-size: 1.1em;
+    font-weight: 600;
+    padding: 12px 16px;
+    background: var(--primary-bg);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.mixed-total span {
+    color: var(--primary);
+    font-size: 1.3em;
+}
+
+.mixed-presets {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mixed-presets span {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Стили для загрузки готового варианта */
+.dropzone-upload {
+    border: 3px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 40px 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    margin-bottom: 24px;
+}
+
+.dropzone-upload:hover, .dropzone-upload.dragover {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.dropzone-upload input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.dropzone-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.dropzone-hint {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.tasks-edit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 16px;
+    margin-bottom: 24px;
+}
+
+.task-edit-item {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg-sidebar);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+}
+
+.task-edit-preview {
+    width: 120px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.task-edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.task-edit-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.task-edit-row label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.task-edit-row select,
+.task-edit-row input[type="number"],
+.task-edit-row input[type="text"] {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+}
+
+.task-edit-row select {
+    min-width: 100px;
+}
+
+.task-edit-row input[type="number"] {
+    width: 100px;
+}
+
+.task-edit-row input[type="file"] {
+    font-size: 13px;
+}
+
+.task-order {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1.2em;
+    min-width: 30px;
+}
+
+.btn-remove-task {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: none;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: auto;
+}
+
+.btn-remove-task:hover {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-large {
+    padding: 16px 32px;
+    font-size: 16px;
+}
+
+.type-option {
+    cursor: pointer;
+}
+
+.type-option input {
+    display: none;
+}
+
+.type-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: var(--transition);
+}
+
+.type-option input:checked + .type-content {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.type-icon {
+    font-size: 2.5em;
+}
+
+.type-info h3 {
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+.type-info p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.mode-options {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.mode-option {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mode-label {
+    padding: 10px 20px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    transition: var(--transition);
+}
+
+.mode-option input:checked + .mode-label {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+    color: var(--primary-dark);
+}
+
+.mode-option input {
+    display: none;
+}
+
+.tasks-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 700px;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--bg-sidebar);
+    border-radius: var(--radius);
+}
+
+.task-checkbox {
+    cursor: pointer;
+    display: block;
+    position: relative;
+}
+
+.task-checkbox input {
+    position: absolute;
+    top: 56px;
+    left: 18px;
+    width: 22px;
+    height: 22px;
+    z-index: 2;
+    accent-color: var(--primary);
+}
+
+.task-preview {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    background: white;
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.task-checkbox input:checked + .task-preview {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-bg);
+}
+
+.task-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-light);
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-height: 40px;
+}
+
+.task-preview-title {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.task-preview-image {
+    padding: 12px;
+    background: white;
+}
+
+.task-preview img {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.full-variant-selection {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--bg-sidebar);
+    border-radius: var(--radius);
+}
+
+.ege-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.ege-row:last-child {
+    border-bottom: none;
+}
+
+.ege-label {
+    font-weight: 700;
+    width: 50px;
+    color: var(--primary);
+}
+
+.task-select {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-family: inherit;
+}
+
+.available-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    width: 100px;
+    text-align: right;
+}
+</style>
+
+<script>
+const allTasks = {{ all_tasks | tojson }};
+const taskCounts = {{ task_counts | tojson }};
+const defaultAnswerCount = {{ default_answer_count | tojson if default_answer_count else '{}' }};
+
+// Файлы для загрузки
+let uploadedFiles = [];
+
+function updateType() {
+    const type = document.querySelector('input[name="variant_type"]:checked').value;
+    document.getElementById('hiddenType').value = type;
+    
+    const uploadSettings = document.getElementById('uploadSettings');
+    const step2 = document.getElementById('step2');
+    const thematicSettings = document.getElementById('thematicSettings');
+    const mixedSettings = document.getElementById('mixedSettings');
+    const manualFull = document.getElementById('manualFullSelection');
+    const manualThematic = document.getElementById('manualThematicSelection');
+    const modeOptions = document.querySelector('.mode-options')?.parentElement;
+    
+    // Скрыть все
+    uploadSettings.style.display = 'none';
+    step2.style.display = 'block';
+    thematicSettings.style.display = 'none';
+    mixedSettings.style.display = 'none';
+    manualFull.style.display = 'none';
+    manualThematic.style.display = 'none';
+    if (modeOptions) modeOptions.style.display = 'block';
+    
+    if (type === 'upload') {
+        uploadSettings.style.display = 'block';
+        step2.style.display = 'none';
+    } else if (type === 'thematic') {
+        thematicSettings.style.display = 'block';
+        updateMode();
+    } else if (type === 'mixed') {
+        mixedSettings.style.display = 'block';
+        if (modeOptions) modeOptions.style.display = 'none';
+    } else {
+        updateMode();
+    }
+}
+
+
+function updateMode() {
+    const type = document.querySelector('input[name="variant_type"]:checked').value;
+    const mode = document.querySelector('input[name="generation_mode"]:checked').value;
+    
+    const manualThematic = document.getElementById('manualThematicSelection');
+    const manualFull = document.getElementById('manualFullSelection');
+    
+    if (mode === 'manual') {
+        if (type === 'thematic') {
+            manualThematic.style.display = 'block';
+            manualFull.style.display = 'none';
+            updateTasksList();
+        } else if (type === 'full') {
+            manualThematic.style.display = 'none';
+            manualFull.style.display = 'block';
+        }
+    } else {
+        manualThematic.style.display = 'none';
+        manualFull.style.display = 'none';
+    }
+}
+
+function updateTasksList() {
+    const egeNumber = document.getElementById('ege_number').value;
+    const tasks = allTasks[egeNumber] || [];
+    const container = document.getElementById('tasksSelection');
+    
+    if (tasks.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">Нет задач для этого номера</p>';
+        return;
+    }
+    
+    container.innerHTML = tasks.map(task => `
+        <label class="task-checkbox">
+            <input type="checkbox" name="selected_tasks" value="${task.id}">
+            <div class="task-preview">
+                <div class="task-preview-header">
+                    <span class="task-preview-title">Задача #${task.id}</span>
+                    <span>№${task.ege_number} ЕГЭ</span>
+                </div>
+                <div class="task-preview-image">
+                    <img src="/images/${task.image_path}" alt="Задача ${task.id}">
+                </div>
+            </div>
+        </label>
+    `).join('');
+}
+
+function updateMixedTotal() {
+    let total = 0;
+    for (let i = 1; i <= 27; i++) {
+        const checkbox = document.querySelector(`input[name="mixed_ege_${i}"]`);
+        const countInput = document.querySelector(`input[name="mixed_count_${i}"]`);
+        if (checkbox && checkbox.checked && countInput) {
+            total += parseInt(countInput.value) || 0;
+        }
+    }
+    document.getElementById('mixedTotalCount').textContent = total;
+}
+
+function selectMixedPreset(numbers) {
+    // Сначала снимаем все галочки
+    for (let i = 1; i <= 27; i++) {
+        const checkbox = document.querySelector(`input[name="mixed_ege_${i}"]`);
+        if (checkbox) checkbox.checked = false;
+    }
+    // Устанавливаем нужные
+    numbers.forEach(num => {
+        const checkbox = document.querySelector(`input[name="mixed_ege_${num}"]`);
+        if (checkbox) checkbox.checked = true;
+    });
+    updateMixedTotal();
+}
+
+function clearMixedSelection() {
+    for (let i = 1; i <= 27; i++) {
+        const checkbox = document.querySelector(`input[name="mixed_ege_${i}"]`);
+        if (checkbox) checkbox.checked = false;
+    }
+    updateMixedTotal();
+}
+
+// ========== Загрузка готового варианта ==========
+
+const dropzoneUpload = document.getElementById('dropzoneUpload');
+const imagesInput = document.getElementById('imagesInput');
+const tasksList = document.getElementById('tasksList');
+const tasksTable = document.getElementById('tasksTable');
+const tasksCount = document.getElementById('tasksCount');
+const uploadActions = document.getElementById('uploadActions');
+
+// Drag & drop
+if (dropzoneUpload) {
+    dropzoneUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzoneUpload.classList.add('dragover');
+    });
+
+    dropzoneUpload.addEventListener('dragleave', () => {
+        dropzoneUpload.classList.remove('dragover');
+    });
+
+    dropzoneUpload.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzoneUpload.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    imagesInput.addEventListener('change', () => {
+        handleFiles(imagesInput.files);
+    });
+}
+
+function handleFiles(files) {
+    const newFiles = Array.from(files).filter(f => 
+        f.type.startsWith('image/') || f.name.endsWith('.png') || f.name.endsWith('.jpg') || f.name.endsWith('.jpeg')
+    );
+    
+    newFiles.forEach(file => {
+        uploadedFiles.push(file);
+        addTaskRow(file, uploadedFiles.length - 1);
+    });
+    
+    updateTasksDisplay();
+}
+
+function addTaskRow(file, index) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const row = document.createElement('div');
+        row.className = 'task-edit-item';
+        row.id = `task-row-${index}`;
+        row.innerHTML = `
+            <img src="${e.target.result}" class="task-edit-preview" alt="Задача">
+            <div class="task-edit-fields">
+                <div class="task-edit-row">
+                    <span class="task-order">#${index + 1}</span>
+                    <label>Номер ЕГЭ:</label>
+                    <select name="ege_number_${index}" required onchange="updateAnswerFields(${index})">
+                        ${generateEgeOptions()}
+                    </select>
+                    <button type="button" class="btn-remove-task" onclick="removeTask(${index})">✕ Удалить</button>
+                </div>
+                <div class="task-edit-row">
+                    <label>Ответ 1:</label>
+                    <input type="text" name="answer1_${index}" required autocomplete="off">
+                    <span id="answer2-wrapper-${index}">
+                        <label>Ответ 2:</label>
+                        <input type="text" name="answer2_${index}" autocomplete="off">
+                    </span>
+                </div>
+                <div class="task-edit-row">
+                    <label>Файл данных:</label>
+                    <input type="file" name="attachment_${index}" accept=".txt,.xlsx,.csv">
+                    <span class="hint" style="font-size:12px;color:var(--text-muted);">(для №9, №18, №26, №27)</span>
+                </div>
+            </div>
+        `;
+        tasksList.appendChild(row);
+        updateAnswerFields(index);
+    };
+    reader.readAsDataURL(file);
+}
+
+function generateEgeOptions() {
+    let options = '';
+    for (let i = 1; i <= 27; i++) {
+        options += `<option value="${i}">№${i}</option>`;
+    }
+    return options;
+}
+
+function updateAnswerFields(index) {
+    const select = document.querySelector(`select[name="ege_number_${index}"]`);
+    const wrapper = document.getElementById(`answer2-wrapper-${index}`);
+    if (select && wrapper) {
+        const egeNum = parseInt(select.value);
+        // Номера 17-25 требуют два ответа
+        if (egeNum >= 17 && egeNum <= 25) {
+            wrapper.style.display = 'inline';
+        } else {
+            wrapper.style.display = 'none';
+        }
+    }
+}
+
+function removeTask(index) {
+    uploadedFiles[index] = null;
+    const row = document.getElementById(`task-row-${index}`);
+    if (row) row.remove();
+    updateTasksDisplay();
+    renumberTasks();
+}
+
+function renumberTasks() {
+    const rows = tasksList.querySelectorAll('.task-edit-item');
+    rows.forEach((row, i) => {
+        const orderSpan = row.querySelector('.task-order');
+        if (orderSpan) orderSpan.textContent = `#${i + 1}`;
+    });
+}
+
+function updateTasksDisplay() {
+    const activeCount = uploadedFiles.filter(f => f !== null).length;
+    tasksCount.textContent = activeCount;
+    
+    if (activeCount > 0) {
+        tasksTable.style.display = 'block';
+        uploadActions.style.display = 'flex';
+    } else {
+        tasksTable.style.display = 'none';
+        uploadActions.style.display = 'none';
+    }
+}
+
+function clearUpload() {
+    uploadedFiles = [];
+    tasksList.innerHTML = '';
+    imagesInput.value = '';
+    updateTasksDisplay();
+}
+
+// Перед отправкой формы - добавляем файлы
+if (document.getElementById('uploadForm')) {
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        // Создаём скрытые input для файлов изображений
+        const dataTransfer = new DataTransfer();
+        uploadedFiles.forEach((file, index) => {
+            if (file) {
+                dataTransfer.items.add(file);
+            }
+        });
+        imagesInput.files = dataTransfer.files;
+        
+        // Добавляем информацию о порядке файлов
+        const orderInput = document.createElement('input');
+        orderInput.type = 'hidden';
+        orderInput.name = 'files_order';
+        orderInput.value = JSON.stringify(uploadedFiles.map((f, i) => f ? i : null).filter(x => x !== null));
+        this.appendChild(orderInput);
+    });
+}
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', function() {
+    updateType();
+    updateTasksList();
+});
+
+const variantForm = document.getElementById('variantForm');
+if (variantForm) {
+    variantForm.addEventListener('submit', function(e) {
+        const errors = [];
+        const nameInput = document.getElementById('name');
+        if (!nameInput || !nameInput.value.trim()) {
+            errors.push('Укажите название варианта.');
+        }
+
+        const type = document.querySelector('input[name="variant_type"]:checked')?.value;
+        const mode = document.querySelector('input[name="generation_mode"]:checked')?.value;
+        if (type === 'thematic' && mode === 'manual') {
+            const selectedCount = document.querySelectorAll('input[name="selected_tasks"]:checked').length;
+            if (selectedCount === 0) {
+                errors.push('Выберите хотя бы одну задачу для варианта.');
+            }
+        }
+
+        if (errors.length > 0) {
+            e.preventDefault();
+            const errorBox = document.getElementById('variantFormError');
+            if (errorBox) {
+                errorBox.textContent = errors[0];
+                errorBox.style.display = 'block';
+                errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (nameInput && !nameInput.value.trim()) {
+                nameInput.focus();
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

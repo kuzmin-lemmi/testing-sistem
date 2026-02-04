@@ -1,0 +1,56 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Задача #{{ task.id }} - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="task-view-page">
+    <div class="page-header">
+        <h1>Задача #{{ task.id }} (№{{ task.ege_number }})</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-secondary">✏️ Редактировать</a>
+            <a href="{{ url_for('tasks_list', ege=task.ege_number) }}" class="btn btn-secondary">← К списку</a>
+        </div>
+    </div>
+    
+    <div class="task-details card">
+        <div class="task-image-large">
+            <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача {{ task.id }}">
+        </div>
+        
+        <div class="task-meta">
+            <div class="meta-row">
+                <span class="meta-label">Номер ЕГЭ:</span>
+                <span class="meta-value">{{ task.ege_number }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Количество ответов:</span>
+                <span class="meta-value">{{ task.answer_count }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Ответ 1:</span>
+                <span class="meta-value answer-value">{{ task.answer_1 }}</span>
+            </div>
+            {% if task.answer_count == 2 %}
+            <div class="meta-row">
+                <span class="meta-label">Ответ 2:</span>
+                <span class="meta-value answer-value">{{ task.answer_2 }}</span>
+            </div>
+            {% endif %}
+            {% if task.attachment_path %}
+            <div class="meta-row">
+                <span class="meta-label">Прикреплённый файл:</span>
+                <span class="meta-value">
+                    <a href="{{ url_for('serve_attachment', filename=task.attachment_path) }}" download="{{ task.attachment_name }}">
+                        📎 {{ task.attachment_name }}
+                    </a>
+                </span>
+            </div>
+            {% endif %}
+            <div class="meta-row">
+                <span class="meta-label">Дата добавления:</span>
+                <span class="meta-value">{{ task.created_at }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

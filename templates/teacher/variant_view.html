@@ -1,0 +1,211 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}{{ variant.name }} - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="variant-view-page">
+    <div class="page-header">
+        <div class="header-info">
+            <h1>{{ variant.name }}</h1>
+            <div class="variant-badges">
+                <span class="type-badge {% if variant.variant_type == 'full' %}badge-full{% else %}badge-thematic{% endif %}">
+                    {% if variant.variant_type == 'full' %}
+                        🎯 Полный вариант ЕГЭ
+                    {% else %}
+                        📝 Тематический №{{ variant.ege_number }}
+                    {% endif %}
+                </span>
+                <span class="count-badge">📚 {{ tasks|length }} задач</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('session_new') }}?variant_id={{ variant.id }}" class="btn btn-success">▶️ Запустить тест</a>
+            <form action="{{ url_for('variant_delete', variant_id=variant.id) }}" method="POST" class="inline-form"
+                  onsubmit="return confirm('Удалить вариант «{{ variant.name }}»?')">
+                <button type="submit" class="btn btn-danger">🗑 Удалить</button>
+            </form>
+            <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">← К списку</a>
+        </div>
+    </div>
+    
+    <div class="variant-tasks">
+        <h2>Задачи варианта</h2>
+        
+        <div class="tasks-list">
+            {% for task in tasks %}
+            <div class="task-row card">
+                <div class="task-position">{{ loop.index }}</div>
+                <div class="task-image-small">
+                    <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача">
+                </div>
+                <div class="task-details">
+                    <div class="task-header">
+                        <span class="task-ege">№{{ task.ege_number }}</span>
+                        <span class="task-id">#{{ task.id }}</span>
+                    </div>
+                    <div class="task-answer">
+                        Ответ: <strong>{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</strong>
+                    </div>
+                    {% if task.attachment_name %}
+                    <div class="task-attachment">📎 {{ task.attachment_name }}</div>
+                    {% endif %}
+                </div>
+                <div class="task-actions">
+                    <a href="{{ url_for('task_view', task_id=task.id) }}" class="btn btn-secondary btn-small">👁 Открыть</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.header-info h1 {
+    margin-bottom: 12px;
+}
+
+.variant-badges {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.type-badge, .count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.badge-full {
+    background: linear-gradient(135deg, var(--primary-bg), #ddd6fe);
+    color: var(--primary-dark);
+}
+
+.badge-thematic {
+    background: linear-gradient(135deg, var(--success-bg), #a7f3d0);
+    color: #065f46;
+}
+
+.count-badge {
+    background: var(--bg-sidebar);
+    color: var(--text-secondary);
+}
+
+.variant-tasks h2 {
+    margin-bottom: 20px;
+}
+
+.tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.task-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 20px;
+    margin-bottom: 0;
+}
+
+.task-position {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.task-image-small {
+    width: 120px;
+    height: 80px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.task-image-small img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.task-details {
+    flex: 1;
+}
+
+.task-header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.task-ege {
+    background: var(--primary-bg);
+    color: var(--primary-dark);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.task-id {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.task-answer {
+    color: var(--text-secondary);
+    font-size: 15px;
+}
+
+.task-answer strong {
+    color: var(--success);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.task-attachment {
+    margin-top: 6px;
+    color: var(--primary);
+    font-size: 13px;
+}
+
+.task-actions {
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .task-row {
+        flex-wrap: wrap;
+    }
+    
+    .task-image-small {
+        width: 100%;
+        height: 150px;
+    }
+    
+    .task-position {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+    }
+    
+    .task-row {
+        position: relative;
+        padding-top: 60px;
+    }
+}
+</style>
+{% endblock %}

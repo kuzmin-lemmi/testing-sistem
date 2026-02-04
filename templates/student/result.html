@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результат - {{ student.last_name }} {{ student.first_name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container { max-width: 700px; margin: 0 auto; }
+        
+        .result-card {
+            background: white;
+            border-radius: 24px;
+            padding: 48px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            margin-bottom: 24px;
+        }
+        
+        .congrats { font-size: 4em; margin-bottom: 16px; }
+        h1 { color: #1e293b; margin-bottom: 8px; }
+        .student-name { color: #64748b; margin-bottom: 32px; font-size: 1.1em; }
+        
+        .score-circle {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            color: white;
+        }
+        .score-number {
+            font-size: 3.5em;
+            font-weight: 700;
+            line-height: 1;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .score-total { font-size: 1.1em; opacity: 0.9; }
+        
+        .grade-badge {
+            display: inline-block;
+            padding: 12px 36px;
+            border-radius: 30px;
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .grade-5 { background: #d1fae5; color: #065f46; }
+        .grade-4 { background: #dbeafe; color: #1e40af; }
+        .grade-3 { background: #fef3c7; color: #92400e; }
+        .grade-2 { background: #fee2e2; color: #991b1b; }
+        
+        .details-card {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .details-card h2 { margin-bottom: 20px; color: #1e293b; }
+        
+        .answers-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .answers-table th, .answers-table td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .answers-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .answers-table tr:last-child td { border-bottom: none; }
+        
+        .status-correct { color: #10b981; font-weight: 700; }
+        .status-wrong { color: #ef4444; font-weight: 700; }
+        
+        .answer-value {
+            font-family: 'JetBrains Mono', monospace;
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .answer-correct {
+            background: #d1fae5;
+            color: #065f46;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="result-card">
+            <div class="congrats">🎉</div>
+            <h1>Тест завершён!</h1>
+            <p class="student-name">{{ student.last_name }} {{ student.first_name }}</p>
+            
+            <div class="score-circle">
+                <span class="score-number">{{ correct_count }}</span>
+                <span class="score-total">из {{ total }}</span>
+            </div>
+            
+            <div class="grade-badge grade-{{ grade }}">
+                Оценка: {{ grade }}
+            </div>
+        </div>
+        
+        {% if show_answers %}
+        <div class="details-card">
+            <h2>📋 Подробные результаты</h2>
+            <table class="answers-table">
+                <thead>
+                    <tr>
+                        <th>№</th>
+                        <th>Номер ЕГЭ</th>
+                        <th>Ваш ответ</th>
+                        <th>Правильный</th>
+                        <th>Результат</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>№{{ task.ege_number }}</td>
+                        <td>
+                            {% if answers_dict.get(task.id) %}
+                                <span class="answer-value">{{ answers_dict[task.id].answer_1 if answers_dict[task.id].answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ answers_dict[task.id].answer_2 if answers_dict[task.id].answer_2 is not none else '—' }}{% endif %}</span>
+                            {% else %}
+                                <span style="color: #94a3b8;">не отвечено</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="answer-value answer-correct">{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</span>
+                        </td>
+                        <td>
+                            {% if answers_dict.get(task.id) and answers_dict[task.id].is_correct %}
+                                <span class="status-correct">✓ Верно</span>
+                            {% else %}
+                                <span class="status-wrong">✗ Неверно</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+    <script>
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+    </script>
+</body>
+</html>

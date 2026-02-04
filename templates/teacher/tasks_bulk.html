@@ -1,0 +1,499 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Массовая загрузка - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="bulk-upload-page">
+    <div class="page-header">
+        <h1>📦 Массовая загрузка задач</h1>
+        <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+    </div>
+    
+    <form action="{{ url_for('tasks_bulk_upload') }}" method="POST" id="bulkForm">
+        <input type="hidden" name="ege_number" value="{{ ege_number }}">
+        
+        <div class="step-card card">
+            <h2>1️⃣ Выберите номер ЕГЭ</h2>
+            <div class="form-group">
+                <select id="egeSelect" onchange="changeEge(this.value)">
+                    {% for num in range(1, 28) %}
+                    <option value="{{ num }}" {% if num == ege_number %}selected{% endif %}>
+                        Задание №{{ num }}
+                        {% if num in special_format %} (особый формат){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="answer-format-info">
+                {% if ege_number in special_format %}
+                <div class="special-format-notice">
+                    ⚠️ <strong>Особый формат ответа:</strong> {{ special_format[ege_number].description }}
+                </div>
+                {% else %}
+                <div class="standard-format-notice">
+                    Формат: {{ default_answer_count.get(ege_number, 1) }} ответ(а)
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="step-card card">
+            <h2>2️⃣ Загрузите изображения</h2>
+            
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-content">
+                    <div class="dropzone-icon">📁</div>
+                    <div class="dropzone-text">
+                        Перетащите PNG-файлы сюда<br>
+                        <span class="dropzone-hint">или нажмите для выбора</span>
+                    </div>
+                </div>
+                <input type="file" id="fileInput" multiple accept=".png" style="display: none;">
+            </div>
+            
+            <div class="upload-progress" id="uploadProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Загрузка...</div>
+            </div>
+        </div>
+        
+        <div class="step-card card" id="tasksCard" style="display: none;">
+            <h2>3️⃣ Заполните ответы</h2>
+            <div class="tasks-count">Загружено: <span id="tasksCount">0</span> файлов</div>
+            
+            <div class="tasks-table-container">
+                <table class="tasks-table" id="tasksTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">Превью</th>
+                            <th>Файл</th>
+                            <th id="answerHeader">Ответ</th>
+                            <th style="width: 60px;">Удалить</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasksBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-large" id="submitBtn" disabled>
+                    💾 Сохранить все задачи
+                </button>
+                <button type="button" class="btn btn-danger" onclick="clearAll()">
+                    🗑 Очистить всё
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.bulk-upload-page {
+    max-width: 900px;
+}
+
+.step-card {
+    margin-bottom: 24px;
+}
+
+.step-card h2 {
+    margin-bottom: 20px;
+}
+
+.answer-format-info {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 14px;
+}
+
+.special-format-notice {
+    background: var(--warning-bg);
+    color: #92400e;
+}
+
+.standard-format-notice {
+    background: var(--bg-sidebar);
+    color: var(--text-secondary);
+}
+
+/* Dropzone */
+.dropzone {
+    border: 3px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 60px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    background: var(--bg-sidebar);
+}
+
+.dropzone:hover, .dropzone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.dropzone-icon {
+    font-size: 4em;
+    margin-bottom: 16px;
+}
+
+.dropzone-text {
+    font-size: 1.2em;
+    color: var(--text);
+}
+
+.dropzone-hint {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+/* Progress */
+.upload-progress {
+    margin-top: 20px;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #764ba2);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Tasks table */
+.tasks-count {
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+}
+
+.tasks-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tasks-table th,
+.tasks-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.tasks-table th {
+    background: var(--bg-sidebar);
+    position: sticky;
+    top: 0;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.task-preview {
+    width: 60px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.task-filename {
+    font-size: 13px;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.answer-inputs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.answer-input {
+    width: 100px;
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+}
+
+.answer-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.answer-textarea {
+    width: 100%;
+    min-width: 200px;
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.answer-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: var(--transition);
+}
+
+.delete-btn:hover {
+    opacity: 1;
+    color: var(--danger);
+}
+
+.form-actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+}
+
+.btn-large {
+    padding: 16px 32px;
+    font-size: 16px;
+}
+</style>
+
+<script>
+const egeNumber = {{ ege_number }};
+const defaultAnswerCount = {{ default_answer_count | tojson }};
+const specialFormat = {{ special_format | tojson }};
+let uploadedFiles = [];
+
+// Инициализация dropzone
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+async function handleFiles(files) {
+    const pngFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.png'));
+    
+    if (pngFiles.length === 0) {
+        alert('Выберите PNG файлы');
+        return;
+    }
+    
+    const progress = document.getElementById('uploadProgress');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    progress.style.display = 'block';
+    
+    for (let i = 0; i < pngFiles.length; i++) {
+        const file = pngFiles[i];
+        const percent = Math.round((i / pngFiles.length) * 100);
+        progressFill.style.width = percent + '%';
+        progressText.textContent = `Загрузка ${i + 1} из ${pngFiles.length}...`;
+        
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            const response = await fetch('{{ url_for("api_upload_image") }}', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                uploadedFiles.push({
+                    originalName: file.name,
+                    filename: result.filename,
+                    url: result.url
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+        }
+    }
+    
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Загрузка завершена!';
+    
+    setTimeout(() => {
+        progress.style.display = 'none';
+        progressFill.style.width = '0%';
+    }, 1000);
+    
+    renderTasks();
+}
+
+function renderTasks() {
+    const tbody = document.getElementById('tasksBody');
+    const card = document.getElementById('tasksCard');
+    const count = document.getElementById('tasksCount');
+    const submitBtn = document.getElementById('submitBtn');
+    const answerHeader = document.getElementById('answerHeader');
+    
+    if (uploadedFiles.length === 0) {
+        card.style.display = 'none';
+        return;
+    }
+    
+    card.style.display = 'block';
+    count.textContent = uploadedFiles.length;
+    submitBtn.disabled = false;
+    
+    // Определяем тип ответа
+    const isSpecial = egeNumber in specialFormat;
+    const answerCount = defaultAnswerCount[egeNumber] || 1;
+    
+    if (isSpecial) {
+        answerHeader.textContent = 'Ответ (особый формат)';
+    } else if (answerCount === 2) {
+        answerHeader.textContent = 'Ответ 1 / Ответ 2';
+    } else {
+        answerHeader.textContent = 'Ответ';
+    }
+    
+    tbody.innerHTML = uploadedFiles.map((file, index) => {
+        let answerHtml = '';
+        
+        if (isSpecial) {
+            answerHtml = `
+                <textarea class="answer-textarea" name="answer_text_${index}" 
+                    placeholder="${specialFormat[egeNumber].description}"></textarea>
+                <input type="hidden" name="image_path_${index}" value="${file.filename}">
+            `;
+        } else if (answerCount === 2) {
+            answerHtml = `
+                <div class="answer-inputs">
+                    <input type="text" class="answer-input" name="answer_1_${index}" placeholder="Ответ 1" required autocomplete="off">
+                    <input type="text" class="answer-input" name="answer_2_${index}" placeholder="Ответ 2" required autocomplete="off">
+                </div>
+                <input type="hidden" name="image_path_${index}" value="${file.filename}">
+            `;
+        } else {
+            answerHtml = `
+                <input type="text" class="answer-input" name="answer_1_${index}" placeholder="Ответ" required autocomplete="off">
+                <input type="hidden" name="image_path_${index}" value="${file.filename}">
+            `;
+        }
+        
+        return `
+            <tr data-index="${index}">
+                <td><img src="${file.url}" class="task-preview" alt="Превью"></td>
+                <td class="task-filename">${file.originalName}</td>
+                <td>${answerHtml}</td>
+                <td>
+                    <button type="button" class="delete-btn" onclick="deleteTask(${index})">🗑</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function deleteTask(index) {
+    const file = uploadedFiles[index];
+    
+    // Удаляем файл с сервера
+    try {
+        await fetch('{{ url_for("api_delete_image") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.filename })
+        });
+    } catch (e) {
+        console.error('Ошибка удаления:', e);
+    }
+    
+    uploadedFiles.splice(index, 1);
+    renderTasks();
+}
+
+async function clearAll() {
+    if (!confirm('Удалить все загруженные файлы?')) return;
+    
+    for (const file of uploadedFiles) {
+        try {
+            await fetch('{{ url_for("api_delete_image") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.filename })
+            });
+        } catch (e) {}
+    }
+    
+    uploadedFiles = [];
+    renderTasks();
+}
+
+function changeEge(value) {
+    window.location.href = '{{ url_for("tasks_bulk_upload") }}?ege=' + value;
+}
+
+// Валидация формы
+document.getElementById('bulkForm').addEventListener('submit', function(e) {
+    if (uploadedFiles.length === 0) {
+        e.preventDefault();
+        alert('Сначала загрузите изображения');
+        return;
+    }
+    
+    // Обновляем индексы в форме
+    const rows = document.querySelectorAll('#tasksBody tr');
+    rows.forEach((row, newIndex) => {
+        const oldIndex = row.dataset.index;
+        row.querySelectorAll('input, textarea').forEach(input => {
+            if (input.name) {
+                input.name = input.name.replace(/_\d+$/, '_' + newIndex);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

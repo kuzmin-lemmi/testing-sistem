@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование ЕГЭ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Nunito', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 60px 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            text-align: center;
+            max-width: 450px;
+        }
+        .icon { font-size: 5em; margin-bottom: 20px; opacity: 0.8; }
+        h1 { color: #1e293b; margin-bottom: 16px; }
+        p { color: #64748b; font-size: 1.1em; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">⏳</div>
+        <h1>Тестирование не запущено</h1>
+        <p>Дождитесь, пока учитель запустит тестирование, и обновите страницу</p>
+    </div>
+    <script>
+        // Автообновление каждые 5 секунд
+        setTimeout(function() { location.reload(); }, 5000);
+    </script>
+</body>
+</html>

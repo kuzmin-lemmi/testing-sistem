@@ -1,0 +1,311 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Добавить задачу - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="task-form-page">
+    <div class="page-header">
+        <h1>➕ Добавить задачу</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('tasks_bulk_upload', ege=ege_number) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
+            <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+        </div>
+    </div>
+    
+    <form action="{{ url_for('task_add') }}" method="POST" enctype="multipart/form-data" class="task-form card" id="taskForm">
+        <div class="form-group">
+            <label for="ege_number">Номер ЕГЭ</label>
+            <select name="ege_number" id="ege_number" required onchange="updateAnswerFormat()">
+                {% for num in range(1, 28) %}
+                <option value="{{ num }}" {% if num == ege_number %}selected{% endif %}>
+                    Задание №{{ num }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Изображение задачи (PNG)</label>
+            
+            <!-- Dropzone -->
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-content" id="dropzoneContent">
+                    <div class="dropzone-icon">📁</div>
+                    <div class="dropzone-text">
+                        Перетащите PNG-файл сюда<br>
+                        <span class="dropzone-hint">или нажмите для выбора</span>
+                    </div>
+                </div>
+                <div class="dropzone-preview" id="dropzonePreview" style="display: none;">
+                    <img id="previewImage" src="" alt="Превью">
+                    <button type="button" class="remove-image-btn" onclick="removeImage()">✕ Удалить</button>
+                </div>
+            </div>
+            <input type="file" name="image" id="imageInput" accept=".png" style="display: none;" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="attachment">Файл данных (опционально)</label>
+            <input type="file" name="attachment" id="attachment" accept=".txt,.xlsx,.csv">
+            <small class="form-hint">Для задач с внешними данными (TXT, XLSX, CSV)</small>
+        </div>
+        
+        <!-- Стандартные ответы (1-2 числа) -->
+        <div id="standardAnswers">
+            <div class="form-group">
+                <label for="answer_count">Количество ответов</label>
+                <select name="answer_count" id="answer_count" onchange="toggleSecondAnswer()">
+                    <option value="1">1 ответ</option>
+                    <option value="2">2 ответа</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="answer_1">Ответ 1</label>
+                    <input type="text" name="answer_1" id="answer_1" placeholder="Напр.: 25 или AB12" autocomplete="off">
+                </div>
+                
+                <div class="form-group" id="answer2Group" style="display: none;">
+                    <label for="answer_2">Ответ 2</label>
+                    <input type="text" name="answer_2" id="answer_2" placeholder="(если нужно 2 ответа)" autocomplete="off">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Особый формат ответа (№25, №27) -->
+        <div id="specialAnswers" style="display: none;">
+            <div class="form-group">
+                <label for="answer_text">Ответ (особый формат)</label>
+                <textarea name="answer_text" id="answer_text" class="answer-textarea" rows="4" 
+                    placeholder="Введите ответ в особом формате"></textarea>
+                <small class="form-hint" id="specialHint"></small>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Сохранить задачу</button>
+            <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.task-form {
+    max-width: 650px;
+}
+
+/* Dropzone */
+.dropzone {
+    border: 3px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    background: var(--bg-sidebar);
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dropzone:hover, .dropzone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.dropzone.has-image {
+    border-style: solid;
+    border-color: var(--success);
+    background: var(--success-bg);
+    cursor: default;
+}
+
+.dropzone-icon {
+    font-size: 3em;
+    margin-bottom: 12px;
+}
+
+.dropzone-text {
+    font-size: 1.1em;
+    color: var(--text);
+}
+
+.dropzone-hint {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.dropzone-preview {
+    position: relative;
+    width: 100%;
+}
+
+.dropzone-preview img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.remove-image-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+    box-shadow: var(--shadow);
+}
+
+.remove-image-btn:hover {
+    background: #dc2626;
+}
+
+/* Textarea для особого формата */
+.answer-textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 100px;
+}
+
+.answer-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-bg);
+}
+</style>
+
+<script>
+const defaultAnswerCount = {{ default_answer_count | tojson }};
+const specialFormat = {
+    25: {type: 'multiline', description: 'N строк, в каждой по 2 числа через пробел'},
+    27: {type: 'multiline_fixed', lines: 2, description: '2 строки, в каждой по 2 числа через пробел'}
+};
+
+// Dropzone
+const dropzone = document.getElementById('dropzone');
+const dropzoneContent = document.getElementById('dropzoneContent');
+const dropzonePreview = document.getElementById('dropzonePreview');
+const previewImage = document.getElementById('previewImage');
+const imageInput = document.getElementById('imageInput');
+
+dropzone.addEventListener('click', (e) => {
+    if (!dropzone.classList.contains('has-image')) {
+        imageInput.click();
+    }
+});
+
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!dropzone.classList.contains('has-image')) {
+        dropzone.classList.add('dragover');
+    }
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.toLowerCase().endsWith('.png')) {
+        handleImageFile(files[0]);
+    } else {
+        alert('Пожалуйста, выберите PNG файл');
+    }
+});
+
+imageInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleImageFile(e.target.files[0]);
+    }
+});
+
+function handleImageFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        dropzoneContent.style.display = 'none';
+        dropzonePreview.style.display = 'block';
+        dropzone.classList.add('has-image');
+    };
+    reader.readAsDataURL(file);
+    
+    // Создаём новый FileList для input
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    imageInput.files = dt.files;
+}
+
+function removeImage() {
+    previewImage.src = '';
+    dropzoneContent.style.display = 'flex';
+    dropzonePreview.style.display = 'none';
+    dropzone.classList.remove('has-image');
+    imageInput.value = '';
+}
+
+// Обновление формата ответа
+function updateAnswerFormat() {
+    const egeNumber = parseInt(document.getElementById('ege_number').value);
+    const standardDiv = document.getElementById('standardAnswers');
+    const specialDiv = document.getElementById('specialAnswers');
+    const specialHint = document.getElementById('specialHint');
+    const answerCount = document.getElementById('answer_count');
+    
+    if (egeNumber in specialFormat) {
+        standardDiv.style.display = 'none';
+        specialDiv.style.display = 'block';
+        specialHint.textContent = specialFormat[egeNumber].description;
+        
+        // Снимаем required со стандартных полей
+        document.getElementById('answer_1').required = false;
+        document.getElementById('answer_text').required = true;
+    } else {
+        standardDiv.style.display = 'block';
+        specialDiv.style.display = 'none';
+        
+        // Устанавливаем количество ответов по умолчанию
+        const defaultCount = defaultAnswerCount[egeNumber] || 1;
+        answerCount.value = defaultCount;
+        toggleSecondAnswer();
+        
+        document.getElementById('answer_1').required = true;
+        document.getElementById('answer_text').required = false;
+    }
+}
+
+function toggleSecondAnswer() {
+    const count = document.getElementById('answer_count').value;
+    const group = document.getElementById('answer2Group');
+    const input = document.getElementById('answer_2');
+    
+    if (count === '2') {
+        group.style.display = 'block';
+        input.required = true;
+    } else {
+        group.style.display = 'none';
+        input.required = false;
+        input.value = '';
+    }
+}
+
+// Инициализация
+updateAnswerFormat();
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+# runtime data (do not publish)
+data/
+exports/
+
+# local db
+*.db
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editor
+.vscode/
+.idea/
+.DS_Store

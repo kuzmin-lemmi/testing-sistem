@@ -1,0 +1,79 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Настройки - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <h1>⚙️ Настройки</h1>
+    
+    <div class="settings-section card">
+        <h2>📊 Критерии оценки</h2>
+        <p class="section-hint">Настройте пороги для выставления оценок по количеству правильных ответов</p>
+        
+        {% if criteria %}
+        <table class="criteria-table">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Всего задач</th>
+                    <th>На «5»</th>
+                    <th>На «4»</th>
+                    <th>На «3»</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in criteria %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>{{ c.total_tasks }}</td>
+                    <td>≥ {{ c.grade_5_min }}</td>
+                    <td>≥ {{ c.grade_4_min }}</td>
+                    <td>≥ {{ c.grade_3_min }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        
+        <h3>Добавить/изменить критерии</h3>
+        <form action="{{ url_for('update_criteria') }}" method="POST" class="criteria-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Название</label>
+                    <input type="text" name="name" id="name" placeholder="Например: Полный вариант ЕГЭ" required>
+                </div>
+                <div class="form-group">
+                    <label for="total_tasks">Количество задач</label>
+                    <input type="number" name="total_tasks" id="total_tasks" min="1" max="100" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="grade_5_min">Минимум на «5»</label>
+                    <input type="number" name="grade_5_min" id="grade_5_min" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="grade_4_min">Минимум на «4»</label>
+                    <input type="number" name="grade_4_min" id="grade_4_min" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="grade_3_min">Минимум на «3»</label>
+                    <input type="number" name="grade_3_min" id="grade_3_min" min="1" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">💾 Сохранить критерии</button>
+        </form>
+    </div>
+    
+    <div class="settings-section card">
+        <h2>📁 Хранение данных</h2>
+        <div class="info-block">
+            <p><strong>База данных:</strong> data/database.db</p>
+            <p><strong>Изображения:</strong> data/images/</p>
+            <p><strong>Прикреплённые файлы:</strong> data/attachments/</p>
+            <p><strong>Экспорт:</strong> exports/</p>
+        </div>
+        <p class="hint">Для резервного копирования скопируйте папку <code>data/</code></p>
+    </div>
+</div>
+{% endblock %}

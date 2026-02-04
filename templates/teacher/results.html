@@ -1,0 +1,212 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Результаты - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="results-page">
+    <div class="page-header">
+        <h1>📊 Результаты</h1>
+    </div>
+    
+    {% if sessions %}
+    <div class="sessions-results">
+        {% for session in sessions %}
+        <div class="session-result-card card">
+            <div class="session-header">
+                <div class="session-info">
+                    <h3>{{ session.variant_name }}</h3>
+                    <div class="session-meta">
+                        <span>📅 {{ session.created_at[:10] }}</span>
+                        <span>👥 {{ session.finished_count }} / {{ session.students_count }}</span>
+                        {% if session.avg_score %}
+                        <span>📈 Средний: {{ session.avg_score }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="session-actions">
+                    <a href="{{ url_for('result_session', session_id=session.id) }}" class="btn btn-primary btn-small">📋 Подробнее</a>
+                    <a href="{{ url_for('result_export', session_id=session.id) }}" class="btn btn-secondary btn-small">📥 CSV</a>
+                </div>
+            </div>
+            
+            {% if session.students and session.finished_count > 0 %}
+            <div class="quick-results">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ФИО</th>
+                            <th>Статус</th>
+                            <th>Баллы</th>
+                            <th>Оценка</th>
+                            <th>Результат</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for st in session.students[:5] %}
+                        <tr>
+                            <td>{{ st.last_name }} {{ st.first_name }}</td>
+                            <td>
+                                {% if st.status == 'finished' %}
+                                <span class="status-pill finished">✅</span>
+                                {% else %}
+                                <span class="status-pill progress">⏳</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if st.status == 'finished' %}
+                                <span class="score-value">{{ st.correct_count }}/{{ st.total_tasks }}</span>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if st.status == 'finished' %}
+                                <span class="grade-badge grade-{{ st.grade }}">{{ st.grade }}</span>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('result_student', student_id=st.id) }}">Подробнее →</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if session.students|length > 5 %}
+                <div class="more-link">
+                    <a href="{{ url_for('result_session', session_id=session.id) }}">Показать всех ({{ session.students|length }}) →</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <h3>Результатов пока нет</h3>
+        <p>Проведите первое тестирование</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.sessions-results {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.session-result-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.session-info h3 {
+    margin-bottom: 8px;
+}
+
+.session-meta {
+    display: flex;
+    gap: 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.session-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.quick-results {
+    padding: 16px 24px;
+}
+
+.quick-results table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.quick-results th, .quick-results td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.quick-results th {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.quick-results tr:last-child td {
+    border-bottom: none;
+}
+
+.status-pill {
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.status-pill.finished { background: var(--success-bg); }
+.status-pill.progress { background: var(--warning-bg); }
+
+.score-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+.grade-badge {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.grade-badge.grade-5 { background: #d1fae5; color: #065f46; }
+.grade-badge.grade-4 { background: #dbeafe; color: #1e40af; }
+.grade-badge.grade-3 { background: #fef3c7; color: #92400e; }
+.grade-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+
+.more-link {
+    text-align: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-light);
+    margin-top: 12px;
+}
+
+.more-link a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--border);
+}
+
+.empty-icon { font-size: 4em; margin-bottom: 20px; opacity: 0.5; }
+.empty-state h3 { margin-bottom: 10px; }
+.empty-state p { color: var(--text-secondary); }
+</style>
+{% endblock %}

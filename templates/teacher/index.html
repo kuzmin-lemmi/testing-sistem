@@ -1,0 +1,79 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Главная - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>🎓 Система тестирования ЕГЭ по информатике</h1>
+    
+    <div class="server-info card">
+        <h2>🌐 Информация о сервере</h2>
+        <div class="server-details">
+            <div class="info-row">
+                <span class="label">Адрес для учеников:</span>
+                <code class="server-url">http://{{ local_ip }}:{{ port }}/test</code>
+                <button class="btn btn-small" onclick="copyUrl()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
+                    📋 Копировать
+                </button>
+            </div>
+            <div class="info-row">
+                <span class="label">Статус:</span>
+                <span class="status-badge status-active">🟢 Сервер запущен</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ total_tasks }}</div>
+            <div class="stat-label">Задач в банке</div>
+            <a href="{{ url_for('tasks_list') }}" class="stat-link">Перейти →</a>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ variants_count }}</div>
+            <div class="stat-label">Сохранённых вариантов</div>
+            <a href="{{ url_for('variants_list') }}" class="stat-link">Перейти →</a>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ task_counts|length }}<span style="font-size: 0.5em; color: var(--text-muted);">/27</span></div>
+            <div class="stat-label">Номеров ЕГЭ заполнено</div>
+            <span class="stat-sublabel">из 27 возможных</span>
+        </div>
+    </div>
+    
+    <div class="quick-actions card">
+        <h2>⚡ Быстрые действия</h2>
+        <div class="action-buttons">
+            <a href="{{ url_for('task_add') }}" class="btn btn-primary">➕ Добавить задачу</a>
+            <a href="{{ url_for('variant_create') }}" class="btn btn-secondary">📋 Создать вариант</a>
+            <a href="{{ url_for('session_new') }}" class="btn btn-success">▶️ Запустить тестирование</a>
+        </div>
+    </div>
+    
+    <div class="tasks-overview card">
+        <h2>📊 Задачи по номерам ЕГЭ</h2>
+        <div class="ege-grid">
+            {% for num in range(1, 28) %}
+            <a href="{{ url_for('tasks_list', ege=num) }}" class="ege-cell {% if task_counts.get(num, 0) == 0 %}empty{% endif %}">
+                <span class="ege-number">{{ num }}</span>
+                <span class="ege-count">{{ task_counts.get(num, 0) }} шт.</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+function copyUrl() {
+    const url = document.querySelector('.server-url').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✓ Скопировано!';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

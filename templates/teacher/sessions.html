@@ -1,0 +1,209 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Тестирования - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="sessions-page">
+    <div class="page-header">
+        <h1>▶️ Тестирования</h1>
+        <a href="{{ url_for('session_new') }}" class="btn btn-primary">➕ Запустить тестирование</a>
+    </div>
+    
+    {% if active_session %}
+    <div class="active-session-banner card">
+        <div class="banner-content">
+            <div class="banner-icon">🟢</div>
+            <div class="banner-info">
+                <h3>Активное тестирование</h3>
+                <p>{{ active_session.variant_name if active_session.variant_id else 'Индивидуальные варианты' }}</p>
+                {% if active_session.access_code %}
+                <div class="access-code">
+                    Код доступа: <strong>{{ active_session.access_code }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            <div class="banner-actions">
+                <a href="{{ url_for('session_monitor', session_id=active_session.id) }}" class="btn btn-secondary">👁 Мониторинг</a>
+                <form action="{{ url_for('session_close', session_id=active_session.id) }}" method="POST" class="inline-form">
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Завершить тестирование?')">⏹ Завершить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <h2>История тестирований</h2>
+    
+    {% if sessions %}
+    <div class="sessions-list">
+        {% for session in sessions %}
+        <div class="session-row card">
+            <div class="session-status">
+                {% if session.status == 'active' %}
+                <span class="status-dot active"></span>
+                {% else %}
+                <span class="status-dot closed"></span>
+                {% endif %}
+            </div>
+            <div class="session-info">
+                <div class="session-name">{{ session.variant_name }}</div>
+                <div class="session-meta">
+                    <span>📅 {{ session.created_at[:16] }}</span>
+                    <span>⏱ {{ session.time_limit }} мин</span>
+                    <span>👥 {{ session.students_count }} учеников</span>
+                    <span>✅ {{ session.finished_count }} завершили</span>
+                    {% if session.access_code %}
+                    <span>🔑 {{ session.access_code }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="session-actions">
+                <a href="{{ url_for('session_monitor', session_id=session.id) }}" class="btn btn-secondary btn-small">📊 Подробнее</a>
+                {% if session.status == 'active' %}
+                <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form">
+                    <button type="submit" class="btn btn-danger btn-small">⏹</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📝</div>
+        <h3>Тестирований пока нет</h3>
+        <p>Запустите первое тестирование</p>
+        <a href="{{ url_for('session_new') }}" class="btn btn-primary">➕ Запустить тестирование</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.active-session-banner {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    margin-bottom: 30px;
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.banner-icon {
+    font-size: 2.5em;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.banner-info {
+    flex: 1;
+}
+
+.banner-info h3 {
+    margin-bottom: 4px;
+}
+
+.banner-info p {
+    opacity: 0.9;
+    margin-bottom: 8px;
+}
+
+.access-code {
+    font-size: 1.2em;
+}
+
+.access-code strong {
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 2px;
+}
+
+.banner-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.session-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 0;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.status-dot.closed {
+    background: var(--text-muted);
+}
+
+.session-info {
+    flex: 1;
+}
+
+.session-name {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.session-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.session-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--border);
+}
+
+.empty-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin-bottom: 10px;
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}

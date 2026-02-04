@@ -1,0 +1,146 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Варианты - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="variants-page">
+    <div class="page-header">
+        <h1>📋 Варианты</h1>
+        <a href="{{ url_for('variant_create') }}" class="btn btn-primary">➕ Создать вариант</a>
+    </div>
+    
+    {% if variants %}
+    <div class="variants-grid">
+        {% for variant in variants %}
+        <div class="variant-card card">
+            <div class="variant-header">
+                <div class="variant-type-badge {% if variant.variant_type == 'full' %}badge-full{% else %}badge-thematic{% endif %}">
+                    {% if variant.variant_type == 'full' %}
+                        🎯 Полный вариант
+                    {% else %}
+                        📝 Тематический №{{ variant.ege_number }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="variant-body">
+                <h3 class="variant-name">{{ variant.name }}</h3>
+                <div class="variant-meta">
+                    <span class="meta-item">📚 {{ variant.tasks_count }} задач</span>
+                    <span class="meta-item">📅 {{ variant.created_at[:10] }}</span>
+                </div>
+            </div>
+            <div class="variant-actions">
+                <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary btn-small">👁 Просмотр</a>
+                <form action="{{ url_for('variant_delete', variant_id=variant.id) }}" method="POST" class="inline-form"
+                      onsubmit="return confirm('Удалить вариант «{{ variant.name }}»?')">
+                    <button type="submit" class="btn btn-danger btn-small">🗑</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h3>Вариантов пока нет</h3>
+        <p>Создайте первый вариант для проведения тестирования</p>
+        <a href="{{ url_for('variant_create') }}" class="btn btn-primary">➕ Создать вариант</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.variants-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.variant-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.variant-header {
+    padding: 16px 20px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.variant-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.badge-full {
+    background: linear-gradient(135deg, var(--primary-bg), #ddd6fe);
+    color: var(--primary-dark);
+}
+
+.badge-thematic {
+    background: linear-gradient(135deg, var(--success-bg), #a7f3d0);
+    color: #065f46;
+}
+
+.variant-body {
+    padding: 20px;
+    flex: 1;
+}
+
+.variant-name {
+    font-size: 1.2em;
+    margin-bottom: 12px;
+    color: var(--text);
+}
+
+.variant-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.variant-actions {
+    padding: 16px 20px;
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    gap: 8px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--border);
+}
+
+.empty-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin-bottom: 10px;
+    color: var(--text);
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Импорт задач - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="import-page">
+    <div class="page-header">
+        <h1>📥 Импорт банка задач</h1>
+        <a href="{{ url_for('tasks_list') }}" class="btn btn-secondary">← Назад к задачам</a>
+    </div>
+    
+    <div class="import-card card">
+        <div class="import-info">
+            <h2>📦 Загрузка архива</h2>
+            <p>Выберите ZIP-архив, экспортированный из другой копии системы.</p>
+            
+            <div class="info-box">
+                <h3>ℹ️ Что будет импортировано:</h3>
+                <ul>
+                    <li>Изображения задач (PNG)</li>
+                    <li>Прикреплённые файлы (TXT, XLSX, CSV)</li>
+                    <li>Номера ЕГЭ и правильные ответы</li>
+                </ul>
+            </div>
+            
+            <div class="warning-box">
+                <h3>⚠️ Обратите внимание:</h3>
+                <ul>
+                    <li>Задачи будут добавлены к существующим, а не заменят их</li>
+                    <li>Дубликаты файлов будут переименованы автоматически</li>
+                </ul>
+            </div>
+        </div>
+        
+        <form action="{{ url_for('tasks_import') }}" method="POST" enctype="multipart/form-data" class="import-form">
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-content">
+                    <span class="dropzone-icon">📁</span>
+                    <p>Перетащите ZIP-файл сюда</p>
+                    <p class="dropzone-hint">или нажмите для выбора</p>
+                </div>
+                <input type="file" name="file" id="fileInput" accept=".zip" required>
+            </div>
+            
+            <div class="selected-file" id="selectedFile" style="display: none;">
+                <span class="file-icon">📦</span>
+                <span class="file-name" id="fileName"></span>
+                <button type="button" class="btn-remove" onclick="clearFile()">✕</button>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-large" id="submitBtn" disabled>
+                    📥 Импортировать задачи
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.import-card {
+    max-width: 600px;
+}
+
+.import-info {
+    margin-bottom: 30px;
+}
+
+.import-info h2 {
+    margin-bottom: 12px;
+}
+
+.import-info p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.info-box, .warning-box {
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.info-box {
+    background: var(--primary-bg);
+    border-left: 4px solid var(--primary);
+}
+
+.warning-box {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+}
+
+.info-box h3, .warning-box h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.info-box ul, .warning-box ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 14px;
+}
+
+.info-box li, .warning-box li {
+    margin: 4px 0;
+}
+
+.dropzone {
+    border: 3px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 50px 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.dropzone:hover, .dropzone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.dropzone input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.dropzone-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.dropzone-hint {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.selected-file {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--success-bg);
+    border-radius: var(--radius);
+    margin-top: 16px;
+}
+
+.file-icon {
+    font-size: 1.5em;
+}
+
+.file-name {
+    flex: 1;
+    font-weight: 600;
+}
+
+.btn-remove {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.btn-remove:hover {
+    color: var(--danger);
+}
+
+.form-actions {
+    margin-top: 24px;
+}
+
+.btn-large {
+    padding: 16px 32px;
+    font-size: 16px;
+    width: 100%;
+}
+</style>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const selectedFile = document.getElementById('selectedFile');
+const fileName = document.getElementById('fileName');
+const submitBtn = document.getElementById('submitBtn');
+
+// Drag & drop
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.endsWith('.zip')) {
+        fileInput.files = files;
+        showSelectedFile(files[0].name);
+    }
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+        showSelectedFile(fileInput.files[0].name);
+    }
+});
+
+function showSelectedFile(name) {
+    dropzone.style.display = 'none';
+    selectedFile.style.display = 'flex';
+    fileName.textContent = name;
+    submitBtn.disabled = false;
+}
+
+function clearFile() {
+    fileInput.value = '';
+    dropzone.style.display = 'block';
+    selectedFile.style.display = 'none';
+    submitBtn.disabled = true;
+}
+</script>
+{% endblock %}

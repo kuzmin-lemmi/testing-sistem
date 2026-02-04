@@ -1,0 +1,181 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Результаты тестирования - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="result-session-page">
+    <div class="page-header">
+        <h1>📊 Результаты тестирования</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('result_export', session_id=session.id) }}" class="btn btn-primary">📥 Экспорт в CSV</a>
+            <a href="{{ url_for('results_list') }}" class="btn btn-secondary">← К списку</a>
+        </div>
+    </div>
+    
+    <div class="session-summary card">
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-value">{{ students|length }}</span>
+                <span class="summary-label">Всего учеников</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value">{{ students|selectattr('status', 'eq', 'finished')|list|length }}</span>
+                <span class="summary-label">Завершили</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value">{{ session.time_limit }}</span>
+                <span class="summary-label">Минут на тест</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value">{{ session.created_at[:10] }}</span>
+                <span class="summary-label">Дата</span>
+            </div>
+        </div>
+    </div>
+    
+    {% if students %}
+    <div class="results-table-container card">
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>ФИО</th>
+                    <th>Начал</th>
+                    <th>Завершил</th>
+                    <th>Результат</th>
+                    <th>Оценка</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for st in students %}
+                <tr>
+                    <td class="student-name">{{ st.last_name }} {{ st.first_name }}</td>
+                    <td>{{ st.started_at[11:16] if st.started_at else '—' }}</td>
+                    <td>{{ st.finished_at[11:16] if st.finished_at else '—' }}</td>
+                    <td>
+                        <span class="score">{{ st.correct }} / {{ st.total }}</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: {{ (st.correct / st.total * 100) if st.total else 0 }}%"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="grade grade-{{ st.grade }}">{{ st.grade }}</span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('result_student', student_id=st.id) }}" class="btn btn-secondary btn-small">👁 Подробнее</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>Нет данных об учениках</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 24px;
+}
+
+.summary-item {
+    text-align: center;
+}
+
+.summary-value {
+    display: block;
+    font-size: 2em;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.summary-label {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.results-table-container {
+    padding: 0;
+    overflow: hidden;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.results-table th,
+.results-table td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.results-table th {
+    background: var(--bg-sidebar);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.results-table tr:last-child td {
+    border-bottom: none;
+}
+
+.results-table tr:hover td {
+    background: var(--bg-sidebar);
+}
+
+.student-name {
+    font-weight: 600;
+}
+
+.score {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+.score-bar {
+    width: 100px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #764ba2);
+    border-radius: 3px;
+}
+
+.grade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 1.2em;
+}
+
+.grade-5 { background: var(--success-bg); color: #065f46; }
+.grade-4 { background: #dbeafe; color: #1e40af; }
+.grade-3 { background: var(--warning-bg); color: #92400e; }
+.grade-2 { background: var(--danger-bg); color: #991b1b; }
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}

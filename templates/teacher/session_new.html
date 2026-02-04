@@ -1,0 +1,479 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Новое тестирование - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="session-new-page">
+    <div class="page-header">
+        <h1>▶️ Запустить тестирование</h1>
+        <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">← Назад</a>
+    </div>
+    
+    <form action="{{ url_for('session_new') }}" method="POST" class="session-form">
+        <!-- Шаг 1: Режим вариантов -->
+        <div class="step-card card">
+            <h2>1️⃣ Выберите режим раздачи вариантов</h2>
+            <div class="mode-options">
+                <label class="mode-option">
+                    <input type="radio" name="variant_mode" value="single" checked onchange="updateMode()">
+                    <div class="mode-content">
+                        <div class="mode-icon">📋</div>
+                        <div class="mode-info">
+                            <h3>Один вариант для всех</h3>
+                            <p>Все ученики решают одинаковые задачи</p>
+                        </div>
+                    </div>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="variant_mode" value="individual" onchange="updateMode()">
+                    <div class="mode-content">
+                        <div class="mode-icon">🎲</div>
+                        <div class="mode-info">
+                            <h3>Индивидуальные варианты</h3>
+                            <p>Каждому ученику генерируется свой набор задач</p>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Настройки для единого варианта -->
+        <div class="step-card card" id="singleSettings">
+            <h2>2️⃣ Выберите вариант</h2>
+            {% if variants %}
+            <div class="variants-select">
+                {% for variant in variants %}
+                <label class="variant-option">
+                    <input type="radio" name="variant_id" value="{{ variant.id }}" 
+                           {% if variant.id == preselected_variant or (loop.first and not preselected_variant) %}checked{% endif %}>
+                    <div class="variant-content">
+                        <span class="variant-type">
+                            {% if variant.variant_type == 'full' %}🎯{% else %}📝{% endif %}
+                        </span>
+                        <span class="variant-name">{{ variant.name }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-variants">
+                <p>Нет сохранённых вариантов</p>
+                <a href="{{ url_for('variant_create') }}" class="btn btn-secondary">Создать вариант</a>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Настройки для индивидуальных вариантов -->
+        <div class="step-card card" id="individualSettings" style="display: none;">
+            <h2>2️⃣ Настройки генерации</h2>
+            <div class="form-group">
+                <label>Тип варианта</label>
+                <div class="type-options">
+                    <label class="type-option-small">
+                        <input type="radio" name="individual_type" value="full" checked>
+                        <span>🎯 Полный ЕГЭ (27 задач)</span>
+                    </label>
+                    <label class="type-option-small">
+                        <input type="radio" name="individual_type" value="thematic" onchange="toggleThematic()">
+                        <span>📝 Тематический</span>
+                    </label>
+                </div>
+            </div>
+            <div id="thematicOptions" style="display: none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Номер ЕГЭ</label>
+                        <select name="individual_ege">
+                            {% for num in range(1, 28) %}
+                            <option value="{{ num }}">№{{ num }} ({{ task_counts.get(num, 0) }} задач)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Количество задач</label>
+                        <input type="number" name="individual_count" value="10" min="1" max="50">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Шаг 3: Параметры -->
+        <div class="step-card card">
+            <h2>3️⃣ Параметры тестирования</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>⏱ Время на тест (минут)</label>
+                    <input type="number" name="time_limit" value="60" min="5" max="240">
+                </div>
+                <div class="form-group">
+                    <label>🔑 Код доступа</label>
+                    <div class="checkbox-toggle">
+                        <label>
+                            <input type="checkbox" name="use_code" value="1" checked>
+                            <span>Требовать код для входа</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>📊 После завершения</label>
+                <div class="checkbox-toggle">
+                    <label>
+                        <input type="checkbox" name="show_answers" value="1" checked>
+                        <span>Показывать правильные ответы ученикам</span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>🧑‍🏫 Управление завершением</label>
+                <div class="checkbox-toggle">
+                    <label>
+                        <input type="checkbox" name="teacher_finish_only" value="1">
+                        <span>Завершать тест только по команде учителя</span>
+                    </label>
+                </div>
+                <p class="hint">Если включено — ученики не смогут завершить тест сами.</p>
+            </div>
+        </div>
+        
+        <!-- Шаг 4: Критерии оценки -->
+        <div class="step-card card">
+            <h2>4️⃣ Критерии оценки для этого тестирования</h2>
+            <p class="hint-text">Укажите минимальное количество правильных ответов для каждой оценки</p>
+            
+            {% if saved_criteria %}
+            <div class="form-group">
+                <label>📂 Загрузить сохранённые критерии</label>
+                <select id="savedCriteria" onchange="loadSavedCriteria()">
+                    <option value="">— Не выбрано (ввести вручную) —</option>
+                    {% for crit in saved_criteria %}
+                    <option value="{{ crit.total_tasks }}_{{ crit.grade_5_min }}_{{ crit.grade_4_min }}_{{ crit.grade_3_min }}" 
+                            data-total="{{ crit.total_tasks }}"
+                            data-g5="{{ crit.grade_5_min }}"
+                            data-g4="{{ crit.grade_4_min }}"
+                            data-g3="{{ crit.grade_3_min }}">
+                        {{ crit.name }} ({{ crit.total_tasks }} задач: 5≥{{ crit.grade_5_min }}, 4≥{{ crit.grade_4_min }}, 3≥{{ crit.grade_3_min }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
+            <div class="form-group">
+                <label>📝 Всего задач в варианте</label>
+                <input type="number" name="total_tasks" id="totalTasks" value="8" min="1" max="100" onchange="updateGradeHints()">
+            </div>
+            </div>
+            
+            <div class="grades-row">
+                <div class="grade-input">
+                    <label class="grade-label grade-5-label">Минимум на 5</label>
+                    <input type="number" name="grade_5_min" id="grade5" value="7" min="1">
+                    <span class="grade-hint" id="hint5"></span>
+                </div>
+                <div class="grade-input">
+                    <label class="grade-label grade-4-label">Минимум на 4</label>
+                    <input type="number" name="grade_4_min" id="grade4" value="5" min="1">
+                    <span class="grade-hint" id="hint4"></span>
+                </div>
+                <div class="grade-input">
+                    <label class="grade-label grade-3-label">Минимум на 3</label>
+                    <input type="number" name="grade_3_min" id="grade3" value="3" min="1">
+                    <span class="grade-hint" id="hint3"></span>
+                </div>
+            </div>
+            
+            <div class="grade-presets">
+                <span class="presets-label">Быстрая настройка:</span>
+                <button type="button" class="btn btn-small btn-outline" onclick="setPreset(27)">ЕГЭ (27)</button>
+                <button type="button" class="btn btn-small btn-outline" onclick="setPreset(10)">10 задач</button>
+                <button type="button" class="btn btn-small btn-outline" onclick="setPreset(8)">8 задач</button>
+                <button type="button" class="btn btn-small btn-outline" onclick="setPreset(5)">5 задач</button>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-success btn-large">🚀 Запустить тестирование</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.session-form {
+    max-width: 700px;
+}
+
+.step-card {
+    margin-bottom: 20px;
+}
+
+.step-card h2 {
+    margin-bottom: 20px;
+}
+
+.mode-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.mode-option {
+    cursor: pointer;
+}
+
+.mode-option input {
+    display: none;
+}
+
+.mode-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: var(--transition);
+}
+
+.mode-option input:checked + .mode-content {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.mode-icon {
+    font-size: 2em;
+}
+
+.mode-info h3 {
+    margin-bottom: 4px;
+}
+
+.mode-info p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.variants-select {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.variant-option {
+    cursor: pointer;
+}
+
+.variant-option input {
+    display: none;
+}
+
+.variant-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    transition: var(--transition);
+}
+
+.variant-option input:checked + .variant-content {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.variant-type {
+    font-size: 1.3em;
+}
+
+.no-variants {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-secondary);
+}
+
+.type-options {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.type-option-small {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.type-option-small input {
+    display: none;
+}
+
+.type-option-small span {
+    padding: 10px 16px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    transition: var(--transition);
+}
+
+.type-option-small input:checked + span {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+}
+
+.checkbox-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.checkbox-toggle input {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-large {
+    padding: 16px 32px;
+    font-size: 16px;
+}
+
+.hint-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.grades-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.grade-input {
+    text-align: center;
+}
+
+.grade-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    border-radius: var(--radius);
+}
+
+.grade-5-label { background: #d1fae5; color: #065f46; }
+.grade-4-label { background: #dbeafe; color: #1e40af; }
+.grade-3-label { background: #fef3c7; color: #92400e; }
+
+.grade-input input {
+    width: 80px;
+    text-align: center;
+    font-size: 1.3em;
+    font-weight: 600;
+    padding: 12px;
+}
+
+.grade-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.grade-presets {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-light);
+}
+
+.presets-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--border);
+    color: var(--text);
+}
+
+.btn-outline:hover {
+    background: var(--bg-sidebar);
+    border-color: var(--primary);
+}
+</style>
+
+<script>
+function updateMode() {
+    const mode = document.querySelector('input[name="variant_mode"]:checked').value;
+    document.getElementById('singleSettings').style.display = mode === 'single' ? 'block' : 'none';
+    document.getElementById('individualSettings').style.display = mode === 'individual' ? 'block' : 'none';
+}
+
+function toggleThematic() {
+    const type = document.querySelector('input[name="individual_type"]:checked').value;
+    document.getElementById('thematicOptions').style.display = type === 'thematic' ? 'block' : 'none';
+}
+
+document.querySelectorAll('input[name="individual_type"]').forEach(input => {
+    input.addEventListener('change', toggleThematic);
+});
+
+// Функции для критериев оценки
+function updateGradeHints() {
+    const total = parseInt(document.getElementById('totalTasks').value) || 1;
+    const g5 = parseInt(document.getElementById('grade5').value) || 0;
+    const g4 = parseInt(document.getElementById('grade4').value) || 0;
+    const g3 = parseInt(document.getElementById('grade3').value) || 0;
+    
+    document.getElementById('hint5').textContent = `≥${Math.round(g5/total*100)}%`;
+    document.getElementById('hint4').textContent = `≥${Math.round(g4/total*100)}%`;
+    document.getElementById('hint3').textContent = `≥${Math.round(g3/total*100)}%`;
+}
+
+function setPreset(total) {
+    document.getElementById('totalTasks').value = total;
+    
+    // Рассчитываем пороги: 5=85%, 4=65%, 3=45%
+    document.getElementById('grade5').value = Math.ceil(total * 0.85);
+    document.getElementById('grade4').value = Math.ceil(total * 0.65);
+    document.getElementById('grade3').value = Math.ceil(total * 0.45);
+    
+    // Сбрасываем выбор сохранённых критериев
+    const savedSelect = document.getElementById('savedCriteria');
+    if (savedSelect) savedSelect.value = '';
+    
+    updateGradeHints();
+}
+
+function loadSavedCriteria() {
+    const select = document.getElementById('savedCriteria');
+    const option = select.options[select.selectedIndex];
+    
+    if (option.value) {
+        document.getElementById('totalTasks').value = option.dataset.total;
+        document.getElementById('grade5').value = option.dataset.g5;
+        document.getElementById('grade4').value = option.dataset.g4;
+        document.getElementById('grade3').value = option.dataset.g3;
+        updateGradeHints();
+    }
+}
+
+// Обновляем количество задач при выборе варианта
+document.querySelectorAll('input[name="variant_id"]').forEach(input => {
+    input.addEventListener('change', function() {
+        // Получаем количество задач из варианта (можно добавить data-атрибут)
+        updateGradeHints();
+    });
+});
+
+// Инициализация
+updateGradeHints();
+</script>
+{% endblock %}

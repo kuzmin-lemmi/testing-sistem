@@ -1,0 +1,223 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}{{ student.last_name }} {{ student.first_name }} - Результат{% endblock %}
+
+{% block content %}
+<div class="result-student-page">
+    <div class="page-header">
+        <h1>{{ student.last_name }} {{ student.first_name }}</h1>
+        <a href="{{ url_for('results_list') }}" class="btn btn-secondary">← К результатам</a>
+    </div>
+    
+    <div class="result-summary card">
+        <div class="summary-content">
+            <div class="score-big">
+                <div class="score-circle">
+                    <span class="correct">{{ correct_count }}</span>
+                    <span class="total">из {{ total }}</span>
+                </div>
+            </div>
+            <div class="grade-big">
+                <span class="grade grade-{{ grade }}">{{ grade }}</span>
+                <span class="grade-label">Оценка</span>
+            </div>
+            <div class="time-info">
+                <div class="time-row">
+                    <span class="time-label">Начал:</span>
+                    <span class="time-value">{{ student.started_at[:16] if student.started_at else '—' }}</span>
+                </div>
+                <div class="time-row">
+                    <span class="time-label">Завершил:</span>
+                    <span class="time-value">{{ student.finished_at[:16] if student.finished_at else '—' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="answers-detail card">
+        <h2>📋 Ответы по задачам</h2>
+        <table class="answers-table">
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Номер ЕГЭ</th>
+                    <th>Ответ ученика</th>
+                    <th>Правильный ответ</th>
+                    <th>Результат</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>№{{ task.ege_number }}</td>
+                    <td>
+                        {% if answers_dict.get(task.id) %}
+                        <span class="answer-value {% if answers_dict[task.id].is_correct %}correct{% else %}wrong{% endif %}">
+                            {{ answers_dict[task.id].answer_1 if answers_dict[task.id].answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ answers_dict[task.id].answer_2 if answers_dict[task.id].answer_2 is not none else '—' }}{% endif %}
+                        </span>
+                        {% else %}
+                        <span class="no-answer">Не отвечено</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="answer-value correct">
+                            {{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        {% if answers_dict.get(task.id) and answers_dict[task.id].is_correct %}
+                        <span class="status-correct">✓ Верно</span>
+                        {% else %}
+                        <span class="status-wrong">✗ Неверно</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.result-summary {
+    margin-bottom: 24px;
+}
+
+.summary-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 30px;
+}
+
+.score-circle {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), #764ba2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.score-circle .correct {
+    font-size: 3em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.score-circle .total {
+    font-size: 1em;
+    opacity: 0.9;
+}
+
+.grade-big {
+    text-align: center;
+}
+
+.grade-big .grade {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    font-size: 2.5em;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.grade-5 { background: var(--success-bg); color: #065f46; }
+.grade-4 { background: #dbeafe; color: #1e40af; }
+.grade-3 { background: var(--warning-bg); color: #92400e; }
+.grade-2 { background: var(--danger-bg); color: #991b1b; }
+
+.grade-label {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.time-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.time-row {
+    display: flex;
+    gap: 12px;
+}
+
+.time-label {
+    color: var(--text-muted);
+}
+
+.time-value {
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.answers-detail h2 {
+    margin-bottom: 20px;
+}
+
+.answers-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.answers-table th,
+.answers-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.answers-table th {
+    background: var(--bg-sidebar);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.answers-table tr:last-child td {
+    border-bottom: none;
+}
+
+.answer-value {
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.answer-value.correct {
+    background: var(--success-bg);
+    color: #065f46;
+}
+
+.answer-value.wrong {
+    background: var(--danger-bg);
+    color: #991b1b;
+}
+
+.no-answer {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.status-correct {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.status-wrong {
+    color: var(--danger);
+    font-weight: 600;
+}
+</style>
+{% endblock %}

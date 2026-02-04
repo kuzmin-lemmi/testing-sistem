@@ -1,0 +1,288 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Мониторинг - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="monitor-page">
+    <div class="page-header">
+        <h1>📊 Мониторинг тестирования</h1>
+        <div class="header-actions">
+            {% if session.status == 'active' %}
+            <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Завершить тестирование?')">⏹ Завершить</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">← К списку</a>
+        </div>
+    </div>
+    
+    <div class="session-info-card card">
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Статус</span>
+                <span class="info-value">
+                    {% if session.status == 'active' %}
+                    <span class="status-badge active">🟢 Активно</span>
+                    {% else %}
+                    <span class="status-badge closed">⚫ Завершено</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Время на тест</span>
+                <span class="info-value">{{ session.time_limit }} мин</span>
+            </div>
+            {% if session.access_code %}
+            <div class="info-item">
+                <span class="info-label">Код доступа</span>
+                <span class="info-value code">{{ session.access_code }}</span>
+            </div>
+            {% endif %}
+            <div class="info-item">
+                <span class="info-label">Создано</span>
+                <span class="info-value">{{ session.created_at[:16] }}</span>
+            </div>
+        </div>
+        
+        {% if session.grade_5_min %}
+        <div class="grade-criteria-info">
+            <span class="criteria-title">📊 Критерии оценки:</span>
+            <div class="criteria-badges">
+                <span class="criteria-badge grade-5">5: ≥{{ session.grade_5_min }}</span>
+                <span class="criteria-badge grade-4">4: ≥{{ session.grade_4_min }}</span>
+                <span class="criteria-badge grade-3">3: ≥{{ session.grade_3_min }}</span>
+                <span class="criteria-badge grade-2">2: &lt;{{ session.grade_3_min }}</span>
+                <span class="criteria-total">из {{ session.total_tasks }} задач</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="students-section">
+        <h2>👥 Ученики ({{ students|length }})</h2>
+        
+        {% if students %}
+        <div class="students-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ФИО</th>
+                        <th>Статус</th>
+                        <th>Начал</th>
+                        <th>Завершил</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td class="student-name">{{ student.last_name }} {{ student.first_name }}</td>
+                        <td>
+                            {% if student.status == 'finished' %}
+                            <span class="status-pill finished">✅ Завершил</span>
+                            {% else %}
+                            <span class="status-pill in-progress">⏳ В процессе</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ student.started_at[11:16] if student.started_at else '—' }}</td>
+                        <td>{{ student.finished_at[11:16] if student.finished_at else '—' }}</td>
+                        <td>
+                            <a href="{{ url_for('result_student', student_id=student.id) }}" class="btn btn-secondary btn-small">📊 Результат</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="no-students">
+            <p>Пока никто не подключился</p>
+            {% if session.status == 'active' and session.access_code %}
+            <p class="hint">Продиктуйте ученикам код: <strong>{{ session.access_code }}</strong></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.session-info-card {
+    margin-bottom: 30px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 24px;
+}
+
+.grade-criteria-info {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.criteria-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.criteria-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.criteria-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.criteria-badge.grade-5 { background: #d1fae5; color: #065f46; }
+.criteria-badge.grade-4 { background: #dbeafe; color: #1e40af; }
+.criteria-badge.grade-3 { background: #fef3c7; color: #92400e; }
+.criteria-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+
+.criteria-total {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.info-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.info-value.code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4em;
+    color: var(--primary);
+    letter-spacing: 2px;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+.status-badge.active {
+    background: var(--success-bg);
+    color: #065f46;
+}
+
+.status-badge.closed {
+    background: var(--bg-sidebar);
+    color: var(--text-muted);
+}
+
+.students-section h2 {
+    margin-bottom: 20px;
+}
+
+.students-table {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.students-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.students-table th,
+.students-table td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.students-table th {
+    background: var(--bg-sidebar);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.students-table tr:last-child td {
+    border-bottom: none;
+}
+
+.students-table tr:hover td {
+    background: var(--bg-sidebar);
+}
+
+.student-name {
+    font-weight: 600;
+}
+
+.status-pill {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.status-pill.finished {
+    background: var(--success-bg);
+    color: #065f46;
+}
+
+.status-pill.in-progress {
+    background: var(--warning-bg);
+    color: #92400e;
+}
+
+.no-students {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+}
+
+.no-students .hint {
+    margin-top: 16px;
+    font-size: 1.1em;
+}
+
+.no-students .hint strong {
+    color: var(--primary);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 2px;
+}
+</style>
+
+{% if session.status == 'active' %}
+<script>
+// Автообновление страницы каждые 10 секунд
+setTimeout(function() {
+    location.reload();
+}, 10000);
+</script>
+{% endif %}
+{% endblock %}
