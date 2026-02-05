@@ -432,6 +432,74 @@
         }
 
         .calc-history div { padding: 2px 0; }
+
+        .py-panel {
+            position: fixed;
+            right: 16px;
+            top: 86px;
+            width: 420px;
+            max-width: calc(100vw - 32px);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            display: none;
+            z-index: 1200;
+        }
+
+        .py-panel.active { display: block; }
+
+        .py-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+        }
+
+        .py-body { padding: 12px; }
+
+        .py-editor {
+            width: 100%;
+            height: 180px;
+            resize: vertical;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .py-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .py-output {
+            margin-top: 10px;
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 10px;
+            padding: 10px;
+            height: 140px;
+            overflow: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        .py-status {
+            margin-top: 6px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .py-file {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
         
         @media (max-width: 768px) {
             .sidebar { width: 70px; padding: 10px 6px; }
@@ -445,6 +513,9 @@
         <div class="header-actions">
             {% if calculator_enabled %}
             <button type="button" class="calc-toggle" onclick="toggleCalculator()">🧮 Калькулятор</button>
+            {% endif %}
+            {% if python_enabled %}
+            <button type="button" class="calc-toggle" onclick="togglePython()">🐍 Python</button>
             {% endif %}
             <div class="timer" id="timer">--:--</div>
         </div>
@@ -522,6 +593,25 @@
                 <button class="calc-btn eq" onclick="calcEvaluate()">=</button>
             </div>
             <div class="calc-history" id="calcHistory"></div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if python_enabled %}
+    <div class="py-panel" id="pyPanel">
+        <div class="py-header">
+            <span>🐍 Python</span>
+            <button type="button" class="calc-close" onclick="togglePython()">✕</button>
+        </div>
+        <div class="py-body">
+            <textarea id="pyEditor" class="py-editor" placeholder="print('Hello')"></textarea>
+            <div class="py-actions">
+                <button type="button" class="nav-btn primary" onclick="runPython()">▶ Запустить</button>
+                <button type="button" class="nav-btn secondary" onclick="insertPythonResult()">Вставить в ответ</button>
+            </div>
+            <div class="py-status" id="pyStatus">Первый запуск может занять до минуты.</div>
+            <div class="py-file" id="pyFile"></div>
+            <pre class="py-output" id="pyOutput"></pre>
         </div>
     </div>
     {% endif %}
@@ -614,9 +704,19 @@
         const teacherFinishOnly = {{ 'true' if teacher_finish_only else 'false' }};
         const appMode = {{ 'true' if app_mode else 'false' }};
         const calculatorEnabled = {{ 'true' if calculator_enabled else 'false' }};
+        const pythonEnabled = {{ 'true' if python_enabled else 'false' }};
         let isPaused = {{ 'true' if paused else 'false' }};
         const dirtyTasks = new Set();
         let zoomedImage = null;
+        const taskMeta = [
+            {% for task in tasks %}
+            {
+                id: {{ task.id }},
+                attachment_path: {{ task.attachment_path|tojson }},
+                attachment_name: {{ task.attachment_name|tojson }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
         
         // Зум изображения
         function toggleZoom(img) {
@@ -828,6 +928,113 @@
                     }
                 });
             }
+        }
+
+        // Python
+        if (pythonEnabled) {
+            const pyPanel = document.getElementById('pyPanel');
+            const pyEditor = document.getElementById('pyEditor');
+            const pyOutput = document.getElementById('pyOutput');
+            const pyStatus = document.getElementById('pyStatus');
+            const pyFile = document.getElementById('pyFile');
+            let pyodideReady = null;
+
+            window.togglePython = function() {
+                if (!pyPanel) return;
+                pyPanel.classList.toggle('active');
+                if (pyPanel.classList.contains('active')) {
+                    setTimeout(() => pyEditor && pyEditor.focus(), 0);
+                }
+            };
+
+            async function loadPyodideScript() {
+                if (window.loadPyodide) return;
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Pyodide load failed'));
+                    document.head.appendChild(script);
+                });
+            }
+
+            async function initPyodide() {
+                if (pyodideReady) return pyodideReady;
+                pyStatus.textContent = 'Загрузка Python... Подождите.';
+                pyodideReady = (async () => {
+                    await loadPyodideScript();
+                    const pyodide = await loadPyodide({
+                        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/'
+                    });
+                    pyStatus.textContent = 'Python готов к запуску.';
+                    return pyodide;
+                })().catch((e) => {
+                    pyStatus.textContent = 'Не удалось загрузить Python. Проверьте сеть.';
+                    throw e;
+                });
+                return pyodideReady;
+            }
+
+            function currentTaskAttachment() {
+                const meta = taskMeta[currentTask];
+                if (!meta || !meta.attachment_path) return null;
+                return {
+                    path: meta.attachment_path,
+                    name: meta.attachment_name || meta.attachment_path
+                };
+            }
+
+            async function loadAttachment(pyodide) {
+                const file = currentTaskAttachment();
+                if (!file) {
+                    pyFile.textContent = '';
+                    return null;
+                }
+                pyFile.textContent = `Файл доступен: ${file.name}`;
+                const res = await fetch(`/attachments/${file.path}`);
+                const buf = new Uint8Array(await res.arrayBuffer());
+                pyodide.FS.writeFile(file.name, buf);
+                return file.name;
+            }
+
+            window.runPython = async function() {
+                if (!pyEditor || !pyOutput) return;
+                const code = pyEditor.value;
+                if (!code.trim()) return;
+                pyOutput.textContent = '';
+                try {
+                    const pyodide = await initPyodide();
+                    await loadAttachment(pyodide);
+                    let output = '';
+                    pyodide.setStdout({ batched: (s) => { output += s; } });
+                    pyodide.setStderr({ batched: (s) => { output += s; } });
+                    await pyodide.runPythonAsync(code);
+                    pyOutput.textContent = output || 'Готово.';
+                } catch (e) {
+                    pyOutput.textContent = String(e);
+                }
+            };
+
+            window.insertPythonResult = function() {
+                if (!pyOutput) return;
+                const text = pyOutput.textContent.trim();
+                if (!text) return;
+                const lines = text.split('\n').filter(Boolean);
+                const value = lines.length ? lines[lines.length - 1] : text;
+                const taskId = getTaskIdByIndex(currentTask);
+                if (!taskId) return;
+                const textarea = document.querySelector(`textarea[data-task-id="${taskId}"][data-answer="text"]`);
+                const input1 = document.querySelector(`input[data-task-id="${taskId}"][data-answer="1"]`);
+                if (textarea) {
+                    textarea.value = value;
+                    scheduleSave(taskId);
+                    return;
+                }
+                if (input1) {
+                    input1.value = value;
+                    scheduleSave(taskId);
+                }
+            };
         }
         
         // Таймер
