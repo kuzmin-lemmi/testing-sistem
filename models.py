@@ -2,7 +2,7 @@
 Модели базы данных SQLite
 """
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from config import DATABASE_PATH
 
 def get_db():
@@ -716,7 +716,7 @@ class TestSession:
         if row and row['paused'] and row['paused_at']:
             try:
                 paused_at = datetime.fromisoformat(row['paused_at'])
-                delta = int((datetime.now() - paused_at).total_seconds())
+                delta = int((datetime.now(timezone.utc).replace(tzinfo=None) - paused_at).total_seconds())
             except Exception:
                 delta = 0
             cursor.execute('''

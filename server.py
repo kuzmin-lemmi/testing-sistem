@@ -7,7 +7,7 @@ import os
 import uuid
 import socket
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, EXPORTS_DIR,
                    MAX_IMAGE_SIZE, MAX_ATTACHMENT_SIZE, MAX_IMPORT_ZIP_SIZE,
@@ -75,8 +75,8 @@ def _calc_remaining_seconds(student, test_session):
     paused = bool(test_session.get('paused'))
     paused_at = _parse_dt(test_session.get('paused_at'))
 
-    start_time = _parse_dt(student.get('started_at')) or datetime.now()
-    now = datetime.now()
+    start_time = _parse_dt(student.get('started_at')) or datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     elapsed = (now - start_time).total_seconds()
     paused_elapsed = (now - paused_at).total_seconds() if paused and paused_at else 0
     effective_elapsed = max(0, elapsed - pause_total - paused_elapsed)
@@ -806,6 +806,8 @@ def session_new():
     
     # GET - показываем форму
     variants = Variant.get_all()
+    for v in variants:
+        v['tasks_count'] = len(Variant.get_tasks(v['id']))
     task_counts = Task.count_by_ege_number()
     preselected_variant = request.args.get('variant_id', type=int)
     saved_criteria = GradeCriteria.get_all()
@@ -866,7 +868,7 @@ def session_monitor(session_id):
         return redirect(url_for('sessions_list'))
     
     students = TestSession.get_students(session_id)
-    now = datetime.now()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     online_count = 0
     for s in students:
         last_seen = _parse_dt(s.get('last_seen_at'))

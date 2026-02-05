@@ -44,13 +44,14 @@
             <div class="variants-select">
                 {% for variant in variants %}
                 <label class="variant-option">
-                    <input type="radio" name="variant_id" value="{{ variant.id }}" 
+                    <input type="radio" name="variant_id" value="{{ variant.id }}" data-tasks-count="{{ variant.tasks_count }}"
                            {% if variant.id == preselected_variant or (loop.first and not preselected_variant) %}checked{% endif %}>
                     <div class="variant-content">
                         <span class="variant-type">
                             {% if variant.variant_type == 'full' %}🎯{% else %}📝{% endif %}
                         </span>
                         <span class="variant-name">{{ variant.name }}</span>
+                        <span class="variant-count">{{ variant.tasks_count }} задач</span>
                     </div>
                 </label>
                 {% endfor %}
@@ -289,6 +290,12 @@
     transition: var(--transition);
 }
 
+.variant-count {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
 .variant-option input:checked + .variant-content {
     border-color: var(--primary);
     background: var(--primary-bg);
@@ -424,16 +431,27 @@ function updateMode() {
     const mode = document.querySelector('input[name="variant_mode"]:checked').value;
     document.getElementById('singleSettings').style.display = mode === 'single' ? 'block' : 'none';
     document.getElementById('individualSettings').style.display = mode === 'individual' ? 'block' : 'none';
+    syncTotalTasks();
 }
 
 function toggleThematic() {
     const type = document.querySelector('input[name="individual_type"]:checked').value;
     document.getElementById('thematicOptions').style.display = type === 'thematic' ? 'block' : 'none';
+    syncTotalTasks();
 }
 
 document.querySelectorAll('input[name="individual_type"]').forEach(input => {
     input.addEventListener('change', toggleThematic);
 });
+
+document.querySelectorAll('input[name="variant_id"]').forEach(input => {
+    input.addEventListener('change', syncTotalTasks);
+});
+
+const individualCountInput = document.querySelector('input[name="individual_count"]');
+if (individualCountInput) {
+    individualCountInput.addEventListener('input', syncTotalTasks);
+}
 
 // Функции для критериев оценки
 function updateGradeHints() {
@@ -445,6 +463,35 @@ function updateGradeHints() {
     document.getElementById('hint5').textContent = `≥${Math.round(g5/total*100)}%`;
     document.getElementById('hint4').textContent = `≥${Math.round(g4/total*100)}%`;
     document.getElementById('hint3').textContent = `≥${Math.round(g3/total*100)}%`;
+}
+
+function syncTotalTasks() {
+    const totalInput = document.getElementById('totalTasks');
+    if (!totalInput) return;
+    const modeInput = document.querySelector('input[name="variant_mode"]:checked');
+    if (!modeInput) return;
+    const mode = modeInput.value;
+    if (mode === 'single') {
+        const selected = document.querySelector('input[name="variant_id"]:checked');
+        if (selected && selected.dataset.tasksCount) {
+            totalInput.value = selected.dataset.tasksCount;
+            updateGradeHints();
+        }
+        return;
+    }
+    const type = document.querySelector('input[name="individual_type"]:checked')?.value;
+    if (type === 'full') {
+        totalInput.value = 27;
+        updateGradeHints();
+        return;
+    }
+    if (type === 'thematic') {
+        const countInput = document.querySelector('input[name="individual_count"]');
+        if (countInput && countInput.value) {
+            totalInput.value = countInput.value;
+            updateGradeHints();
+        }
+    }
 }
 
 function setPreset(total) {
@@ -475,15 +522,9 @@ function loadSavedCriteria() {
     }
 }
 
-// Обновляем количество задач при выборе варианта
-document.querySelectorAll('input[name="variant_id"]').forEach(input => {
-    input.addEventListener('change', function() {
-        // Получаем количество задач из варианта (можно добавить data-атрибут)
-        updateGradeHints();
-    });
-});
-
 // Инициализация
+updateMode();
+syncTotalTasks();
 updateGradeHints();
 </script>
 {% endblock %}
