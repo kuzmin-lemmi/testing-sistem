@@ -219,6 +219,10 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'extra_seconds'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN extra_seconds INTEGER NOT NULL DEFAULT 0")
 
+    # 6) test_sessions: calculator
+    if not _table_has_column(conn, 'test_sessions', 'calculator_enabled'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN calculator_enabled BOOLEAN NOT NULL DEFAULT 0")
+
     conn.commit()
     conn.close()
 
@@ -281,6 +285,7 @@ def init_db():
             paused_at DATETIME,
             pause_total_seconds INTEGER NOT NULL DEFAULT 0,
             extra_seconds INTEGER NOT NULL DEFAULT 0,
+            calculator_enabled BOOLEAN NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed')),
             grade_5_min INTEGER,
             grade_4_min INTEGER,
@@ -626,17 +631,17 @@ if __name__ == '__main__':
 # Функции для работы с тестированиями (сессиями)
 class TestSession:
     @staticmethod
-    def create(variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only,
+    def create(variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled,
                thematic_ege_number=None, thematic_tasks_count=None,
                grade_5_min=None, grade_4_min=None, grade_3_min=None, total_tasks=None):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO test_sessions (variant_id, individual_mode, time_limit, 
-                                       access_code, show_answers, teacher_finish_only, status,
+                                       access_code, show_answers, teacher_finish_only, calculator_enabled, status,
                                        grade_5_min, grade_4_min, grade_3_min, total_tasks)
-            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
-        ''', (variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only,
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+        ''', (variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled,
               grade_5_min, grade_4_min, grade_3_min, total_tasks))
         session_id = cursor.lastrowid
         

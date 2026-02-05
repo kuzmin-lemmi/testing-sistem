@@ -726,6 +726,7 @@ def session_new():
         use_code = request.form.get('use_code') == '1'
         show_answers = request.form.get('show_answers') == '1'
         teacher_finish_only = request.form.get('teacher_finish_only') == '1'
+        calculator_enabled = request.form.get('calculator_enabled') == '1'
         
         # Критерии оценки
         total_tasks = int(request.form.get('total_tasks', 8))
@@ -755,6 +756,7 @@ def session_new():
                 access_code=access_code,
                 show_answers=show_answers,
                 teacher_finish_only=teacher_finish_only,
+                calculator_enabled=calculator_enabled,
                 grade_5_min=grade_5_min,
                 grade_4_min=grade_4_min,
                 grade_3_min=grade_3_min,
@@ -772,6 +774,7 @@ def session_new():
                     access_code=access_code,
                     show_answers=show_answers,
                     teacher_finish_only=teacher_finish_only,
+                    calculator_enabled=calculator_enabled,
                     thematic_ege_number=0,  # 0 = полный вариант
                     thematic_tasks_count=27,
                     grade_5_min=grade_5_min,
@@ -789,6 +792,7 @@ def session_new():
                     access_code=access_code,
                     show_answers=show_answers,
                     teacher_finish_only=teacher_finish_only,
+                    calculator_enabled=calculator_enabled,
                     thematic_ege_number=ege_number,
                     thematic_tasks_count=tasks_count,
                     grade_5_min=grade_5_min,
@@ -1036,7 +1040,8 @@ def student_test():
                          current_task=current_task,
                          teacher_finish_only=bool(test_session and test_session.get('teacher_finish_only')),
                          app_mode=bool(session.get('app_mode')),
-                         paused=bool(test_session and test_session.get('paused')))
+                         paused=bool(test_session and test_session.get('paused')),
+                         calculator_enabled=bool(test_session and test_session.get('calculator_enabled')))
 
 @app.route('/test/save', methods=['POST'])
 def student_save_answer():

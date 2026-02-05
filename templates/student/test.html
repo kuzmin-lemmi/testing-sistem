@@ -32,6 +32,16 @@
             z-index: 100;
         }
         .student-name { font-weight: 700; font-size: 1.1em; }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-finish {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
         .timer {
             background: rgba(255,255,255,0.2);
             padding: 10px 20px;
@@ -59,6 +69,17 @@
             opacity: 0.7;
             cursor: not-allowed;
         }
+        .calc-toggle {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.35);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .calc-toggle:hover { background: rgba(255,255,255,0.3); }
         .finish-note {
             font-size: 0.9em;
             opacity: 0.85;
@@ -337,6 +358,80 @@
         }
 
         .pause-banner.active { display: block; }
+
+        .calc-panel {
+            position: fixed;
+            right: 16px;
+            top: 86px;
+            width: 320px;
+            max-width: calc(100vw - 32px);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            display: none;
+            z-index: 1200;
+        }
+
+        .calc-panel.active { display: block; }
+
+        .calc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+        }
+
+        .calc-close {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+
+        .calc-body { padding: 12px; }
+
+        .calc-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            margin-bottom: 10px;
+        }
+
+        .calc-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .calc-btn {
+            padding: 10px 0;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .calc-btn.op { background: #eef2ff; }
+        .calc-btn.eq { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .calc-history {
+            margin-top: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .calc-history div { padding: 2px 0; }
         
         @media (max-width: 768px) {
             .sidebar { width: 70px; padding: 10px 6px; }
@@ -347,23 +442,30 @@
 <body>
     <header class="header">
         <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>
-        <div class="timer" id="timer">--:--</div>
-        {% if teacher_finish_only %}
-        <div class="finish-note">
-            Завершение теста — только по команде учителя
+        <div class="header-actions">
+            {% if calculator_enabled %}
+            <button type="button" class="calc-toggle" onclick="toggleCalculator()">🧮 Калькулятор</button>
+            {% endif %}
+            <div class="timer" id="timer">--:--</div>
         </div>
-        <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
-            <button type="submit" class="btn-finish" disabled>
-                Ожидайте учителя
-            </button>
-        </form>
-        {% else %}
-        <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
-            <button type="submit" class="btn-finish" onclick="return confirm('Завершить тест? Это действие нельзя отменить.')">
-                Завершить тест
-            </button>
-        </form>
-        {% endif %}
+        <div class="header-finish">
+            {% if teacher_finish_only %}
+            <div class="finish-note">
+                Завершение теста — только по команде учителя
+            </div>
+            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
+                <button type="submit" class="btn-finish" disabled>
+                    Ожидайте учителя
+                </button>
+            </form>
+            {% else %}
+            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
+                <button type="submit" class="btn-finish" onclick="return confirm('Завершить тест? Это действие нельзя отменить.')">
+                    Завершить тест
+                </button>
+            </form>
+            {% endif %}
+        </div>
     </header>
 
     {% if app_mode %}
@@ -381,6 +483,48 @@
     {% endif %}
 
     <div class="pause-banner" id="pauseOverlay">Пауза учителя — ввод отключен</div>
+
+    {% if calculator_enabled %}
+    <div class="calc-panel" id="calcPanel">
+        <div class="calc-header">
+            <span>🧮 Калькулятор</span>
+            <button type="button" class="calc-close" onclick="toggleCalculator()">✕</button>
+        </div>
+        <div class="calc-body">
+            <input type="text" id="calcInput" class="calc-input" placeholder="Введите выражение">
+            <div class="calc-grid">
+                <button class="calc-btn" onclick="calcInsert('7')">7</button>
+                <button class="calc-btn" onclick="calcInsert('8')">8</button>
+                <button class="calc-btn" onclick="calcInsert('9')">9</button>
+                <button class="calc-btn op" onclick="calcInsert('/')">÷</button>
+
+                <button class="calc-btn" onclick="calcInsert('4')">4</button>
+                <button class="calc-btn" onclick="calcInsert('5')">5</button>
+                <button class="calc-btn" onclick="calcInsert('6')">6</button>
+                <button class="calc-btn op" onclick="calcInsert('*')">×</button>
+
+                <button class="calc-btn" onclick="calcInsert('1')">1</button>
+                <button class="calc-btn" onclick="calcInsert('2')">2</button>
+                <button class="calc-btn" onclick="calcInsert('3')">3</button>
+                <button class="calc-btn op" onclick="calcInsert('-')">−</button>
+
+                <button class="calc-btn" onclick="calcInsert('0')">0</button>
+                <button class="calc-btn" onclick="calcInsert('.')">.</button>
+                <button class="calc-btn op" onclick="calcInsert('(')">(</button>
+                <button class="calc-btn op" onclick="calcInsert(')')">)</button>
+
+                <button class="calc-btn op" onclick="calcInsert('^')">^</button>
+                <button class="calc-btn op" onclick="calcInsert('sqrt(')">√</button>
+                <button class="calc-btn" onclick="calcBackspace()">⌫</button>
+                <button class="calc-btn op" onclick="calcInsert('+')">+</button>
+
+                <button class="calc-btn" onclick="calcClear()">C</button>
+                <button class="calc-btn eq" onclick="calcEvaluate()">=</button>
+            </div>
+            <div class="calc-history" id="calcHistory"></div>
+        </div>
+    </div>
+    {% endif %}
     
     <div class="main">
         <aside class="sidebar">
@@ -459,12 +603,17 @@
     
     <div class="zoom-overlay" id="zoomOverlay" onclick="closeZoom()"></div>
     <div class="save-indicator" id="saveIndicator">✓ Сохранено</div>
-    
+
+    {% if calculator_enabled %}
+    <script src="{{ url_for('static', filename='js/vendor/decimal.min.js') }}"></script>
+    {% endif %}
+
     <script>
         let currentTask = {{ current_task }};
         let remainingSeconds = {{ remaining }};
         const teacherFinishOnly = {{ 'true' if teacher_finish_only else 'false' }};
         const appMode = {{ 'true' if app_mode else 'false' }};
+        const calculatorEnabled = {{ 'true' if calculator_enabled else 'false' }};
         let isPaused = {{ 'true' if paused else 'false' }};
         const dirtyTasks = new Set();
         let zoomedImage = null;
@@ -516,6 +665,169 @@
         if (appMode) {
             updateFullscreenUI();
             document.addEventListener('fullscreenchange', updateFullscreenUI);
+        }
+
+        // Калькулятор
+        if (calculatorEnabled) {
+            const calcPanel = document.getElementById('calcPanel');
+            const calcInput = document.getElementById('calcInput');
+            const calcHistory = document.getElementById('calcHistory');
+
+            window.toggleCalculator = function() {
+                if (!calcPanel) return;
+                calcPanel.classList.toggle('active');
+                if (calcPanel.classList.contains('active')) {
+                    setTimeout(() => calcInput && calcInput.focus(), 0);
+                }
+            };
+
+            window.calcInsert = function(value) {
+                if (!calcInput) return;
+                calcInput.value += value;
+                calcInput.focus();
+            };
+
+            window.calcClear = function() {
+                if (calcInput) calcInput.value = '';
+            };
+
+            window.calcBackspace = function() {
+                if (!calcInput) return;
+                calcInput.value = calcInput.value.slice(0, -1);
+            };
+
+            function tokenize(expr) {
+                const cleaned = expr.replace(/\s+/g, '').replace(/,/g, '.').replace(/√/g, 'sqrt');
+                const regex = /(sqrt|\d*\.\d+|\d+\.?\d*|\^|\+|\-|\*|\/|\(|\))/g;
+                const tokens = cleaned.match(regex) || [];
+                return tokens;
+            }
+
+            function toRPN(tokens) {
+                const output = [];
+                const stack = [];
+                const prec = { 'u-': 4, '^': 3, '*': 2, '/': 2, '+': 1, '-': 1 };
+                const right = { '^': true, 'u-': true };
+                let prevType = null;
+
+                tokens.forEach((token) => {
+                    if (!isNaN(token)) {
+                        output.push(token);
+                        prevType = 'num';
+                        return;
+                    }
+                    if (token === 'sqrt') {
+                        stack.push(token);
+                        prevType = 'func';
+                        return;
+                    }
+                    if (token === '(') {
+                        stack.push(token);
+                        prevType = '(';
+                        return;
+                    }
+                    if (token === ')') {
+                        while (stack.length && stack[stack.length - 1] !== '(') {
+                            output.push(stack.pop());
+                        }
+                        stack.pop();
+                        if (stack.length && stack[stack.length - 1] === 'sqrt') {
+                            output.push(stack.pop());
+                        }
+                        prevType = ')';
+                        return;
+                    }
+
+                    let op = token;
+                    if (op === '-' && (prevType === null || prevType === 'op' || prevType === '(' || prevType === 'func')) {
+                        op = 'u-';
+                    }
+                    while (stack.length) {
+                        const top = stack[stack.length - 1];
+                        if (top === '(' || top === 'sqrt') break;
+                        const topPrec = prec[top];
+                        const opPrec = prec[op];
+                        if (topPrec > opPrec || (topPrec === opPrec && !right[op])) {
+                            output.push(stack.pop());
+                        } else {
+                            break;
+                        }
+                    }
+                    stack.push(op);
+                    prevType = 'op';
+                });
+
+                while (stack.length) {
+                    output.push(stack.pop());
+                }
+                return output;
+            }
+
+            function evalRPN(rpn) {
+                const stack = [];
+                rpn.forEach((token) => {
+                    if (!isNaN(token)) {
+                        stack.push(new Decimal(token));
+                        return;
+                    }
+                    if (token === 'u-') {
+                        const a = stack.pop();
+                        stack.push(a.neg());
+                        return;
+                    }
+                    if (token === 'sqrt') {
+                        const a = stack.pop();
+                        stack.push(a.sqrt());
+                        return;
+                    }
+                    const b = stack.pop();
+                    const a = stack.pop();
+                    switch (token) {
+                        case '+': stack.push(a.plus(b)); break;
+                        case '-': stack.push(a.minus(b)); break;
+                        case '*': stack.push(a.times(b)); break;
+                        case '/': stack.push(a.div(b)); break;
+                        case '^': stack.push(a.pow(b)); break;
+                        default: throw new Error('bad op');
+                    }
+                });
+                return stack.pop();
+            }
+
+            function addHistory(expr, result) {
+                if (!calcHistory) return;
+                const item = document.createElement('div');
+                item.textContent = expr + ' = ' + result;
+                calcHistory.prepend(item);
+                while (calcHistory.children.length > 10) {
+                    calcHistory.removeChild(calcHistory.lastChild);
+                }
+            }
+
+            window.calcEvaluate = function() {
+                if (!calcInput) return;
+                const expr = calcInput.value.trim();
+                if (!expr) return;
+                try {
+                    const tokens = tokenize(expr);
+                    const rpn = toRPN(tokens);
+                    const result = evalRPN(rpn);
+                    const resultStr = result.toString();
+                    addHistory(expr, resultStr);
+                    calcInput.value = resultStr;
+                } catch (e) {
+                    addHistory(expr, 'Ошибка');
+                }
+            };
+
+            if (calcInput) {
+                calcInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        window.calcEvaluate();
+                    }
+                });
+            }
         }
         
         // Таймер
