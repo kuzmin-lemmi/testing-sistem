@@ -209,6 +209,16 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'teacher_finish_only'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN teacher_finish_only BOOLEAN NOT NULL DEFAULT 0")
 
+    # 5) test_sessions: pause/extend controls
+    if not _table_has_column(conn, 'test_sessions', 'paused'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN paused BOOLEAN NOT NULL DEFAULT 0")
+    if not _table_has_column(conn, 'test_sessions', 'paused_at'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN paused_at DATETIME")
+    if not _table_has_column(conn, 'test_sessions', 'pause_total_seconds'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN pause_total_seconds INTEGER NOT NULL DEFAULT 0")
+    if not _table_has_column(conn, 'test_sessions', 'extra_seconds'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN extra_seconds INTEGER NOT NULL DEFAULT 0")
+
     conn.commit()
     conn.close()
 
@@ -267,6 +277,10 @@ def init_db():
             access_code TEXT,
             show_answers BOOLEAN NOT NULL DEFAULT 1,
             teacher_finish_only BOOLEAN NOT NULL DEFAULT 0,
+            paused BOOLEAN NOT NULL DEFAULT 0,
+            paused_at DATETIME,
+            pause_total_seconds INTEGER NOT NULL DEFAULT 0,
+            extra_seconds INTEGER NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed')),
             grade_5_min INTEGER,
             grade_4_min INTEGER,
@@ -675,6 +689,52 @@ class TestSession:
         cursor.execute("UPDATE test_sessions SET status = 'closed' WHERE id = ?", (session_id,))
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def pause(session_id):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE test_sessions
+            SET paused = 1, paused_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status = 'active' AND paused = 0
+        ''', (session_id,))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def resume(session_id):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT paused, paused_at, pause_total_seconds FROM test_sessions WHERE id = ?', (session_id,))
+        row = cursor.fetchone()
+        if row and row['paused'] and row['paused_at']:
+            try:
+                paused_at = datetime.fromisoformat(row['paused_at'])
+                delta = int((datetime.now() - paused_at).total_seconds())
+            except Exception:
+                delta = 0
+            cursor.execute('''
+                UPDATE test_sessions
+                SET paused = 0, paused_at = NULL, pause_total_seconds = pause_total_seconds + ?
+                WHERE id = ?
+            ''', (delta, session_id))
+        else:
+            cursor.execute('UPDATE test_sessions SET paused = 0, paused_at = NULL WHERE id = ?', (session_id,))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def extend_time(session_id, extra_seconds):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE test_sessions
+            SET extra_seconds = extra_seconds + ?
+            WHERE id = ?
+        ''', (extra_seconds, session_id))
+        conn.commit()
+        conn.close()
     
     @staticmethod
     def get_students(session_id):
@@ -727,6 +787,21 @@ class Student:
         student = cursor.fetchone()
         conn.close()
         return dict(student) if student else None
+
+    @staticmethod
+    def touch(student_id):
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE students SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?
+            ''', (student_id,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     
     @staticmethod
     def finish(student_id):

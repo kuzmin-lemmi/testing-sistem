@@ -8,6 +8,23 @@
         <h1>📊 Мониторинг тестирования</h1>
         <div class="header-actions">
             {% if session.status == 'active' %}
+            {% if session.paused %}
+            <form action="{{ url_for('session_resume', session_id=session.id) }}" method="POST" class="inline-form">
+                <button type="submit" class="btn btn-primary">▶️ Продолжить</button>
+            </form>
+            {% else %}
+            <form action="{{ url_for('session_pause', session_id=session.id) }}" method="POST" class="inline-form">
+                <button type="submit" class="btn btn-warning">⏸ Пауза</button>
+            </form>
+            {% endif %}
+            <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+                <input type="hidden" name="minutes" value="5">
+                <button type="submit" class="btn btn-secondary">+5 мин</button>
+            </form>
+            <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+                <input type="hidden" name="minutes" value="10">
+                <button type="submit" class="btn btn-secondary">+10 мин</button>
+            </form>
             <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form">
                 <button type="submit" class="btn btn-danger" onclick="return confirm('Завершить тестирование?')">⏹ Завершить</button>
             </form>
@@ -23,6 +40,9 @@
                 <span class="info-value">
                     {% if session.status == 'active' %}
                     <span class="status-badge active">🟢 Активно</span>
+                    {% if session.paused %}
+                    <span class="status-badge paused">⏸ Пауза</span>
+                    {% endif %}
                     {% else %}
                     <span class="status-badge closed">⚫ Завершено</span>
                     {% endif %}
@@ -59,7 +79,7 @@
     </div>
     
     <div class="students-section">
-        <h2>👥 Ученики ({{ students|length }})</h2>
+        <h2>👥 Ученики ({{ students|length }}) — онлайн: {{ online_count }}</h2>
         
         {% if students %}
         <div class="students-table">
@@ -67,9 +87,11 @@
                 <thead>
                     <tr>
                         <th>ФИО</th>
+                        <th>Онлайн</th>
                         <th>Статус</th>
                         <th>Начал</th>
                         <th>Завершил</th>
+                        <th>Активность</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
@@ -77,6 +99,13 @@
                     {% for student in students %}
                     <tr>
                         <td class="student-name">{{ student.last_name }} {{ student.first_name }}</td>
+                        <td>
+                            {% if student.is_online %}
+                            <span class="status-pill online">●</span>
+                            {% else %}
+                            <span class="status-pill offline">●</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if student.status == 'finished' %}
                             <span class="status-pill finished">✅ Завершил</span>
@@ -86,6 +115,7 @@
                         </td>
                         <td>{{ student.started_at[11:16] if student.started_at else '—' }}</td>
                         <td>{{ student.finished_at[11:16] if student.finished_at else '—' }}</td>
+                        <td>{{ student.last_seen_at[11:16] if student.last_seen_at else '—' }}</td>
                         <td>
                             <a href="{{ url_for('result_student', student_id=student.id) }}" class="btn btn-secondary btn-small">📊 Результат</a>
                         </td>
@@ -197,6 +227,11 @@
     color: var(--text-muted);
 }
 
+.status-badge.paused {
+    background: var(--warning-bg);
+    color: #92400e;
+}
+
 .students-section h2 {
     margin-bottom: 20px;
 }
@@ -255,6 +290,14 @@
 .status-pill.in-progress {
     background: var(--warning-bg);
     color: #92400e;
+}
+
+.status-pill.online {
+    color: #16a34a;
+}
+
+.status-pill.offline {
+    color: #94a3b8;
 }
 
 .no-students {

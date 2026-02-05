@@ -209,6 +209,15 @@ body {
     background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, var(--warning) 0%, #d97706 100%);
+    color: white;
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
 .btn-danger {
     background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
     color: white;

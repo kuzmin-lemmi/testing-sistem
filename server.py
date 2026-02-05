@@ -58,6 +58,31 @@ def get_local_ip():
 def allowed_file(filename, allowed_extensions):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
+def _parse_dt(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+def _calc_remaining_seconds(student, test_session):
+    time_limit = test_session['time_limit'] if test_session else 60
+    extra_seconds = test_session.get('extra_seconds') or 0
+    pause_total = test_session.get('pause_total_seconds') or 0
+    paused = bool(test_session.get('paused'))
+    paused_at = _parse_dt(test_session.get('paused_at'))
+
+    start_time = _parse_dt(student.get('started_at')) or datetime.now()
+    now = datetime.now()
+    elapsed = (now - start_time).total_seconds()
+    paused_elapsed = (now - paused_at).total_seconds() if paused and paused_at else 0
+    effective_elapsed = max(0, elapsed - pause_total - paused_elapsed)
+    remaining = max(0, time_limit * 60 + extra_seconds - effective_elapsed)
+    return int(remaining)
+
 def generate_unique_filename(original_filename):
     """Генерирует уникальное имя файла"""
     ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
@@ -795,6 +820,39 @@ def session_close(session_id):
     flash('Тестирование завершено', 'success')
     return redirect(url_for('sessions_list'))
 
+@app.route('/sessions/<int:session_id>/pause', methods=['POST'])
+def session_pause(session_id):
+    """Поставить тестирование на паузу"""
+    session = TestSession.get_by_id(session_id)
+    if session and session['status'] == 'active':
+        TestSession.pause(session_id)
+        flash('Тестирование поставлено на паузу', 'success')
+    return redirect(url_for('session_monitor', session_id=session_id))
+
+@app.route('/sessions/<int:session_id>/resume', methods=['POST'])
+def session_resume(session_id):
+    """Продолжить тестирование"""
+    session = TestSession.get_by_id(session_id)
+    if session and session['status'] == 'active':
+        TestSession.resume(session_id)
+        flash('Тестирование продолжено', 'success')
+    return redirect(url_for('session_monitor', session_id=session_id))
+
+@app.route('/sessions/<int:session_id>/extend', methods=['POST'])
+def session_extend(session_id):
+    """Продлить тестирование"""
+    session = TestSession.get_by_id(session_id)
+    if session and session['status'] == 'active':
+        minutes = request.form.get('minutes', '5')
+        try:
+            minutes_int = int(minutes)
+        except Exception:
+            minutes_int = 5
+        if minutes_int > 0:
+            TestSession.extend_time(session_id, minutes_int * 60)
+            flash(f'Время продлено на {minutes_int} мин', 'success')
+    return redirect(url_for('session_monitor', session_id=session_id))
+
 @app.route('/sessions/<int:session_id>/monitor')
 def session_monitor(session_id):
     """Мониторинг тестирования"""
@@ -804,10 +862,19 @@ def session_monitor(session_id):
         return redirect(url_for('sessions_list'))
     
     students = TestSession.get_students(session_id)
+    now = datetime.now()
+    online_count = 0
+    for s in students:
+        last_seen = _parse_dt(s.get('last_seen_at'))
+        s['last_seen_at'] = last_seen.isoformat() if last_seen else None
+        s['is_online'] = bool(last_seen and (now - last_seen).total_seconds() <= 25)
+        if s['is_online']:
+            online_count += 1
     
     return render_template('teacher/session_monitor.html',
                          session=session,
-                         students=students)
+                         students=students,
+                         online_count=online_count)
 
 
 # ==================== ИНТЕРФЕЙС УЧЕНИКА ====================
@@ -866,6 +933,7 @@ def student_start():
             session['start_time'] = (existing.get('started_at') or datetime.now().isoformat())
             session['time_limit'] = active_session['time_limit']
             session['app_mode'] = app_mode
+            Student.touch(existing['id'])
             return redirect(url_for('student_test'))
         flash('Вы уже завершили этот тест', 'error')
         return redirect(url_for('student_login'))
@@ -915,6 +983,7 @@ def student_start():
     
     # Создаём запись ученика
     student_id = Student.create(active_session['id'], first_name, last_name, variant_id)
+    Student.touch(student_id)
     
     # Сохраняем в сессию
     from flask import session
@@ -955,14 +1024,7 @@ def student_test():
             answers[task['id']] = ans
     
     # Вычисляем оставшееся время по данным БД (устойчиво к перезапуску браузера)
-    time_limit = test_session['time_limit'] if test_session else 60
-    start_value = student.get('started_at')
-    try:
-        start_time = datetime.fromisoformat(start_value) if start_value else datetime.now()
-    except Exception:
-        start_time = datetime.now()
-    elapsed = (datetime.now() - start_time).total_seconds()
-    remaining = max(0, time_limit * 60 - elapsed)
+    remaining = _calc_remaining_seconds(student, test_session)
     
     current_task = request.args.get('task', 0, type=int)
     
@@ -973,7 +1035,8 @@ def student_test():
                          remaining=int(remaining),
                          current_task=current_task,
                          teacher_finish_only=bool(test_session and test_session.get('teacher_finish_only')),
-                         app_mode=bool(session.get('app_mode')))
+                         app_mode=bool(session.get('app_mode')),
+                         paused=bool(test_session and test_session.get('paused')))
 
 @app.route('/test/save', methods=['POST'])
 def student_save_answer():
@@ -997,6 +1060,7 @@ def student_save_answer():
     answer_text = (str(answer_text) if answer_text not in [None] else None)
 
     Answer.save(student_id, task_id, answer_1, answer_2, answer_text=answer_text)
+    Student.touch(student_id)
     
     return jsonify({'success': True})
 
@@ -1038,12 +1102,15 @@ def student_ping():
     if not test_session:
         return jsonify({'active': False}), 404
 
+    Student.touch(student_id)
+    remaining = _calc_remaining_seconds(student, test_session)
+
     if test_session['status'] == 'closed':
         if student['status'] != 'finished':
             Student.finish(student_id)
         return jsonify({'active': False, 'finished': True, 'redirect': url_for('student_result')})
 
-    return jsonify({'active': True})
+    return jsonify({'active': True, 'paused': bool(test_session.get('paused')), 'remaining_seconds': remaining})
 
 @app.route('/test/result')
 def student_result():
