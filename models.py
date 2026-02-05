@@ -15,6 +15,7 @@ def get_db():
     conn.execute('PRAGMA foreign_keys = ON')
     conn.execute('PRAGMA journal_mode = WAL')
     conn.execute('PRAGMA synchronous = NORMAL')
+    conn.execute('PRAGMA busy_timeout = 5000')
     return conn
 
 def _table_has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
@@ -691,15 +692,20 @@ class Student:
     @staticmethod
     def create(session_id, first_name, last_name, variant_id):
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO students (session_id, first_name, last_name, variant_id, status)
-            VALUES (?, ?, ?, ?, 'in_progress')
-        ''', (session_id, first_name, last_name, variant_id))
-        student_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return student_id
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO students (session_id, first_name, last_name, variant_id, status)
+                VALUES (?, ?, ?, ?, 'in_progress')
+            ''', (session_id, first_name, last_name, variant_id))
+            student_id = cursor.lastrowid
+            conn.commit()
+            return student_id
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     
     @staticmethod
     def get_by_id(student_id):
@@ -725,26 +731,36 @@ class Student:
     @staticmethod
     def finish(student_id):
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE students 
-            SET status = 'finished', finished_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        ''', (student_id,))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE students 
+                SET status = 'finished', finished_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            ''', (student_id,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     @staticmethod
     def finish_all(session_id):
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE students
-            SET status = 'finished', finished_at = CURRENT_TIMESTAMP
-            WHERE session_id = ? AND status != 'finished'
-        ''', (session_id,))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE students
+                SET status = 'finished', finished_at = CURRENT_TIMESTAMP
+                WHERE session_id = ? AND status != 'finished'
+            ''', (session_id,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     
     @staticmethod
     def get_answers(student_id):
@@ -800,50 +816,55 @@ class Answer:
             # Иначе — регистронезависимое сравнение (работает и для кириллицы)
             return a.casefold() == b.casefold()
         
-        # Получаем правильные ответы
-        cursor.execute('SELECT answer_1, answer_2, answer_count FROM tasks WHERE id = ?', (task_id,))
-        task = cursor.fetchone()
-        
-        # Проверяем правильность
-        is_correct = None  # None = не проверено/неприменимо (например, текстовый ответ)
-        if task:
-            if task['answer_count'] == 0:
-                # Текстовый/многострочный ответ: сравниваем с эталоном, если он задан.
-                # Иначе оставляем None (можно проверить вручную).
-                cursor.execute('SELECT answer_text FROM tasks WHERE id = ?', (task_id,))
-                t2 = cursor.fetchone()
-                correct_text = (t2['answer_text'] if t2 else None)
-                if correct_text is not None and str(correct_text).strip() != '':
-                    def norm(s: str) -> str:
-                        return '\n'.join(' '.join(line.strip().split()) for line in str(s).strip().splitlines() if line.strip() != '')
-                    is_correct = (norm(answer_text or '') == norm(correct_text))
+        try:
+            # Получаем правильные ответы
+            cursor.execute('SELECT answer_1, answer_2, answer_count FROM tasks WHERE id = ?', (task_id,))
+            task = cursor.fetchone()
+            
+            # Проверяем правильность
+            is_correct = None  # None = не проверено/неприменимо (например, текстовый ответ)
+            if task:
+                if task['answer_count'] == 0:
+                    # Текстовый/многострочный ответ: сравниваем с эталоном, если он задан.
+                    # Иначе оставляем None (можно проверить вручную).
+                    cursor.execute('SELECT answer_text FROM tasks WHERE id = ?', (task_id,))
+                    t2 = cursor.fetchone()
+                    correct_text = (t2['answer_text'] if t2 else None)
+                    if correct_text is not None and str(correct_text).strip() != '':
+                        def norm(s: str) -> str:
+                            return '\n'.join(' '.join(line.strip().split()) for line in str(s).strip().splitlines() if line.strip() != '')
+                        is_correct = (norm(answer_text or '') == norm(correct_text))
+                    else:
+                        is_correct = None
+                elif task['answer_count'] == 1:
+                    is_correct = _equal(answer_1, task['answer_1'])
                 else:
-                    is_correct = None
-            elif task['answer_count'] == 1:
-                is_correct = _equal(answer_1, task['answer_1'])
-            else:
-                is_correct = (_equal(answer_1, task['answer_1']) and _equal(answer_2, task['answer_2']))
+                    is_correct = (_equal(answer_1, task['answer_1']) and _equal(answer_2, task['answer_2']))
 
-        # Сохраняем или обновляем ответ
-        cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?', 
-                      (student_id, task_id))
-        existing = cursor.fetchone()
-        
-        if existing:
-            cursor.execute('''
-                UPDATE answers SET answer_1 = ?, answer_2 = ?, answer_text = ?, is_correct = ?,
-                                   answered_at = CURRENT_TIMESTAMP
-                WHERE student_id = ? AND task_id = ?
-            ''', (answer_1, answer_2, answer_text, is_correct, student_id, task_id))
-        else:
-            cursor.execute('''
-                INSERT INTO answers (student_id, task_id, answer_1, answer_2, answer_text, is_correct)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
-        
-        conn.commit()
-        conn.close()
-        return is_correct
+            # Сохраняем или обновляем ответ
+            cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?', 
+                          (student_id, task_id))
+            existing = cursor.fetchone()
+            
+            if existing:
+                cursor.execute('''
+                    UPDATE answers SET answer_1 = ?, answer_2 = ?, answer_text = ?, is_correct = ?,
+                                       answered_at = CURRENT_TIMESTAMP
+                    WHERE student_id = ? AND task_id = ?
+                ''', (answer_1, answer_2, answer_text, is_correct, student_id, task_id))
+            else:
+                cursor.execute('''
+                    INSERT INTO answers (student_id, task_id, answer_1, answer_2, answer_text, is_correct)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
+            
+            conn.commit()
+            return is_correct
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     
     @staticmethod
     def get_for_student_task(student_id, task_id):

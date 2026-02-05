@@ -18,6 +18,28 @@ from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSessio
 app = Flask(__name__)
 app.secret_key = 'ege-testing-secret-key-2026'
 
+@app.errorhandler(Exception)
+def handle_exception(error):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(error, HTTPException):
+        return error
+    app.logger.exception('Unhandled exception')
+    if request.path.startswith('/test'):
+        return (
+            "<!DOCTYPE html><html lang='ru'><head><meta charset='UTF-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+            "<title>Ошибка</title>"
+            "<style>body{font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;"
+            "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}"
+            ".card{background:#fff;border-radius:16px;padding:28px;box-shadow:0 10px 25px rgba(0,0,0,0.1);max-width:520px;text-align:center;}"
+            "h1{margin:0 0 12px;font-size:20px;}p{margin:0 0 6px;color:#475569;}</style>"
+            "</head><body><div class='card'><h1>Произошла ошибка</h1>"
+            "<p>Пожалуйста, сообщите учителю.</p>"
+            "<p>Можно закрыть окно и войти заново.</p>"
+            "</div></body></html>"
+        ), 500
+    return 'Internal Server Error', 500
+
 # Инициализация БД при запуске
 init_db()
 migrate_db()
@@ -796,6 +818,18 @@ def student_login():
     active_session = TestSession.get_active()
     if not active_session:
         return render_template('student/no_test.html')
+
+    from flask import session
+    student_id = session.get('student_id')
+    if student_id:
+        student = Student.get_by_id(student_id)
+        if student and student['status'] == 'in_progress':
+            test_session = TestSession.get_by_id(student['session_id'])
+            if test_session and test_session['status'] == 'active':
+                return redirect(url_for('student_test'))
+            if test_session and test_session['status'] == 'closed':
+                return redirect(url_for('student_result'))
+        session.clear()
     
     need_code = active_session['access_code'] is not None
     app_mode = request.args.get('app') == '1'
@@ -826,7 +860,14 @@ def student_start():
     # Проверка на повторный вход
     existing = Student.get_by_session_and_name(active_session['id'], first_name, last_name)
     if existing:
-        flash('Вы уже начали или завершили этот тест', 'error')
+        if existing['status'] == 'in_progress':
+            from flask import session
+            session['student_id'] = existing['id']
+            session['start_time'] = (existing.get('started_at') or datetime.now().isoformat())
+            session['time_limit'] = active_session['time_limit']
+            session['app_mode'] = app_mode
+            return redirect(url_for('student_test'))
+        flash('Вы уже завершили этот тест', 'error')
         return redirect(url_for('student_login'))
     
     # Определяем вариант для ученика
@@ -913,9 +954,13 @@ def student_test():
         if ans:
             answers[task['id']] = ans
     
-    # Вычисляем оставшееся время
-    start_time = datetime.fromisoformat(session.get('start_time'))
-    time_limit = session.get('time_limit', 60)
+    # Вычисляем оставшееся время по данным БД (устойчиво к перезапуску браузера)
+    time_limit = test_session['time_limit'] if test_session else 60
+    start_value = student.get('started_at')
+    try:
+        start_time = datetime.fromisoformat(start_value) if start_value else datetime.now()
+    except Exception:
+        start_time = datetime.now()
     elapsed = (datetime.now() - start_time).total_seconds()
     remaining = max(0, time_limit * 60 - elapsed)
     

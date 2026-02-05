@@ -704,6 +704,22 @@
 
         heartbeat();
         setInterval(heartbeat, 5000);
+
+        setInterval(() => {
+            if (dirtyTasks.size > 0) {
+                flushAll();
+            }
+        }, 15000);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                flushAll();
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            flushAll();
+        });
     </script>
 </body>
 </html>
