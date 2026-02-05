@@ -15,3 +15,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# pyodide offline runtime (large)
+static/pyodide/

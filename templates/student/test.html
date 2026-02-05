@@ -951,7 +951,7 @@
                 if (window.loadPyodide) return;
                 return new Promise((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
+                    script.src = '/static/pyodide/pyodide.js';
                     script.onload = () => resolve();
                     script.onerror = () => reject(new Error('Pyodide load failed'));
                     document.head.appendChild(script);
@@ -964,12 +964,12 @@
                 pyodideReady = (async () => {
                     await loadPyodideScript();
                     const pyodide = await loadPyodide({
-                        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/'
+                        indexURL: '/static/pyodide/'
                     });
                     pyStatus.textContent = 'Python готов к запуску.';
                     return pyodide;
                 })().catch((e) => {
-                    pyStatus.textContent = 'Не удалось загрузить Python. Проверьте сеть.';
+                    pyStatus.textContent = 'Не удалось загрузить Python. Нужны файлы Pyodide в static/pyodide.';
                     throw e;
                 });
                 return pyodideReady;
@@ -1009,6 +1009,7 @@
                     pyodide.setStdout({ batched: (s) => { output += s; } });
                     pyodide.setStderr({ batched: (s) => { output += s; } });
                     await pyodide.runPythonAsync(code);
+                    output = output.replace(/\r\n?/g, '\n');
                     pyOutput.textContent = output || 'Готово.';
                 } catch (e) {
                     pyOutput.textContent = String(e);
@@ -1035,6 +1036,44 @@
                     scheduleSave(taskId);
                 }
             };
+
+            if (pyEditor) {
+                pyEditor.addEventListener('keydown', (e) => {
+                    const value = pyEditor.value;
+                    const start = pyEditor.selectionStart;
+                    const end = pyEditor.selectionEnd;
+
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const indent = '    ';
+                        if (e.shiftKey) {
+                            const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                            if (value.slice(lineStart, lineStart + 4) === indent) {
+                                pyEditor.value = value.slice(0, lineStart) + value.slice(lineStart + 4);
+                                pyEditor.selectionStart = Math.max(start - 4, lineStart);
+                                pyEditor.selectionEnd = Math.max(end - 4, lineStart);
+                            }
+                            return;
+                        }
+                        pyEditor.value = value.slice(0, start) + indent + value.slice(end);
+                        pyEditor.selectionStart = pyEditor.selectionEnd = start + indent.length;
+                        return;
+                    }
+
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                        const line = value.slice(lineStart, start);
+                        const baseIndent = (line.match(/^\s+/) || [''])[0];
+                        const extra = line.trimEnd().endsWith(':') ? '    ' : '';
+                        const insert = '\n' + baseIndent + extra;
+                        pyEditor.value = value.slice(0, start) + insert + value.slice(end);
+                        const newPos = start + insert.length;
+                        pyEditor.selectionStart = pyEditor.selectionEnd = newPos;
+                        return;
+                    }
+                });
+            }
         }
         
         // Таймер
