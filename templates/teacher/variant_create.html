@@ -967,11 +967,21 @@ function addTaskRow(file, index) {
                     <button type="button" class="btn-remove-task" onclick="removeTask(${index})">✕ Удалить</button>
                 </div>
                 <div class="task-edit-row">
-                    <label>Ответов:</label>
-                    <input type="number" name="answer_count_${index}" value="1" min="1" max="20" style="width:80px;" onchange="renderUploadAnswerInputs(${index}, this.value)">
-                    <span class="hint" style="font-size:12px;color:var(--text-muted);">1..20</span>
+                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                        <input type="checkbox" name="answer_kind_${index}" value="file_upload"
+                               onchange="toggleUploadKind(${index}, this.checked)"
+                               style="width:15px;height:15px;cursor:pointer;">
+                        Загрузка файла (.ods/.odt) — ручная проверка
+                    </label>
                 </div>
-                <div class="task-edit-row" id="upload-answers-${index}">
+                <div id="upload-answer-block-${index}">
+                    <div class="task-edit-row">
+                        <label>Ответов:</label>
+                        <input type="number" name="answer_count_${index}" value="1" min="1" max="20" style="width:80px;" onchange="renderUploadAnswerInputs(${index}, this.value)">
+                        <span class="hint" style="font-size:12px;color:var(--text-muted);">1..20</span>
+                    </div>
+                    <div class="task-edit-row" id="upload-answers-${index}">
+                    </div>
                 </div>
                 <div class="task-edit-row">
                     <label>Файл данных:</label>
@@ -987,11 +997,24 @@ function addTaskRow(file, index) {
 }
 
 function generateEgeOptions() {
-    let options = '';
+    let options = '<option value="0">Общий банк</option>';
     for (let i = 1; i <= 27; i++) {
         options += `<option value="${i}">№${i}</option>`;
     }
     return options;
+}
+
+function toggleUploadKind(index, isFileUpload) {
+    const block = document.getElementById(`upload-answer-block-${index}`);
+    if (!block) return;
+    if (isFileUpload) {
+        block.style.display = 'none';
+        // снимаем required с полей ответов чтобы форма прошла валидацию
+        block.querySelectorAll('input[required]').forEach(el => el.removeAttribute('required'));
+    } else {
+        block.style.display = '';
+        renderUploadAnswerInputs(index, 1);
+    }
 }
 
 function renderUploadAnswerInputs(index, value) {

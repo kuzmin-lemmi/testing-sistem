@@ -1381,31 +1381,40 @@ def variant_upload():
     # Обрабатываем каждое изображение
     for i, image in enumerate(images):
         # Получаем данные формы для этой задачи
-        ege_number = request.form.get(f'ege_number_{i}')
-        answer_count = request.form.get(f'answer_count_{i}', type=int, default=1)
-        if not answer_count or answer_count < 1:
-            answer_count = 1
-        if answer_count > 20:
-            answer_count = 20
-        answers = _read_answers_from_form(request.form, answer_count, suffix=f'_{i}')
-
-        if not ege_number or any((v or '').strip() == '' for v in answers):
+        ege_number_raw = request.form.get(f'ege_number_{i}')
+        if ege_number_raw is None:
             continue
+        ege_number = int(ege_number_raw)
+
+        # Определяем тип задания
+        answer_kind_val = request.form.get(f'answer_kind_{i}')
+        is_file_upload = (answer_kind_val == 'file_upload')
+
+        if is_file_upload:
+            answer_count = 0
+            answer1 = answer2 = answer_text = None
+        else:
+            answer_count = request.form.get(f'answer_count_{i}', type=int, default=1)
+            if not answer_count or answer_count < 1:
+                answer_count = 1
+            if answer_count > 20:
+                answer_count = 20
+            answers = _read_answers_from_form(request.form, answer_count, suffix=f'_{i}')
+            if any((v or '').strip() == '' for v in answers):
+                continue
+            answer1, answer2, answer_text = _pack_answers_for_task(answers)
 
         valid_image, image_error = _validate_upload(image, MAX_IMAGE_SIZE, ALLOWED_IMAGE_EXTENSIONS, 'png')
         if not valid_image:
             flash(f'Файл #{i + 1}: {image_error}', 'error')
             continue
-        
-        ege_number = int(ege_number)
-        answer1, answer2, answer_text = _pack_answers_for_task(answers)
-        
+
         # Сохраняем изображение
         ext = os.path.splitext(image.filename)[1] or '.png'
         image_filename = f"{uuid.uuid4().hex}{ext}"
         image_path = os.path.join(DATA_DIR, 'images', image_filename)
         image.save(image_path)
-        
+
         # Обрабатываем прикреплённый файл (если есть)
         attachment_path = None
         attachment_name = None
@@ -1421,17 +1430,23 @@ def variant_upload():
             attachment.save(attach_path)
             attachment_path = attach_filename
             attachment_name = attachment.filename
-        
+
+        # ege_number=0 означает «Общий банк» (task_scope='class')
+        task_scope = 'class' if ege_number == 0 else 'ege'
+        stored_ege = ege_number if ege_number != 0 else 1
+
         # Создаём задачу в банке
         task_id = Task.create(
-            ege_number=ege_number,
+            ege_number=stored_ege,
             image_path=image_filename,
             answer_count=answer_count,
             answer_1=answer1,
             answer_2=answer2,
             answer_text=answer_text,
             attachment_path=attachment_path,
-            attachment_name=attachment_name
+            attachment_name=attachment_name,
+            answer_kind='file_upload' if is_file_upload else 'classic',
+            task_scope=task_scope,
         )
         task_ids.append(task_id)
     
