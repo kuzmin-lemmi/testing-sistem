@@ -422,14 +422,22 @@ def tasks_move_to_class():
     class_id = request.form.get('class_id', type=int)
     task_ids = [int(tid) for tid in request.form.getlist('task_ids') if str(tid).isdigit()]
     ege_back = request.form.get('ege', type=int, default=1)
+    origin_mode = request.form.get('origin_mode', 'ege')
+    origin_class_id = request.form.get('origin_class_id', type=int)
     if not class_id:
         flash('Выберите класс для переноса', 'error')
+        if origin_mode == 'class' and origin_class_id:
+            return redirect(url_for('tasks_list', mode='class', class_id=origin_class_id))
         return redirect(url_for('tasks_list', mode='ege', ege=ege_back))
     if not task_ids:
         flash('Выберите хотя бы одну задачу', 'warning')
+        if origin_mode == 'class' and origin_class_id:
+            return redirect(url_for('tasks_list', mode='class', class_id=origin_class_id))
         return redirect(url_for('tasks_list', mode='ege', ege=ege_back))
     moved = Task.move_to_class(task_ids, class_id)
     flash(f'Перенесено задач: {moved}', 'success')
+    if origin_mode == 'class' and origin_class_id:
+        return redirect(url_for('tasks_list', mode='class', class_id=origin_class_id))
     return redirect(url_for('tasks_list', mode='ege', ege=ege_back))
 
 
@@ -792,6 +800,7 @@ def tasks_bulk_upload():
             ege_number = int(request.form.get('ege_number'))
         
         index = 0
+        created = 0
         while True:
             image_path = request.form.get(f'image_path_{index}')
             if not image_path:
@@ -836,12 +845,13 @@ def tasks_bulk_upload():
                 class_id=class_id if mode == 'class' else None,
             )
             index += 1
+            created += 1
 
         if mode == 'class':
-            flash(f'Добавлено {index} задач в общий банк', 'success')
+            flash(f'Добавлено {created} задач в общий банк', 'success')
             return redirect(url_for('tasks_list', mode='ege', ege=0))
 
-        flash(f'Добавлено {index} задач для номера {ege_number}', 'success')
+        flash(f'Добавлено {created} задач для номера {ege_number}', 'success')
         return redirect(url_for('tasks_list', mode='ege', ege=ege_number))
     
     # GET - показываем форму
@@ -2207,12 +2217,16 @@ def student_result():
         return redirect(url_for('student_login'))
     
     student = Student.get_by_id(student_id)
+    if not student:
+        flask_session.clear()
+        return redirect(url_for('student_login'))
+
     test_session = TestSession.get_by_id(student['session_id'])
 
     if test_session and test_session.get('teacher_finish_only') and test_session['status'] != 'closed':
         return redirect(url_for('student_test'))
 
-    if student and student['status'] != 'finished':
+    if student['status'] != 'finished':
         Student.finish(student_id)
     
     # Получаем все ответы
@@ -2227,9 +2241,9 @@ def student_result():
     
     # Рассчитываем оценку с учётом критериев сессии
     session_criteria = {
-        'grade_5_min': test_session.get('grade_5_min'),
-        'grade_4_min': test_session.get('grade_4_min'),
-        'grade_3_min': test_session.get('grade_3_min')
+        'grade_5_min': test_session.get('grade_5_min') if test_session else None,
+        'grade_4_min': test_session.get('grade_4_min') if test_session else None,
+        'grade_3_min': test_session.get('grade_3_min') if test_session else None,
     }
     grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
     
@@ -2392,9 +2406,9 @@ def result_student(student_id):
     
     # Рассчитываем оценку с учётом критериев сессии
     session_criteria = {
-        'grade_5_min': test_session.get('grade_5_min'),
-        'grade_4_min': test_session.get('grade_4_min'),
-        'grade_3_min': test_session.get('grade_3_min')
+        'grade_5_min': test_session.get('grade_5_min') if test_session else None,
+        'grade_4_min': test_session.get('grade_4_min') if test_session else None,
+        'grade_3_min': test_session.get('grade_3_min') if test_session else None,
     }
     grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
     
