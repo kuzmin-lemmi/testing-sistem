@@ -48,28 +48,64 @@
             </thead>
             <tbody>
                 {% for task in tasks %}
+                {% set ans = answers_dict.get(task.id) %}
                 <tr>
                     <td>{{ loop.index }}</td>
                     <td>№{{ task.ege_number }}</td>
                     <td>
-                        {% if answers_dict.get(task.id) %}
-                        <span class="answer-value {% if answers_dict[task.id].is_correct %}correct{% else %}wrong{% endif %}">
-                            {{ answers_dict[task.id].answer_1 if answers_dict[task.id].answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ answers_dict[task.id].answer_2 if answers_dict[task.id].answer_2 is not none else '—' }}{% endif %}
-                        </span>
+                        {% if task.answer_kind == 'file_upload' %}
+                            {% if ans and ans.get('upload_name') %}
+                            <a href="{{ url_for('teacher_download_answer_file', student_id=student.id, task_id=task.id) }}"
+                               class="btn btn-small btn-secondary" download>
+                                📥 {{ ans.upload_name }}
+                            </a>
+                            {% else %}
+                            <span class="no-answer">Файл не загружен</span>
+                            {% endif %}
                         {% else %}
-                        <span class="no-answer">Не отвечено</span>
+                            {% if ans %}
+                            <span class="answer-value {% if ans.is_correct %}correct{% else %}wrong{% endif %}">
+                                {{ ans.answer_1 if ans.answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ ans.answer_2 if ans.answer_2 is not none else '—' }}{% endif %}
+                            </span>
+                            {% else %}
+                            <span class="no-answer">Не отвечено</span>
+                            {% endif %}
                         {% endif %}
                     </td>
                     <td>
+                        {% if task.answer_kind == 'file_upload' %}
+                        <span style="color:var(--text-muted);font-size:13px;">ручная проверка</span>
+                        {% else %}
                         <span class="answer-value correct">
                             {{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}
                         </span>
+                        {% endif %}
                     </td>
                     <td>
-                        {% if answers_dict.get(task.id) and answers_dict[task.id].is_correct %}
-                        <span class="status-correct">✓ Верно</span>
+                        {% if task.answer_kind == 'file_upload' %}
+                            {% if ans and ans.get('upload_name') %}
+                            <div class="mark-buttons" id="mark-{{ student.id }}-{{ task.id }}">
+                                {% if ans.is_correct == true %}
+                                <span class="status-correct">✓ Зачтено</span>
+                                <button type="button" class="btn btn-small btn-danger" onclick="markAnswer({{ student.id }}, {{ task.id }}, false)">✗ Отменить</button>
+                                {% elif ans.is_correct == false %}
+                                <span class="status-wrong">✗ Не зачтено</span>
+                                <button type="button" class="btn btn-small btn-primary" onclick="markAnswer({{ student.id }}, {{ task.id }}, true)">✓ Зачесть</button>
+                                {% else %}
+                                <span class="status-pending">⏳ Не проверено</span>
+                                <button type="button" class="btn btn-small btn-primary" onclick="markAnswer({{ student.id }}, {{ task.id }}, true)">✓ Зачесть</button>
+                                <button type="button" class="btn btn-small btn-danger" onclick="markAnswer({{ student.id }}, {{ task.id }}, false)">✗ Не зачесть</button>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="status-wrong">—</span>
+                            {% endif %}
                         {% else %}
-                        <span class="status-wrong">✗ Неверно</span>
+                            {% if ans and ans.is_correct %}
+                            <span class="status-correct">✓ Верно</span>
+                            {% else %}
+                            <span class="status-wrong">✗ Неверно</span>
+                            {% endif %}
                         {% endif %}
                     </td>
                 </tr>
@@ -78,6 +114,21 @@
         </table>
     </div>
 </div>
+
+<script>
+async function markAnswer(studentId, taskId, isCorrect) {
+    const resp = await fetch('{{ url_for("teacher_mark_answer") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+        body: JSON.stringify({student_id: studentId, task_id: taskId, is_correct: isCorrect})
+    });
+    if (resp.ok) {
+        location.reload();
+    } else {
+        alert('Ошибка при сохранении оценки');
+    }
+}
+</script>
 
 <style>
 .result-summary {
@@ -218,6 +269,18 @@
 .status-wrong {
     color: var(--danger);
     font-weight: 600;
+}
+
+.status-pending {
+    color: #92400e;
+    font-weight: 600;
+}
+
+.mark-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 </style>
 {% endblock %}

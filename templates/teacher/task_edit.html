@@ -75,14 +75,31 @@
         </div>
         
         <div class="form-group">
-            <label for="answer_count">Количество ответов</label>
-            <input type="number" name="answer_count" id="answer_count" min="1" max="20" value="{{ task.answer_count if task.answer_count and task.answer_count > 0 else 1 }}" oninput="renderAnswerInputs()">
-            <small class="form-hint">Можно указать 1, 2, 3 или больше.</small>
+            <label for="answer_kind">Тип ответа</label>
+            <select name="answer_kind" id="answer_kind" onchange="toggleAnswerKind()">
+                <option value="classic" {% if task.answer_kind != 'file_upload' %}selected{% endif %}>Числовой / текстовый ответ</option>
+                <option value="file_upload" {% if task.answer_kind == 'file_upload' %}selected{% endif %}>Загрузка файла (.ods / .odt) — ручная проверка</option>
+            </select>
         </div>
 
-        <div class="form-group">
-            <label>Ответы</label>
-            <div id="answersContainer"></div>
+        <div id="classicAnswerBlock">
+            <div class="form-group">
+                <label for="answer_count">Количество ответов</label>
+                <input type="number" name="answer_count" id="answer_count" min="1" max="20" value="{{ task.answer_count if task.answer_count and task.answer_count > 0 else 1 }}" oninput="renderAnswerInputs()">
+                <small class="form-hint">Можно указать 1, 2, 3 или больше.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Ответы</label>
+                <div id="answersContainer"></div>
+            </div>
+        </div>
+
+        <div id="fileUploadHint" style="display:none;" class="form-group">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;color:#1e40af;line-height:1.6;">
+                📁 Ученик создаёт файл в LibreOffice и загружает в систему.<br>
+                Правильный ответ не задаётся — проверка вручную учителем.
+            </div>
         </div>
         
         <div class="form-actions">
@@ -155,9 +172,23 @@ function toggleModeFields() {
     }
 }
 
+function toggleAnswerKind() {
+    const kind = document.getElementById('answer_kind').value;
+    const classic = document.getElementById('classicAnswerBlock');
+    const hint = document.getElementById('fileUploadHint');
+    if (kind === 'file_upload') {
+        classic.style.display = 'none';
+        hint.style.display = 'block';
+    } else {
+        classic.style.display = 'block';
+        hint.style.display = 'none';
+    }
+}
+
 // Инициализация при открытии страницы
 renderAnswerInputs();
 toggleModeFields();
+toggleAnswerKind();
 
 // Превью нового изображения
 document.getElementById('image').addEventListener('change', function(e) {

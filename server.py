@@ -10,8 +10,9 @@ import secrets
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 
-from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, EXPORTS_DIR,
+from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR,
                     MAX_IMAGE_SIZE, MAX_ATTACHMENT_SIZE, MAX_IMPORT_ZIP_SIZE,
+                    MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
                     SECRET_KEY, TEACHER_ALLOWED_IPS)
@@ -574,22 +575,31 @@ def task_add():
             attachment_path = os.path.join(ATTACHMENTS_DIR, attachment_filename)
             attachment.save(attachment_path)
         
-        answer_count = request.form.get('answer_count', type=int, default=1)
-        if not answer_count or answer_count < 1:
-            answer_count = 1
-        if answer_count > 20:
-            answer_count = 20
+        answer_kind = request.form.get('answer_kind', 'classic')
+        if answer_kind not in ('classic', 'file_upload'):
+            answer_kind = 'classic'
 
-        answer_values = _read_answers_from_form(request.form, answer_count)
-        if any((v or '').strip() == '' for v in answer_values):
-            flash('Заполните все ответы для задачи', 'error')
-            return redirect(url_for('task_add', mode=mode, ege=ege_number, class_id=class_id))
+        if answer_kind == 'file_upload':
+            answer_count = 0
+            answer_1 = answer_2 = answer_text = None
+        else:
+            answer_count = request.form.get('answer_count', type=int, default=1)
+            if not answer_count or answer_count < 1:
+                answer_count = 1
+            if answer_count > 20:
+                answer_count = 20
 
-        answer_1, answer_2, answer_text = _pack_answers_for_task(answer_values)
-        
+            answer_values = _read_answers_from_form(request.form, answer_count)
+            if any((v or '').strip() == '' for v in answer_values):
+                flash('Заполните все ответы для задачи', 'error')
+                return redirect(url_for('task_add', mode=mode, ege=ege_number, class_id=class_id))
+
+            answer_1, answer_2, answer_text = _pack_answers_for_task(answer_values)
+
         Task.create(
             ege_number=ege_number,
             image_path=image_filename,
+            answer_kind=answer_kind,
             answer_1=answer_1,
             answer_count=answer_count,
             answer_2=answer_2,
@@ -655,18 +665,27 @@ def task_edit(task_id):
                 updates['ege_number'] = int(ege_number)
             updates['class_id'] = None
         
-        answer_count = request.form.get('answer_count', type=int, default=1)
-        if not answer_count or answer_count < 1:
-            answer_count = 1
-        if answer_count > 20:
-            answer_count = 20
-        answer_values = _read_answers_from_form(request.form, answer_count)
-        if any((v or '').strip() == '' for v in answer_values):
-            flash('Заполните все ответы для задачи', 'error')
-            return redirect(url_for('task_edit', task_id=task_id))
+        answer_kind = request.form.get('answer_kind', 'classic')
+        if answer_kind not in ('classic', 'file_upload'):
+            answer_kind = 'classic'
+        updates['answer_kind'] = answer_kind
 
-        updates['answer_count'] = answer_count
-        updates['answer_1'], updates['answer_2'], updates['answer_text'] = _pack_answers_for_task(answer_values)
+        if answer_kind == 'file_upload':
+            updates['answer_count'] = 0
+            updates['answer_1'] = updates['answer_2'] = updates['answer_text'] = None
+        else:
+            answer_count = request.form.get('answer_count', type=int, default=1)
+            if not answer_count or answer_count < 1:
+                answer_count = 1
+            if answer_count > 20:
+                answer_count = 20
+            answer_values = _read_answers_from_form(request.form, answer_count)
+            if any((v or '').strip() == '' for v in answer_values):
+                flash('Заполните все ответы для задачи', 'error')
+                return redirect(url_for('task_edit', task_id=task_id))
+
+            updates['answer_count'] = answer_count
+            updates['answer_1'], updates['answer_2'], updates['answer_text'] = _pack_answers_for_task(answer_values)
         
         # Обновление изображения (если загружено новое)
         image = request.files.get('image')
@@ -882,6 +901,113 @@ def serve_image(filename):
 def serve_attachment(filename):
     """Отдача прикреплённых файлов"""
     return send_from_directory(ATTACHMENTS_DIR, filename, as_attachment=True)
+
+
+# ==================== ЗАГРУЗКА ФАЙЛОВ УЧЕНИКОВ ====================
+
+@app.route('/test/upload-answer-file', methods=['POST'])
+def student_upload_answer_file():
+    """Ученик загружает файл (.ods/.odt) как ответ на задание типа file_upload."""
+    from flask import session as flask_session
+    student_id = flask_session.get('student_id')
+    if not student_id:
+        return jsonify({'error': 'Не авторизован'}), 401
+
+    student = Student.get_by_id(student_id)
+    if not student:
+        return jsonify({'error': 'Ученик не найден'}), 401
+
+    test_session = TestSession.get_by_id(student['session_id'])
+    if not test_session or test_session['status'] != 'active':
+        return jsonify({'error': 'Сессия неактивна'}), 403
+    if test_session.get('paused'):
+        return jsonify({'error': 'Тестирование на паузе'}), 403
+
+    task_id = request.form.get('task_id', type=int)
+    if not task_id:
+        return jsonify({'error': 'Не указан task_id'}), 400
+
+    # Проверяем, что задача входит в вариант ученика
+    tasks = Variant.get_tasks(student['variant_id'])
+    task_ids_in_variant = {t['id'] for t in tasks}
+    if task_id not in task_ids_in_variant:
+        return jsonify({'error': 'Задача не принадлежит вашему варианту'}), 403
+
+    task = Task.get_by_id(task_id)
+    if not task or task.get('answer_kind') != 'file_upload':
+        return jsonify({'error': 'Для этой задачи загрузка файла не предусмотрена'}), 400
+
+    uploaded = request.files.get('file')
+    if not uploaded or not uploaded.filename:
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    original_name = uploaded.filename
+    ext = original_name.rsplit('.', 1)[-1].lower() if '.' in original_name else ''
+    if ext not in ALLOWED_STUDENT_UPLOAD_EXTENSIONS:
+        return jsonify({'error': f'Разрешены только файлы: {", ".join(sorted(ALLOWED_STUDENT_UPLOAD_EXTENSIONS))}'}), 400
+
+    # Читаем в память для проверки размера
+    data = uploaded.read()
+    if len(data) > MAX_STUDENT_UPLOAD_SIZE:
+        return jsonify({'error': f'Файл слишком большой (максимум {MAX_STUDENT_UPLOAD_SIZE // 1024 // 1024} МБ)'}), 400
+    if len(data) == 0:
+        return jsonify({'error': 'Файл пустой'}), 400
+
+    # Удаляем старый файл если был
+    old_answer = Answer.get_for_student_task(student_id, task_id)
+    if old_answer and old_answer.get('upload_path'):
+        old_path = os.path.join(STUDENT_UPLOADS_DIR, old_answer['upload_path'])
+        if os.path.isfile(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    # Сохраняем новый файл
+    stored_name = f"{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(STUDENT_UPLOADS_DIR, stored_name)
+    with open(dest, 'wb') as f:
+        f.write(data)
+
+    safe_original = secure_filename(original_name) or stored_name
+    Answer.save_upload(student_id, task_id, stored_name, safe_original, len(data))
+    Student.touch(student_id)
+
+    return jsonify({
+        'success': True,
+        'upload_name': safe_original,
+        'upload_size': len(data),
+    })
+
+
+# ==================== СКАЧИВАНИЕ И ПРОВЕРКА ФАЙЛОВ УЧЕНИКОВ (УЧИТЕЛЬ) ====================
+
+@app.route('/teacher/answers/download/<int:student_id>/<int:task_id>')
+def teacher_download_answer_file(student_id, task_id):
+    """Учитель скачивает файл, загруженный учеником."""
+    answer = Answer.get_for_student_task(student_id, task_id)
+    if not answer or not answer.get('upload_path'):
+        return 'Файл не найден', 404
+    stored = answer['upload_path']
+    original = answer.get('upload_name') or stored
+    return send_from_directory(STUDENT_UPLOADS_DIR, stored,
+                               as_attachment=True,
+                               download_name=original)
+
+
+@app.route('/teacher/answers/mark', methods=['POST'])
+def teacher_mark_answer():
+    """Учитель вручную ставит ✓ или ✗ на file_upload задаче."""
+    data = request.get_json(silent=True) or {}
+    student_id = data.get('student_id')
+    task_id = data.get('task_id')
+    is_correct = data.get('is_correct')  # True / False
+
+    if student_id is None or task_id is None or is_correct is None:
+        return jsonify({'error': 'Неполные данные'}), 400
+
+    Answer.mark(int(student_id), int(task_id), bool(is_correct))
+    return jsonify({'success': True})
 
 # ==================== API ====================
 
@@ -1576,6 +1702,7 @@ def session_monitor(session_id):
         s['is_online'] = bool(last_seen and (now - last_seen).total_seconds() <= 25)
         if s['is_online']:
             online_count += 1
+        s['file_uploads_count'] = Answer.count_uploads_for_student(s['id'])
     
     return render_template('teacher/session_monitor.html',
                          session=session,

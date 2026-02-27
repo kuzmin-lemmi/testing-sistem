@@ -249,6 +249,20 @@ def migrate_db():
     if not _table_has_column(conn, 'variants', 'class_id'):
         cur.execute("ALTER TABLE variants ADD COLUMN class_id INTEGER")
 
+    # 11) tasks: answer_kind (classic | file_upload)
+    if not _table_has_column(conn, 'tasks', 'answer_kind'):
+        cur.execute("ALTER TABLE tasks ADD COLUMN answer_kind TEXT NOT NULL DEFAULT 'classic'")
+
+    # 12) answers: uploaded file fields
+    if not _table_has_column(conn, 'answers', 'upload_path'):
+        cur.execute("ALTER TABLE answers ADD COLUMN upload_path TEXT")
+    if not _table_has_column(conn, 'answers', 'upload_name'):
+        cur.execute("ALTER TABLE answers ADD COLUMN upload_name TEXT")
+    if not _table_has_column(conn, 'answers', 'upload_size'):
+        cur.execute("ALTER TABLE answers ADD COLUMN upload_size INTEGER")
+    if not _table_has_column(conn, 'answers', 'upload_uploaded_at'):
+        cur.execute("ALTER TABLE answers ADD COLUMN upload_uploaded_at DATETIME")
+
     conn.commit()
     conn.close()
 
@@ -278,6 +292,7 @@ def init_db():
             image_path TEXT NOT NULL,
             attachment_path TEXT,
             attachment_name TEXT,
+            answer_kind TEXT NOT NULL DEFAULT 'classic',
             answer_count INTEGER NOT NULL DEFAULT 1,
             answer_1 INTEGER,
             answer_2 INTEGER,
@@ -363,8 +378,13 @@ def init_db():
             task_id INTEGER NOT NULL,
             answer_1 INTEGER,
             answer_2 INTEGER,
+            answer_text TEXT,
             is_correct BOOLEAN,
             answered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            upload_path TEXT,
+            upload_name TEXT,
+            upload_size INTEGER,
+            upload_uploaded_at DATETIME,
             FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
             FOREIGN KEY (task_id) REFERENCES tasks(id)
         )
@@ -406,15 +426,15 @@ class Task:
     @staticmethod
     def create(ege_number, image_path, answer_1=None, answer_count=1, answer_2=None,
                attachment_path=None, attachment_name=None, answer_text=None,
-               task_scope='ege', class_id=None):
+               task_scope='ege', class_id=None, answer_kind='classic'):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO tasks (ege_number, task_scope, class_id, image_path, attachment_path, attachment_name,
-                             answer_count, answer_1, answer_2, answer_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             answer_kind, answer_count, answer_1, answer_2, answer_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (ege_number, task_scope, class_id, image_path, attachment_path, attachment_name,
-              answer_count, answer_1, answer_2, answer_text))
+              answer_kind, answer_count, answer_1, answer_2, answer_text))
         task_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -497,7 +517,7 @@ class Task:
         values = []
         for key, value in kwargs.items():
             if key in ['ege_number', 'task_scope', 'class_id', 'image_path', 'attachment_path', 'attachment_name',
-                      'answer_count', 'answer_1', 'answer_2', 'answer_text']:
+                      'answer_kind', 'answer_count', 'answer_1', 'answer_2', 'answer_text']:
                 fields.append(f'{key} = ?')
                 values.append(value)
         if fields:
@@ -1162,3 +1182,77 @@ class Answer:
         answer = cursor.fetchone()
         conn.close()
         return dict(answer) if answer else None
+
+    @staticmethod
+    def save_upload(student_id, task_id, upload_path, upload_name, upload_size):
+        """Сохранить/обновить загруженный учеником файл (file_upload задача)."""
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
+                (student_id, task_id)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                cursor.execute('''
+                    UPDATE answers
+                    SET upload_path = ?, upload_name = ?, upload_size = ?,
+                        upload_uploaded_at = CURRENT_TIMESTAMP,
+                        is_correct = NULL,
+                        answered_at = CURRENT_TIMESTAMP
+                    WHERE student_id = ? AND task_id = ?
+                ''', (upload_path, upload_name, upload_size, student_id, task_id))
+            else:
+                cursor.execute('''
+                    INSERT INTO answers
+                        (student_id, task_id, upload_path, upload_name, upload_size,
+                         upload_uploaded_at, is_correct)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
+                ''', (student_id, task_id, upload_path, upload_name, upload_size))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def count_uploads_for_student(student_id):
+        """Вернуть количество загруженных файлов для ученика (upload_path IS NOT NULL)."""
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT COUNT(*) FROM answers WHERE student_id = ? AND upload_path IS NOT NULL',
+            (student_id,)
+        )
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    @staticmethod
+    def mark(student_id, task_id, is_correct):
+        """Учитель вручную выставляет ✓/✗ для file_upload задачи."""
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
+                (student_id, task_id)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                cursor.execute('''
+                    UPDATE answers SET is_correct = ? WHERE student_id = ? AND task_id = ?
+                ''', (is_correct, student_id, task_id))
+            else:
+                cursor.execute('''
+                    INSERT INTO answers (student_id, task_id, is_correct)
+                    VALUES (?, ?, ?)
+                ''', (student_id, task_id, is_correct))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()

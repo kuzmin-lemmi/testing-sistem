@@ -10,6 +10,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 DATABASE_PATH = os.path.join(DATA_DIR, 'database.db')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 ATTACHMENTS_DIR = os.path.join(DATA_DIR, 'attachments')
+STUDENT_UPLOADS_DIR = os.path.join(DATA_DIR, 'student_uploads')
 EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
 
 # Настройки сервера
@@ -28,6 +29,8 @@ TEACHER_ALLOWED_IPS = {
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 МБ
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 МБ
 MAX_IMPORT_ZIP_SIZE = 50 * 1024 * 1024  # 50 МБ
+MAX_STUDENT_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 МБ
+ALLOWED_STUDENT_UPLOAD_EXTENSIONS = {'ods', 'odt'}
 ALLOWED_IMAGE_EXTENSIONS = {'png'}
 ALLOWED_ATTACHMENT_EXTENSIONS = {'txt', 'xlsx', 'xls', 'ods', 'csv'}
 
@@ -54,5 +57,5 @@ SPECIAL_ANSWER_FORMAT = {
 }
 
 # Создаём директории если не существуют
-for directory in [DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, EXPORTS_DIR]:
+for directory in [DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR]:
     os.makedirs(directory, exist_ok=True)

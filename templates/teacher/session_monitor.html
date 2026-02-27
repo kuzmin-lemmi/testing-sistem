@@ -118,6 +118,9 @@
                         <td>{{ student.last_seen_at[11:16] if student.last_seen_at else '—' }}</td>
                         <td>
                             <a href="{{ url_for('result_student', student_id=student.id) }}" class="btn btn-secondary btn-small">📊 Результат</a>
+                            {% if student.get('file_uploads_count', 0) > 0 %}
+                            <span class="badge-uploads" title="Загружено файлов">📁 {{ student.file_uploads_count }}</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -317,6 +320,19 @@
     color: var(--primary);
     font-family: 'JetBrains Mono', monospace;
     letter-spacing: 2px;
+}
+
+.badge-uploads {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 6px;
 }
 </style>
 
