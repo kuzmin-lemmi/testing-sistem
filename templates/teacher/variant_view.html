@@ -20,6 +20,7 @@
         </div>
         <div class="header-actions">
             <a href="{{ url_for('session_new') }}?variant_id={{ variant.id }}" class="btn btn-success">▶️ Запустить тест</a>
+            <a href="{{ url_for('variant_edit', variant_id=variant.id) }}" class="btn btn-primary">✏️ Редактировать</a>
             <form action="{{ url_for('variant_delete', variant_id=variant.id) }}" method="POST" class="inline-form"
                   onsubmit="return confirm('Удалить вариант «{{ variant.name }}»?')">
                 <button type="submit" class="btn btn-danger">🗑 Удалить</button>

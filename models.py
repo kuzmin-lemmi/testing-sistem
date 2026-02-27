@@ -227,6 +227,28 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'python_enabled'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN python_enabled BOOLEAN NOT NULL DEFAULT 0")
 
+    # 8) classes table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cur.execute("INSERT OR IGNORE INTO classes (name) VALUES ('Общий банк')")
+
+    # 9) tasks: scope + class
+    if not _table_has_column(conn, 'tasks', 'task_scope'):
+        cur.execute("ALTER TABLE tasks ADD COLUMN task_scope TEXT NOT NULL DEFAULT 'ege'")
+    if not _table_has_column(conn, 'tasks', 'class_id'):
+        cur.execute("ALTER TABLE tasks ADD COLUMN class_id INTEGER")
+
+    # 10) variants: scope + class
+    if not _table_has_column(conn, 'variants', 'variant_scope'):
+        cur.execute("ALTER TABLE variants ADD COLUMN variant_scope TEXT NOT NULL DEFAULT 'ege'")
+    if not _table_has_column(conn, 'variants', 'class_id'):
+        cur.execute("ALTER TABLE variants ADD COLUMN class_id INTEGER")
+
     conn.commit()
     conn.close()
 
@@ -236,11 +258,23 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
+    # Таблица классов (для обычных работ, не ЕГЭ)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute("INSERT OR IGNORE INTO classes (name) VALUES ('Общий банк')")
+
     # Таблица задач
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ege_number INTEGER NOT NULL CHECK(ege_number >= 1 AND ege_number <= 27),
+            task_scope TEXT NOT NULL DEFAULT 'ege',
+            class_id INTEGER,
             image_path TEXT NOT NULL,
             attachment_path TEXT,
             attachment_name TEXT,
@@ -248,7 +282,8 @@ def init_db():
             answer_1 INTEGER,
             answer_2 INTEGER,
             answer_text TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (class_id) REFERENCES classes(id)
         )
     ''')
     
@@ -259,7 +294,10 @@ def init_db():
             name TEXT NOT NULL,
             variant_type TEXT NOT NULL CHECK(variant_type IN ('thematic', 'full', 'mixed', 'uploaded')),
             ege_number INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            variant_scope TEXT NOT NULL DEFAULT 'ege',
+            class_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (class_id) REFERENCES classes(id)
         )
     ''')
     
@@ -366,15 +404,16 @@ def init_db():
 # Функции для работы с задачами
 class Task:
     @staticmethod
-    def create(ege_number, image_path, answer_1=None, answer_count=1, answer_2=None, 
-               attachment_path=None, attachment_name=None, answer_text=None):
+    def create(ege_number, image_path, answer_1=None, answer_count=1, answer_2=None,
+               attachment_path=None, attachment_name=None, answer_text=None,
+               task_scope='ege', class_id=None):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO tasks (ege_number, image_path, attachment_path, attachment_name,
+            INSERT INTO tasks (ege_number, task_scope, class_id, image_path, attachment_path, attachment_name,
                              answer_count, answer_1, answer_2, answer_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (ege_number, image_path, attachment_path, attachment_name,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (ege_number, task_scope, class_id, image_path, attachment_path, attachment_name,
               answer_count, answer_1, answer_2, answer_text))
         task_id = cursor.lastrowid
         conn.commit()
@@ -394,17 +433,33 @@ class Task:
     def get_by_ege_number(ege_number):
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM tasks WHERE ege_number = ? ORDER BY created_at DESC', 
+        cursor.execute("SELECT * FROM tasks WHERE task_scope = 'ege' AND ege_number = ? ORDER BY created_at DESC",
                       (ege_number,))
+        tasks = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return tasks
+
+    @staticmethod
+    def get_by_class_id(class_id):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tasks WHERE task_scope = 'class' AND class_id = ? ORDER BY created_at DESC", (class_id,))
         tasks = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return tasks
     
     @staticmethod
-    def get_all():
+    def get_all(scope=None, class_id=None):
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM tasks ORDER BY ege_number, created_at DESC')
+        if scope == 'ege':
+            cursor.execute("SELECT * FROM tasks WHERE task_scope = 'ege' ORDER BY ege_number, created_at DESC")
+        elif scope == 'class' and class_id is not None:
+            cursor.execute("SELECT * FROM tasks WHERE task_scope = 'class' AND class_id = ? ORDER BY created_at DESC", (class_id,))
+        elif scope == 'class':
+            cursor.execute("SELECT * FROM tasks WHERE task_scope = 'class' ORDER BY created_at DESC")
+        else:
+            cursor.execute('SELECT * FROM tasks ORDER BY task_scope, ege_number, created_at DESC')
         tasks = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return tasks
@@ -414,10 +469,25 @@ class Task:
         """Возвращает словарь {номер_ЕГЭ: количество_задач}"""
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT ege_number, COUNT(*) as count FROM tasks GROUP BY ege_number')
+        cursor.execute("SELECT ege_number, COUNT(*) as count FROM tasks WHERE task_scope = 'ege' GROUP BY ege_number")
         result = {row['ege_number']: row['count'] for row in cursor.fetchall()}
         conn.close()
         return result
+
+    @staticmethod
+    def count_by_class():
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT c.id as class_id, c.name as class_name, COUNT(t.id) as count
+            FROM classes c
+            LEFT JOIN tasks t ON t.class_id = c.id AND t.task_scope = 'class'
+            GROUP BY c.id, c.name
+            ORDER BY CASE WHEN c.name = 'Общий банк' THEN 0 ELSE 1 END, c.name
+        ''')
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
     
     @staticmethod
     def update(task_id, **kwargs):
@@ -426,7 +496,7 @@ class Task:
         fields = []
         values = []
         for key, value in kwargs.items():
-            if key in ['ege_number', 'image_path', 'attachment_path', 'attachment_name',
+            if key in ['ege_number', 'task_scope', 'class_id', 'image_path', 'attachment_path', 'attachment_name',
                       'answer_count', 'answer_1', 'answer_2', 'answer_text']:
                 fields.append(f'{key} = ?')
                 values.append(value)
@@ -444,17 +514,75 @@ class Task:
         conn.commit()
         conn.close()
 
+    @staticmethod
+    def move_to_class(task_ids, class_id):
+        if not task_ids:
+            return 0
+        conn = get_db()
+        cursor = conn.cursor()
+        placeholders = ','.join('?' for _ in task_ids)
+        params = [class_id] + list(task_ids)
+        cursor.execute(
+            f"UPDATE tasks SET task_scope = 'class', class_id = ? WHERE id IN ({placeholders})",
+            params,
+        )
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return affected
+
+
+class ClassGroup:
+    @staticmethod
+    def get_all():
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM classes ORDER BY CASE WHEN name = 'Общий банк' THEN 0 ELSE 1 END, name")
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_default_id():
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO classes (name) VALUES ('Общий банк')")
+        cursor.execute("SELECT id FROM classes WHERE name = 'Общий банк' LIMIT 1")
+        row = cursor.fetchone()
+        conn.commit()
+        conn.close()
+        return int(row['id']) if row else None
+
+    @staticmethod
+    def get_by_id(class_id):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM classes WHERE id = ?', (class_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @staticmethod
+    def create(name):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO classes (name) VALUES (?)', (name.strip(),))
+        class_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return class_id
+
 # Функции для работы с вариантами
 class Variant:
     @staticmethod
-    def create(name, variant_type, ege_number=None):
+    def create(name, variant_type, ege_number=None, variant_scope='ege', class_id=None):
         conn = get_db()
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO variants (name, variant_type, ege_number)
-                VALUES (?, ?, ?)
-            ''', (name, variant_type, ege_number))
+                INSERT INTO variants (name, variant_type, ege_number, variant_scope, class_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, variant_type, ege_number, variant_scope, class_id))
             variant_id = cursor.lastrowid
             conn.commit()
             return variant_id
@@ -475,6 +603,46 @@ class Variant:
                 INSERT INTO variant_tasks (variant_id, task_id, position)
                 VALUES (?, ?, ?)
             ''', rows)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def update(variant_id, **kwargs):
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            fields = []
+            values = []
+            for key, value in kwargs.items():
+                if key in ['name', 'variant_type', 'ege_number', 'variant_scope', 'class_id']:
+                    fields.append(f'{key} = ?')
+                    values.append(value)
+            if fields:
+                values.append(variant_id)
+                cursor.execute(f'UPDATE variants SET {", ".join(fields)} WHERE id = ?', values)
+                conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def replace_tasks(variant_id, task_ids):
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM variant_tasks WHERE variant_id = ?', (variant_id,))
+            if task_ids:
+                rows = [(variant_id, task_id, position) for position, task_id in enumerate(task_ids, 1)]
+                cursor.executemany('''
+                    INSERT INTO variant_tasks (variant_id, task_id, position)
+                    VALUES (?, ?, ?)
+                ''', rows)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -507,10 +675,13 @@ class Variant:
         return tasks
     
     @staticmethod
-    def get_all():
+    def get_all(scope=None):
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM variants ORDER BY created_at DESC')
+        if scope in ('ege', 'class'):
+            cursor.execute('SELECT * FROM variants WHERE variant_scope = ? ORDER BY created_at DESC', (scope,))
+        else:
+            cursor.execute('SELECT * FROM variants ORDER BY created_at DESC')
         variants = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return variants
@@ -757,6 +928,25 @@ class TestSession:
         conn.close()
         return students
 
+    @staticmethod
+    def delete_with_results(session_id):
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM answers
+                WHERE student_id IN (SELECT id FROM students WHERE session_id = ?)
+            ''', (session_id,))
+            cursor.execute('DELETE FROM students WHERE session_id = ?', (session_id,))
+            cursor.execute('DELETE FROM test_sessions WHERE id = ?', (session_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
 
 class Student:
     @staticmethod
@@ -903,7 +1093,7 @@ class Answer:
         
         try:
             # Получаем правильные ответы
-            cursor.execute('SELECT answer_1, answer_2, answer_count FROM tasks WHERE id = ?', (task_id,))
+            cursor.execute('SELECT answer_1, answer_2, answer_count, answer_text FROM tasks WHERE id = ?', (task_id,))
             task = cursor.fetchone()
             
             # Проверяем правильность
@@ -912,9 +1102,7 @@ class Answer:
                 if task['answer_count'] == 0:
                     # Текстовый/многострочный ответ: сравниваем с эталоном, если он задан.
                     # Иначе оставляем None (можно проверить вручную).
-                    cursor.execute('SELECT answer_text FROM tasks WHERE id = ?', (task_id,))
-                    t2 = cursor.fetchone()
-                    correct_text = (t2['answer_text'] if t2 else None)
+                    correct_text = task['answer_text']
                     if correct_text is not None and str(correct_text).strip() != '':
                         def norm(s: str) -> str:
                             return '\n'.join(' '.join(line.strip().split()) for line in str(s).strip().splitlines() if line.strip() != '')
@@ -923,8 +1111,21 @@ class Answer:
                         is_correct = None
                 elif task['answer_count'] == 1:
                     is_correct = _equal(answer_1, task['answer_1'])
-                else:
+                elif task['answer_count'] == 2:
                     is_correct = (_equal(answer_1, task['answer_1']) and _equal(answer_2, task['answer_2']))
+                else:
+                    count = int(task['answer_count'])
+                    expected = [task['answer_1'], task['answer_2']]
+                    extra_expected = [line.strip() for line in str(task['answer_text'] or '').splitlines()]
+                    for idx in range(2, count):
+                        expected.append(extra_expected[idx - 2] if idx - 2 < len(extra_expected) else None)
+
+                    provided = [answer_1, answer_2]
+                    extra_provided = [line.strip() for line in str(answer_text or '').splitlines()]
+                    for idx in range(2, count):
+                        provided.append(extra_provided[idx - 2] if idx - 2 < len(extra_provided) else None)
+
+                    is_correct = all(_equal(provided[i], expected[i]) for i in range(count))
 
             # Сохраняем или обновляем ответ
             cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?', 

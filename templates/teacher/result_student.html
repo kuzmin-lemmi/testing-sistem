@@ -24,11 +24,11 @@
             <div class="time-info">
                 <div class="time-row">
                     <span class="time-label">Начал:</span>
-                    <span class="time-value">{{ student.started_at[:16] if student.started_at else '—' }}</span>
+                    <span class="time-value">{{ student.started_at|local_dt if student.started_at else '—' }}</span>
                 </div>
                 <div class="time-row">
                     <span class="time-label">Завершил:</span>
-                    <span class="time-value">{{ student.finished_at[:16] if student.finished_at else '—' }}</span>
+                    <span class="time-value">{{ student.finished_at|local_dt if student.finished_at else '—' }}</span>
                 </div>
             </div>
         </div>

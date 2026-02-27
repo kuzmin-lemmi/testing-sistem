@@ -1,0 +1,522 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}Редактировать вариант - ЕГЭ Информатика{% endblock %}
+
+{% block content %}
+<div class="variant-edit-page">
+    <div class="page-header">
+        <h1>✏️ Редактирование варианта</h1>
+        <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary">← К варианту</a>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="card edit-form" id="variantEditForm">
+        <div class="form-group">
+            <label for="name">Название варианта</label>
+            <input type="text" id="name" name="name" value="{{ variant.name }}" required>
+        </div>
+
+        <h3 style="margin-bottom:10px;">Текущие задачи варианта</h3>
+        <div class="hint-text" style="margin-bottom:12px;">Слева выберите задачу, по центру увидите её полностью. Для удаления из варианта поставьте галочку.</div>
+
+        <section class="current-workspace">
+            <aside class="current-list" id="currentList">
+                {% for task in current_tasks %}
+                <button type="button" class="current-item {% if loop.first %}active{% endif %}"
+                        data-task-id="{{ task.id }}"
+                        data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                        data-answer="{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}"
+                        data-ege="{{ task.ege_number }}"
+                        onclick="selectCurrentTask({{ task.id }}, this)">
+                    <span class="current-item-index">{{ loop.index }}</span>
+                    <span class="current-item-text">#{{ task.id }}</span>
+                </button>
+                {% endfor %}
+            </aside>
+
+            <div class="current-preview">
+                {% if current_tasks %}
+                <div class="preview-toolbar">
+                    <div id="previewMeta" class="preview-meta">#{{ current_tasks[0].id }} • №{{ current_tasks[0].ege_number }} • Ответ: {{ current_tasks[0].answer_1 }}{% if current_tasks[0].answer_count == 2 %}, {{ current_tasks[0].answer_2 }}{% endif %}</div>
+                    <label class="remove-toggle">
+                        <input type="checkbox" id="removeCurrentChecked" onchange="toggleRemoveCurrent()">
+                        Удалить эту задачу из варианта
+                    </label>
+                </div>
+                <div class="preview-image-wrap">
+                    <img id="previewImage" src="{{ url_for('serve_image', filename=current_tasks[0].image_path) }}" alt="Текущая задача">
+                </div>
+                {% else %}
+                <div class="empty-state">В варианте пока нет задач</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <div style="display:none;" id="removeCheckboxes">
+            {% for task in current_tasks %}
+            <input type="checkbox" id="remove_task_{{ task.id }}" name="remove_task_ids" value="{{ task.id }}">
+            {% endfor %}
+        </div>
+
+        <section class="add-section">
+            <h3>Добавить задачи</h3>
+            <div class="hint-text" style="margin-bottom:10px;">Выберите способ: из уже имеющихся задач или через drag-and-drop новых скриншотов.</div>
+
+            <div class="add-mode-tabs">
+                <label class="tab-pill">
+                    <input type="radio" name="add_mode" value="existing" checked onchange="switchAddMode()">
+                    <span>Из существующих</span>
+                </label>
+                <label class="tab-pill">
+                    <input type="radio" name="add_mode" value="upload" onchange="switchAddMode()">
+                    <span>Drag & Drop</span>
+                </label>
+            </div>
+
+            <div id="addExistingWrap">
+                <div class="tools-row">
+                    <input type="text" id="taskSearch" placeholder="Поиск по ID или № ЕГЭ..." oninput="filterAvailableTasks()">
+                    <select id="egeFilter" onchange="filterAvailableTasks()">
+                        <option value="">Все номера</option>
+                        {% for n in range(1, 28) %}
+                        <option value="{{ n }}">№{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="existing-workspace">
+                    <div class="available-list" id="availableTasks">
+                        {% for task in available_tasks %}
+                        <div class="available-row available-task {% if loop.first %}active{% endif %}"
+                             data-task-id="{{ task.id }}"
+                             data-ege="{{ task.ege_number }}"
+                             data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                             data-answer="{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}"
+                             onclick="selectAvailableTask({{ task.id }}, this, event)">
+                            <input type="checkbox" id="add_task_{{ task.id }}" name="add_task_ids" value="{{ task.id }}" class="add-task-checkbox" onclick="event.stopPropagation()" onchange="syncExistingPreviewCheckbox(this)">
+                            <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача">
+                            <div>
+                                <div><strong>#{{ task.id }}</strong> • №{{ task.ege_number }}</div>
+                                <div class="hint-text">Ответ: {{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="existing-preview">
+                        {% if available_tasks %}
+                        <div class="preview-toolbar">
+                            <div id="existingPreviewMeta" class="preview-meta">#{{ available_tasks[0].id }} • №{{ available_tasks[0].ege_number }} • Ответ: {{ available_tasks[0].answer_1 }}{% if available_tasks[0].answer_count == 2 %}, {{ available_tasks[0].answer_2 }}{% endif %}</div>
+                            <label class="remove-toggle">
+                                <input type="checkbox" id="addExistingChecked" onchange="toggleAddExisting()">
+                                Добавить эту задачу в вариант
+                            </label>
+                        </div>
+                        <div class="preview-image-wrap">
+                            <img id="existingPreviewImage" src="{{ url_for('serve_image', filename=available_tasks[0].image_path) }}" alt="Предпросмотр задачи">
+                        </div>
+                        {% else %}
+                        <div class="empty-state">Нет доступных задач для добавления</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="addUploadWrap" style="display:none;">
+                <div class="dropzone-upload" id="newTasksDropzone">
+                    <div class="dropzone-content">
+                        <span class="dropzone-icon">🖼️</span>
+                        <p>Перетащите скриншоты сюда</p>
+                        <p class="dropzone-hint">или нажмите для выбора (PNG/JPG, множественная загрузка)</p>
+                    </div>
+                    <input type="file" id="newImagesInput" name="new_images" accept=".png,.jpg,.jpeg" multiple>
+                </div>
+
+                <div id="newTasksContainer" style="display:none; margin-top: 12px;">
+                    <h4>Новые задачи: <span id="newTasksCount">0</span></h4>
+                    <div class="new-tasks-list" id="newTasksList"></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Сохранить изменения</button>
+            <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.edit-form { padding: 20px; }
+.hint-text { color: var(--text-muted); font-size: 13px; }
+
+.current-workspace {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.current-list {
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    overflow-y: auto;
+    max-height: 520px;
+    background: #fff;
+}
+
+.current-item {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--border-light);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.current-item.active { background: var(--primary-bg); }
+.current-item-index {
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.current-preview {
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px;
+}
+
+.preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.preview-meta { font-weight: 600; }
+.remove-toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+
+.preview-image-wrap {
+    width: 100%;
+    min-height: 420px;
+    background: #f8fafc;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+#previewImage {
+    max-width: 100%;
+    max-height: 75vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.add-section { border-top: 1px solid var(--border-light); padding-top: 16px; }
+.add-mode-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.tab-pill input { display: none; }
+.tab-pill span { display: inline-flex; padding: 8px 12px; border: 2px solid var(--border); border-radius: 999px; cursor: pointer; }
+.tab-pill input:checked + span { border-color: var(--primary); background: var(--primary-bg); }
+
+.tools-row { display: grid; grid-template-columns: 1fr 150px; gap: 8px; margin-bottom: 10px; }
+
+.existing-workspace {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 12px;
+}
+
+.available-list {
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.available-row {
+    display: grid;
+    grid-template-columns: auto 100px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+}
+
+.available-row.active { background: var(--primary-bg); }
+
+.existing-preview {
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px;
+}
+
+.available-row img {
+    width: 100px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f1f5f9;
+}
+
+.dropzone-upload {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    text-align: center;
+    background: #f8fafc;
+    position: relative;
+    cursor: pointer;
+}
+
+.dropzone-upload.dragover { border-color: var(--primary); background: var(--primary-bg); }
+.dropzone-content { pointer-events: none; }
+.dropzone-icon { font-size: 32px; display: block; margin-bottom: 6px; }
+.dropzone-hint { color: var(--text-muted); font-size: 13px; }
+
+#newImagesInput { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.new-tasks-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow: auto; }
+.new-task-row {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: #fff;
+}
+.new-task-preview { width: 120px; height: 80px; border-radius: 8px; object-fit: cover; background: #f1f5f9; }
+.new-task-fields { display: grid; grid-template-columns: 120px 120px 1fr 1fr; gap: 8px; align-items: center; }
+
+@media (max-width: 1100px) {
+    .current-workspace { grid-template-columns: 1fr; }
+    .current-list { max-height: 180px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .current-item { border-right: 1px solid var(--border-light); }
+    .existing-workspace { grid-template-columns: 1fr; }
+    .available-list { max-height: 240px; }
+    .new-task-row { grid-template-columns: 1fr; }
+    .new-task-fields { grid-template-columns: 1fr 1fr; }
+}
+</style>
+
+<script>
+function selectCurrentTask(taskId, btn) {
+    const all = document.querySelectorAll('.current-item');
+    all.forEach((el) => el.classList.remove('active'));
+    btn.classList.add('active');
+
+    const img = document.getElementById('previewImage');
+    const meta = document.getElementById('previewMeta');
+    const removeUi = document.getElementById('removeCurrentChecked');
+    const realCheckbox = document.getElementById(`remove_task_${taskId}`);
+
+    if (img) img.src = btn.dataset.image || '';
+    if (meta) meta.textContent = `#${taskId} • №${btn.dataset.ege} • Ответ: ${btn.dataset.answer || ''}`;
+    if (removeUi && realCheckbox) removeUi.checked = realCheckbox.checked;
+    if (removeUi) removeUi.setAttribute('data-task-id', String(taskId));
+}
+
+function toggleRemoveCurrent() {
+    const removeUi = document.getElementById('removeCurrentChecked');
+    if (!removeUi) return;
+    const taskId = removeUi.getAttribute('data-task-id');
+    if (!taskId) return;
+    const realCheckbox = document.getElementById(`remove_task_${taskId}`);
+    if (realCheckbox) realCheckbox.checked = removeUi.checked;
+}
+
+function switchAddMode() {
+    const mode = document.querySelector('input[name="add_mode"]:checked')?.value || 'existing';
+    const ex = document.getElementById('addExistingWrap');
+    const up = document.getElementById('addUploadWrap');
+    if (ex) ex.style.display = mode === 'existing' ? '' : 'none';
+    if (up) up.style.display = mode === 'upload' ? '' : 'none';
+}
+
+function filterAvailableTasks() {
+    const q = (document.getElementById('taskSearch')?.value || '').trim().toLowerCase();
+    const ege = document.getElementById('egeFilter')?.value || '';
+    document.querySelectorAll('#availableTasks .available-task').forEach((row) => {
+        const idText = row.dataset.taskId || '';
+        const egeText = row.dataset.ege || '';
+        const byQ = !q || idText.includes(q) || egeText.includes(q);
+        const byEge = !ege || egeText === ege;
+        row.style.display = byQ && byEge ? '' : 'none';
+    });
+}
+
+function selectAvailableTask(taskId, row, event) {
+    if (event && event.target && event.target.closest('input[type="checkbox"]')) {
+        return;
+    }
+    const all = document.querySelectorAll('#availableTasks .available-task');
+    all.forEach((el) => el.classList.remove('active'));
+    row.classList.add('active');
+
+    const img = document.getElementById('existingPreviewImage');
+    const meta = document.getElementById('existingPreviewMeta');
+    const addUi = document.getElementById('addExistingChecked');
+    const realCheckbox = document.getElementById(`add_task_${taskId}`);
+
+    if (img) img.src = row.dataset.image || '';
+    if (meta) meta.textContent = `#${taskId} • №${row.dataset.ege} • Ответ: ${row.dataset.answer || ''}`;
+    if (addUi && realCheckbox) addUi.checked = realCheckbox.checked;
+    if (addUi) addUi.setAttribute('data-task-id', String(taskId));
+}
+
+function toggleAddExisting() {
+    const addUi = document.getElementById('addExistingChecked');
+    if (!addUi) return;
+    const taskId = addUi.getAttribute('data-task-id');
+    if (!taskId) return;
+    const realCheckbox = document.getElementById(`add_task_${taskId}`);
+    if (realCheckbox) realCheckbox.checked = addUi.checked;
+}
+
+function syncExistingPreviewCheckbox(chk) {
+    const row = chk.closest('.available-task');
+    if (!row || !row.classList.contains('active')) return;
+    const addUi = document.getElementById('addExistingChecked');
+    if (addUi) addUi.checked = chk.checked;
+}
+
+const NEW_TASK_FILES = [];
+const NEW_TASK_META = [];
+
+function syncNewFilesInput() {
+    const input = document.getElementById('newImagesInput');
+    if (!input) return;
+    const dt = new DataTransfer();
+    NEW_TASK_FILES.forEach((f) => dt.items.add(f));
+    input.files = dt.files;
+}
+
+function appendNewFiles(fileList) {
+    Array.from(fileList || []).forEach((file) => {
+        const name = (file.name || '').toLowerCase();
+        if (!(/\.(png|jpg|jpeg)$/).test(name)) return;
+        NEW_TASK_FILES.push(file);
+        NEW_TASK_META.push({ ege: '1', answer_count: '1', answer1: '', answer2: '' });
+    });
+    renderNewTasks();
+}
+
+function removeNewTask(index) {
+    captureNewTaskMeta();
+    NEW_TASK_FILES.splice(index, 1);
+    NEW_TASK_META.splice(index, 1);
+    renderNewTasks();
+}
+
+function renderNewTasks() {
+    const container = document.getElementById('newTasksContainer');
+    const list = document.getElementById('newTasksList');
+    const countEl = document.getElementById('newTasksCount');
+    if (!container || !list || !countEl) return;
+
+    countEl.textContent = String(NEW_TASK_FILES.length);
+    container.style.display = NEW_TASK_FILES.length ? '' : 'none';
+
+    list.innerHTML = NEW_TASK_FILES.map((file, index) => {
+        const meta = NEW_TASK_META[index] || { ege: '1', answer_count: '1', answer1: '', answer2: '' };
+        const preview = URL.createObjectURL(file);
+        return `
+            <div class="new-task-row">
+                <img src="${preview}" class="new-task-preview" alt="preview">
+                <div class="new-task-fields">
+                    <input type="number" name="new_ege_number" min="1" max="27" value="${meta.ege}" data-meta-index="${index}" onchange="updateNewTaskMeta(${index}, 'ege', this.value)" required>
+                    <select name="new_answer_count" data-meta-index="${index}" onchange="updateNewTaskMeta(${index}, 'answer_count', this.value)">
+                        <option value="1" ${meta.answer_count === '1' ? 'selected' : ''}>1 ответ</option>
+                        <option value="2" ${meta.answer_count === '2' ? 'selected' : ''}>2 ответа</option>
+                    </select>
+                    <input type="text" name="new_answer1" value="${meta.answer1}" data-meta-index="${index}" oninput="updateNewTaskMeta(${index}, 'answer1', this.value)" placeholder="Ответ 1" required>
+                    <input type="text" name="new_answer2" value="${meta.answer2}" data-meta-index="${index}" oninput="updateNewTaskMeta(${index}, 'answer2', this.value)" placeholder="Ответ 2">
+                </div>
+                <button type="button" class="btn btn-danger btn-small" onclick="removeNewTask(${index})">🗑 Убрать</button>
+            </div>
+        `;
+    }).join('');
+
+    syncNewFilesInput();
+}
+
+function captureNewTaskMeta() {
+    NEW_TASK_FILES.forEach((_, index) => {
+        const ege = document.querySelector(`input[name="new_ege_number"][data-meta-index="${index}"]`);
+        const count = document.querySelector(`select[name="new_answer_count"][data-meta-index="${index}"]`);
+        const a1 = document.querySelector(`input[name="new_answer1"][data-meta-index="${index}"]`);
+        const a2 = document.querySelector(`input[name="new_answer2"][data-meta-index="${index}"]`);
+        if (!NEW_TASK_META[index]) NEW_TASK_META[index] = { ege: '1', answer_count: '1', answer1: '', answer2: '' };
+        if (ege) NEW_TASK_META[index].ege = ege.value;
+        if (count) NEW_TASK_META[index].answer_count = count.value;
+        if (a1) NEW_TASK_META[index].answer1 = a1.value;
+        if (a2) NEW_TASK_META[index].answer2 = a2.value;
+    });
+}
+
+function updateNewTaskMeta(index, field, value) {
+    if (!NEW_TASK_META[index]) NEW_TASK_META[index] = { ege: '1', answer_count: '1', answer1: '', answer2: '' };
+    NEW_TASK_META[index][field] = value;
+}
+
+(function initNewTasksDropzone() {
+    const dropzone = document.getElementById('newTasksDropzone');
+    const input = document.getElementById('newImagesInput');
+    if (!dropzone || !input) return;
+
+    input.addEventListener('change', (e) => {
+        appendNewFiles(e.target.files);
+        input.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach((evt) => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach((evt) => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        appendNewFiles(e.dataTransfer.files);
+    });
+})();
+
+document.addEventListener('DOMContentLoaded', function() {
+    const firstBtn = document.querySelector('.current-item');
+    if (firstBtn) {
+        selectCurrentTask(parseInt(firstBtn.dataset.taskId, 10), firstBtn);
+    }
+    const firstAvailable = document.querySelector('#availableTasks .available-task');
+    if (firstAvailable) {
+        selectAvailableTask(parseInt(firstAvailable.dataset.taskId, 10), firstAvailable);
+    }
+    switchAddMode();
+});
+</script>
+{% endblock %}

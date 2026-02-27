@@ -136,26 +136,32 @@
             {% endif %}
         {% endwith %}
         
-        <form action="{{ url_for('student_start') }}" method="POST">
+        <form id="studentLoginForm" action="{{ url_for('student_start') }}" method="POST" autocomplete="off">
             {% if app_mode %}
             <input type="hidden" name="app_mode" value="1">
             {% endif %}
             <div class="form-row">
                 <div class="form-group">
                     <label>Фамилия</label>
-                    <input type="text" name="last_name" required placeholder="Иванов">
+                    <input type="text" name="last_name" required placeholder="Иванов"
+                           autocomplete="section-{{ autocomplete_section }} new-password"
+                           autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true">
                 </div>
                 <div class="form-group">
                     <label>Имя</label>
-                    <input type="text" name="first_name" required placeholder="Иван">
+                    <input type="text" name="first_name" required placeholder="Иван"
+                           autocomplete="section-{{ autocomplete_section }} new-password"
+                           autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true">
                 </div>
             </div>
             
             {% if need_code %}
-            <div class="form-group">
-                <label>Код доступа</label>
-                <input type="text" name="code" class="code-input" maxlength="6" required placeholder="XXXX">
-            </div>
+                <div class="form-group">
+                    <label>Код доступа</label>
+                    <input type="text" name="code" class="code-input" maxlength="6" required placeholder="XXXX"
+                           autocomplete="section-{{ autocomplete_section }} one-time-code"
+                           autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true">
+                </div>
             {% endif %}
             {% if app_mode %}
             <p class="subtitle" style="margin-top: 10px;">После входа нажмите кнопку «Полный экран»</p>
@@ -163,5 +169,19 @@
             <button type="submit" class="btn">Начать тест →</button>
         </form>
     </div>
+    <script>
+        (function() {
+            const form = document.getElementById('studentLoginForm');
+            if (!form) return;
+            const hardReset = () => {
+                form.reset();
+                form.querySelectorAll('input[type="text"]').forEach((input) => {
+                    input.value = '';
+                });
+            };
+            hardReset();
+            window.addEventListener('pageshow', hardReset);
+        })();
+    </script>
 </body>
 </html>

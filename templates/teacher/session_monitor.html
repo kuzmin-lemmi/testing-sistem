@@ -60,7 +60,7 @@
             {% endif %}
             <div class="info-item">
                 <span class="info-label">Создано</span>
-                <span class="info-value">{{ session.created_at[:16] }}</span>
+                <span class="info-value">{{ session.created_at|local_dt }}</span>
             </div>
         </div>
         

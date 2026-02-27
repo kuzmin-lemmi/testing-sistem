@@ -608,11 +608,11 @@ body {
 
 .tasks-layout {
     display: flex;
-    gap: 28px;
+    gap: 10px;
 }
 
 .ege-sidebar {
-    width: 220px;
+    width: 160px;
     flex-shrink: 0;
 }
 
@@ -657,6 +657,13 @@ body {
 .ege-list li a.active {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
+}
+
+.ege-list li a.drop-over {
+    outline: 2px dashed var(--primary);
+    outline-offset: -4px;
+    background: var(--primary-bg);
+    color: var(--primary-dark);
 }
 
 .ege-list li a.empty {
@@ -717,17 +724,28 @@ body {
 
 .tasks-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 24px;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    width: 100%;
+    justify-items: stretch;
 }
 
 .task-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    width: 100%;
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-light);
     transition: var(--transition);
+    cursor: grab;
+}
+
+.task-card.dragging {
+    opacity: 0.7;
 }
 
 .task-card:hover {
@@ -736,45 +754,60 @@ body {
 }
 
 .task-image {
-    height: 180px;
-    overflow: hidden;
-    background: linear-gradient(135deg, var(--bg-sidebar) 0%, var(--border) 100%);
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    overflow: visible;
+    background: #fff;
     position: relative;
+    padding: 6px;
+}
+
+.task-image a {
+    display: block;
+    width: 100%;
+    height: auto;
 }
 
 .task-image img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    max-width: 100%;
+    height: auto;
+    object-fit: initial;
     transition: var(--transition-slow);
 }
 
 .task-card:hover .task-image img {
-    transform: scale(1.05);
+    transform: none;
 }
 
 .task-card .task-info {
-    padding: 18px;
-    background: transparent;
+    grid-column: 1;
+    grid-row: 2;
+    padding: 8px 10px 6px;
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border-light);
     border-radius: 0;
+    font-size: 11px;
 }
 
 .task-id {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-muted);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-family: 'JetBrains Mono', monospace;
 }
 
 .task-answer {
     font-weight: 600;
     color: var(--text);
-    font-size: 1.1em;
+    font-size: 0.82em;
+    margin-bottom: 6px;
 }
 
 .task-attachment {
-    margin-top: 10px;
-    font-size: 13px;
+    margin-top: 6px;
+    font-size: 10px;
     color: var(--primary);
     display: flex;
     align-items: center;
@@ -782,12 +815,28 @@ body {
 }
 
 .task-actions {
-    padding: 14px 18px;
+    grid-column: 1;
+    grid-row: 3;
+    padding: 6px 8px 8px;
     background: var(--bg-sidebar);
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
     border-top: 1px solid var(--border-light);
+}
+
+@media (max-width: 1100px) {
+    .task-image {
+        grid-column: 1;
+        grid-row: 1;
+        min-height: 320px;
+    }
+
+    .task-card .task-info,
+    .task-actions {
+        grid-column: 1;
+        border-left: none;
+    }
 }
 
 .empty-state {
@@ -1147,3 +1196,47 @@ body {
         justify-content: center;
     }
 }
+
+/* ==================== ПРОДУКТИВНЫЙ LAYOUT (Explorer) ==================== */
+
+.results-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    align-items: start;
+}
+.filters-bar { margin-bottom: 16px; }
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-row select, .filter-row input { padding: 8px 10px; border: 2px solid var(--border); border-radius: var(--radius); }
+.results-count { margin-top: 8px; color: var(--text-muted); font-size: 14px; }
+.session-tree { padding: 0; overflow: hidden; max-height: calc(100vh - 180px); position: sticky; top: 86px; }
+.tree-title { padding: 14px 16px; border-bottom: 1px solid var(--border-light); font-weight: 700; background: var(--bg-sidebar); }
+.tree-list { max-height: calc(100vh - 230px); overflow-y: auto; }
+.tree-item-row { display: grid; grid-template-columns: auto 1fr; align-items: stretch; border-bottom: 1px solid var(--border-light); }
+.tree-item-row:hover { background: var(--primary-bg); }
+.tree-item-row.active { background: var(--primary-bg); border-left: 4px solid var(--primary); }
+.tree-check-item { display: flex; align-items: center; padding: 0 8px 0 10px; }
+.tree-item { display: block; padding: 12px 14px; text-decoration: none; color: inherit; }
+.tree-item-title { font-weight: 600; margin-bottom: 4px; }
+.tree-item-meta { font-size: 12px; color: var(--text-muted); }
+.session-details { min-height: 500px; }
+.details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.details-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 13px; flex-wrap: wrap; }
+.students-table-wrap { overflow-x: auto; }
+.students-table { width: 100%; border-collapse: collapse; }
+.students-table th, .students-table td { padding: 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
+.students-table th { font-size: 13px; color: var(--text-muted); }
+.grade-badge { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 700; }
+.grade-badge.grade-5 { background: #d1fae5; color: #065f46; }
+.grade-badge.grade-4 { background: #dbeafe; color: #1e40af; }
+.grade-badge.grade-3 { background: #fef3c7; color: #92400e; }
+.grade-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+.empty-small { padding: 16px; color: var(--text-muted); }
+.empty-state { text-align: center; padding: 80px 20px; }
+@media (max-width: 980px) {
+    .results-layout { grid-template-columns: 1fr; }
+    .session-tree { position: static; max-height: 320px; }
+    .tree-list { max-height: 260px; }
+}
+.tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
+.tree-check-all { font-size: 13px; color: var(--text-secondary); }

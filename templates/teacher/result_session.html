@@ -27,7 +27,7 @@
                 <span class="summary-label">Минут на тест</span>
             </div>
             <div class="summary-item">
-                <span class="summary-value">{{ session.created_at[:10] }}</span>
+                <span class="summary-value">{{ session.created_at|local_date }}</span>
                 <span class="summary-label">Дата</span>
             </div>
         </div>

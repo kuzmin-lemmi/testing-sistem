@@ -6,141 +6,145 @@
 <div class="variants-page">
     <div class="page-header">
         <h1>📋 Варианты</h1>
-        <a href="{{ url_for('variant_create') }}" class="btn btn-primary">➕ Создать вариант</a>
+        <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-primary">➕ Создать вариант</a>
     </div>
-    
-    {% if variants %}
-    <div class="variants-grid">
-        {% for variant in variants %}
-        <div class="variant-card card">
-            <div class="variant-header">
-                <div class="variant-type-badge {% if variant.variant_type == 'full' %}badge-full{% else %}badge-thematic{% endif %}">
-                    {% if variant.variant_type == 'full' %}
-                        🎯 Полный вариант
-                    {% else %}
-                        📝 Тематический №{{ variant.ege_number }}
-                    {% endif %}
+
+    <div class="mode-tabs" style="display:flex; gap:10px; margin-bottom:12px;">
+        <a href="{{ url_for('variants_list', scope='all') }}" class="btn {% if scope == 'all' %}btn-primary{% else %}btn-outline{% endif %}">Все</a>
+        <a href="{{ url_for('variants_list', scope='ege') }}" class="btn {% if scope == 'ege' %}btn-primary{% else %}btn-outline{% endif %}">ЕГЭ</a>
+        <a href="{{ url_for('variants_list', scope='class') }}" class="btn {% if scope == 'class' %}btn-primary{% else %}btn-outline{% endif %}">Обычные классы</a>
+    </div>
+
+    <div class="results-layout">
+        <aside class="session-tree card">
+            <div class="tree-title">Список вариантов</div>
+            {% if variants %}
+            <form action="{{ url_for('variant_delete_bulk') }}" method="POST" onsubmit="return confirmVariantBulkDelete()">
+                <input type="hidden" name="scope" value="{{ scope }}">
+                <div class="tree-bulk-actions">
+                    <label class="tree-check-all"><input type="checkbox" id="checkAllVariants"> Все</label>
+                    <button type="submit" class="btn btn-danger btn-small">🗑 Удалить отмеченные</button>
+                </div>
+                <div class="tree-list">
+                    {% for v in variants %}
+                    <div class="tree-item-row {% if selected_variant_id == v.id %}active{% endif %}">
+                        <label class="tree-check-item">
+                            <input type="checkbox" name="variant_ids" value="{{ v.id }}" class="variant-checkbox">
+                        </label>
+                        <a class="tree-item" href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}">
+                            <div class="tree-item-title">{{ v.name }}</div>
+                            <div class="tree-item-meta">
+                                {% if v.variant_scope == 'class' %}🏫 {{ v.class_name if v.class_name else 'Класс' }}{% else %}🎓 ЕГЭ{% endif %}
+                                · {{ v.tasks_count }} задач
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </form>
+            {% else %}
+            <div class="empty-small">Нет вариантов</div>
+            {% endif %}
+        </aside>
+
+        <section class="session-details card">
+            {% if selected_variant %}
+            <div class="details-header">
+                <div>
+                    <h2>{{ selected_variant.name }}</h2>
+                    <div class="details-meta">
+                        <span>📅 {{ selected_variant.created_at|local_dt }}</span>
+                        <span>📚 {{ selected_variant.tasks_count }} задач</span>
+                        {% if selected_variant.variant_scope == 'class' %}
+                        <span>🏫 {{ selected_variant.class_name if selected_variant.class_name else 'Класс' }}</span>
+                        {% else %}
+                        <span>🎓 ЕГЭ</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">👁 Открыть</a>
+                    <a href="{{ url_for('variant_edit', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">✏️ Редактировать</a>
+                    <form action="{{ url_for('variant_delete', variant_id=selected_variant.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить вариант и связанные результаты?')">
+                        <input type="hidden" name="scope" value="{{ scope }}">
+                        <button type="submit" class="btn btn-danger btn-small">🗑 Удалить</button>
+                    </form>
                 </div>
             </div>
-            <div class="variant-body">
-                <h3 class="variant-name">{{ variant.name }}</h3>
-                <div class="variant-meta">
-                    <span class="meta-item">📚 {{ variant.tasks_count }} задач</span>
-                    <span class="meta-item">📅 {{ variant.created_at[:10] }}</span>
-                </div>
+
+            <div class="students-table-wrap">
+                <table class="students-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Номер</th>
+                            <th>Ответ</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in selected_tasks %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>№{{ task.ege_number }}</td>
+                            <td>{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</td>
+                            <td><a href="{{ url_for('task_view', task_id=task.id) }}">Открыть задачу →</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <div class="variant-actions">
-                <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary btn-small">👁 Просмотр</a>
-                <form action="{{ url_for('variant_delete', variant_id=variant.id) }}" method="POST" class="inline-form"
-                      onsubmit="return confirm('Удалить вариант «{{ variant.name }}»?')">
-                    <button type="submit" class="btn btn-danger btn-small">🗑</button>
-                </form>
-            </div>
-        </div>
-        {% endfor %}
+            {% else %}
+            <div class="empty-state"><div class="empty-icon">📂</div><h3>Выберите вариант слева</h3></div>
+            {% endif %}
+        </section>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-icon">📋</div>
-        <h3>Вариантов пока нет</h3>
-        <p>Создайте первый вариант для проведения тестирования</p>
-        <a href="{{ url_for('variant_create') }}" class="btn btn-primary">➕ Создать вариант</a>
-    </div>
-    {% endif %}
 </div>
 
 <style>
-.variants-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 24px;
-}
-
-.variant-card {
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
-}
-
-.variant-header {
-    padding: 16px 20px;
-    background: var(--bg-sidebar);
-    border-bottom: 1px solid var(--border-light);
-}
-
-.variant-type-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.badge-full {
-    background: linear-gradient(135deg, var(--primary-bg), #ddd6fe);
-    color: var(--primary-dark);
-}
-
-.badge-thematic {
-    background: linear-gradient(135deg, var(--success-bg), #a7f3d0);
-    color: #065f46;
-}
-
-.variant-body {
-    padding: 20px;
-    flex: 1;
-}
-
-.variant-name {
-    font-size: 1.2em;
-    margin-bottom: 12px;
-    color: var(--text);
-}
-
-.variant-meta {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.meta-item {
-    color: var(--text-muted);
-    font-size: 14px;
-}
-
-.variant-actions {
-    padding: 16px 20px;
-    background: var(--bg-sidebar);
-    border-top: 1px solid var(--border-light);
-    display: flex;
-    gap: 8px;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 80px 20px;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    border: 2px dashed var(--border);
-}
-
-.empty-icon {
-    font-size: 4em;
-    margin-bottom: 20px;
-    opacity: 0.5;
-}
-
-.empty-state h3 {
-    margin-bottom: 10px;
-    color: var(--text);
-}
-
-.empty-state p {
-    color: var(--text-secondary);
-    margin-bottom: 24px;
+.results-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.session-tree { padding: 0; overflow: hidden; max-height: calc(100vh - 180px); position: sticky; top: 86px; }
+.tree-title { padding: 14px 16px; border-bottom: 1px solid var(--border-light); font-weight: 700; background: var(--bg-sidebar); }
+.tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
+.tree-check-all { font-size: 13px; color: var(--text-secondary); }
+.tree-list { max-height: calc(100vh - 280px); overflow-y: auto; }
+.tree-item-row { display: grid; grid-template-columns: auto 1fr; align-items: stretch; border-bottom: 1px solid var(--border-light); }
+.tree-item-row:hover { background: var(--primary-bg); }
+.tree-item-row.active { background: var(--primary-bg); border-left: 4px solid var(--primary); }
+.tree-check-item { display: flex; align-items: center; padding: 0 8px 0 10px; }
+.tree-item { display: block; padding: 12px 14px; text-decoration: none; color: inherit; }
+.tree-item-title { font-weight: 600; margin-bottom: 4px; }
+.tree-item-meta { font-size: 12px; color: var(--text-muted); }
+.session-details { min-height: 500px; }
+.details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.details-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 13px; flex-wrap: wrap; }
+.students-table-wrap { overflow-x: auto; }
+.students-table { width: 100%; border-collapse: collapse; }
+.students-table th, .students-table td { padding: 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
+.students-table th { font-size: 13px; color: var(--text-muted); }
+.empty-small { padding: 16px; color: var(--text-muted); }
+.empty-state { text-align: center; padding: 80px 20px; }
+@media (max-width: 980px) {
+  .results-layout { grid-template-columns: 1fr; }
+  .session-tree { position: static; max-height: 320px; }
+  .tree-list { max-height: 220px; }
 }
 </style>
+
+<script>
+const checkAllVariants = document.getElementById('checkAllVariants');
+if (checkAllVariants) {
+    checkAllVariants.addEventListener('change', function() {
+        document.querySelectorAll('.variant-checkbox').forEach((cb) => cb.checked = checkAllVariants.checked);
+    });
+}
+function confirmVariantBulkDelete() {
+    const checked = Array.from(document.querySelectorAll('.variant-checkbox')).filter((cb) => cb.checked).length;
+    if (checked === 0) {
+        alert('Отметьте хотя бы один вариант.');
+        return false;
+    }
+    return confirm(`Удалить отмеченные варианты: ${checked} шт.?`);
+}
+</script>
 {% endblock %}

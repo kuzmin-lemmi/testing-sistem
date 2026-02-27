@@ -5,10 +5,10 @@
 {% block content %}
 <div class="task-view-page">
     <div class="page-header">
-        <h1>Задача #{{ task.id }} (№{{ task.ege_number }})</h1>
+        <h1>Задача #{{ task.id }}</h1>
         <div class="header-actions">
             <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-secondary">✏️ Редактировать</a>
-            <a href="{{ url_for('tasks_list', ege=task.ege_number) }}" class="btn btn-secondary">← К списку</a>
+            <a href="{{ url_for('tasks_list', mode=('class' if task.task_scope == 'class' else 'ege'), class_id=task.class_id, ege=task.ege_number) }}" class="btn btn-secondary">← К списку</a>
         </div>
     </div>
     
@@ -19,8 +19,12 @@
         
         <div class="task-meta">
             <div class="meta-row">
-                <span class="meta-label">Номер ЕГЭ:</span>
-                <span class="meta-value">{{ task.ege_number }}</span>
+                <span class="meta-label">Раздел:</span>
+                <span class="meta-value">{{ 'Обычные классы' if task.task_scope == 'class' else 'ЕГЭ' }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Категория:</span>
+                <span class="meta-value">{% if task.task_scope == 'class' %}Класс #{{ task.class_id }}{% else %}№{{ task.ege_number }}{% endif %}</span>
             </div>
             <div class="meta-row">
                 <span class="meta-label">Количество ответов:</span>
@@ -30,11 +34,20 @@
                 <span class="meta-label">Ответ 1:</span>
                 <span class="meta-value answer-value">{{ task.answer_1 }}</span>
             </div>
-            {% if task.answer_count == 2 %}
+            {% if task.answer_count >= 2 %}
             <div class="meta-row">
                 <span class="meta-label">Ответ 2:</span>
                 <span class="meta-value answer-value">{{ task.answer_2 }}</span>
             </div>
+            {% endif %}
+            {% if task.answer_count > 2 %}
+            {% set extra = (task.answer_text or '').split('\n') %}
+            {% for idx in range(3, task.answer_count + 1) %}
+            <div class="meta-row">
+                <span class="meta-label">Ответ {{ idx }}:</span>
+                <span class="meta-value answer-value">{{ extra[idx - 3] if extra|length > (idx - 3) else '' }}</span>
+            </div>
+            {% endfor %}
             {% endif %}
             {% if task.attachment_path %}
             <div class="meta-row">

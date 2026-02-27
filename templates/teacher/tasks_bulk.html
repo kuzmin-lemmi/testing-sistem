@@ -6,13 +6,27 @@
 <div class="bulk-upload-page">
     <div class="page-header">
         <h1>📦 Массовая загрузка задач</h1>
-        <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+        {% if mode == 'class' %}
+        <a href="{{ url_for('tasks_list', mode='ege', ege=0) }}" class="btn btn-secondary">← Назад к списку</a>
+        {% else %}
+        <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+        {% endif %}
     </div>
     
     <form action="{{ url_for('tasks_bulk_upload') }}" method="POST" id="bulkForm">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        {% if mode == 'class' %}
+        <input type="hidden" name="class_id" value="{{ class_id }}">
+        {% endif %}
         <input type="hidden" name="ege_number" value="{{ ege_number }}">
         
         <div class="step-card card">
+            {% if mode == 'class' %}
+            <h2>1️⃣ Общий банк</h2>
+            <div class="form-group">
+                <div class="standard-format-notice">Загружаемые задачи будут добавлены в общий банк</div>
+            </div>
+            {% else %}
             <h2>1️⃣ Выберите номер ЕГЭ</h2>
             <div class="form-group">
                 <select id="egeSelect" onchange="changeEge(this.value)">
@@ -24,17 +38,12 @@
                     {% endfor %}
                 </select>
             </div>
+            {% endif %}
             
             <div class="answer-format-info">
-                {% if ege_number in special_format %}
-                <div class="special-format-notice">
-                    ⚠️ <strong>Особый формат ответа:</strong> {{ special_format[ege_number].description }}
-                </div>
-                {% else %}
                 <div class="standard-format-notice">
-                    Формат: {{ default_answer_count.get(ege_number, 1) }} ответ(а)
+                    Для каждой задачи можно указать своё количество ответов (1..20)
                 </div>
-                {% endif %}
             </div>
         </div>
         
@@ -64,20 +73,7 @@
             <h2>3️⃣ Заполните ответы</h2>
             <div class="tasks-count">Загружено: <span id="tasksCount">0</span> файлов</div>
             
-            <div class="tasks-table-container">
-                <table class="tasks-table" id="tasksTable">
-                    <thead>
-                        <tr>
-                            <th style="width: 80px;">Превью</th>
-                            <th>Файл</th>
-                            <th id="answerHeader">Ответ</th>
-                            <th style="width: 60px;">Удалить</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tasksBody">
-                    </tbody>
-                </table>
-            </div>
+            <div id="tasksGrid"></div>
             
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary btn-large" id="submitBtn" disabled>
@@ -178,51 +174,81 @@
     font-size: 14px;
 }
 
-/* Tasks table */
+/* Tasks grid */
 .tasks-count {
     margin-bottom: 16px;
     color: var(--text-secondary);
 }
 
-.tasks-table-container {
-    max-height: 500px;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+#tasksGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
-.tasks-table {
-    width: 100%;
-    border-collapse: collapse;
+.bulk-task-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 0;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-light);
 }
 
-.tasks-table th,
-.tasks-table td {
+.bulk-task-image {
+    background: #fff;
     padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-light);
+    min-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.tasks-table th {
+.bulk-task-image img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    cursor: pointer;
+}
+
+.bulk-task-meta {
+    padding: 14px 16px;
     background: var(--bg-sidebar);
-    position: sticky;
-    top: 0;
-    font-weight: 600;
-    font-size: 13px;
+    border-left: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.task-preview {
-    width: 60px;
-    height: 45px;
-    object-fit: cover;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-}
-
-.task-filename {
-    font-size: 13px;
+.bulk-task-filename {
+    font-size: 12px;
     color: var(--text-secondary);
-    word-break: break-all;
+    word-break: break-word;
+    margin-bottom: 4px;
+}
+
+.bulk-meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bulk-meta-row label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+    .bulk-task-card {
+        grid-template-columns: 1fr;
+    }
+    .bulk-task-meta {
+        border-left: none;
+        border-top: 1px solid var(--border-light);
+    }
 }
 
 .answer-inputs {
@@ -289,8 +315,7 @@
 
 <script>
 const egeNumber = {{ ege_number }};
-const defaultAnswerCount = {{ default_answer_count | tojson }};
-const specialFormat = {{ special_format | tojson }};
+const uploadMode = {{ mode | tojson }};
 let uploadedFiles = [];
 
 // Инициализация dropzone
@@ -344,6 +369,7 @@ async function handleFiles(files) {
             
             const response = await fetch('{{ url_for("api_upload_image") }}', {
                 method: 'POST',
+                headers: { 'X-CSRFToken': window.CSRF_TOKEN || '' },
                 body: formData
             });
             
@@ -353,7 +379,9 @@ async function handleFiles(files) {
                 uploadedFiles.push({
                     originalName: file.name,
                     filename: result.filename,
-                    url: result.url
+                    url: result.url,
+                    answerCount: 1,
+                    answers: ['']
                 });
             }
         } catch (error) {
@@ -373,11 +401,10 @@ async function handleFiles(files) {
 }
 
 function renderTasks() {
-    const tbody = document.getElementById('tasksBody');
+    const grid = document.getElementById('tasksGrid');
     const card = document.getElementById('tasksCard');
     const count = document.getElementById('tasksCount');
     const submitBtn = document.getElementById('submitBtn');
-    const answerHeader = document.getElementById('answerHeader');
     
     if (uploadedFiles.length === 0) {
         card.style.display = 'none';
@@ -387,54 +414,73 @@ function renderTasks() {
     card.style.display = 'block';
     count.textContent = uploadedFiles.length;
     submitBtn.disabled = false;
+
+    uploadedFiles = uploadedFiles.map((f) => ({ ...f, answerCount: f.answerCount || 1 }));
     
-    // Определяем тип ответа
-    const isSpecial = egeNumber in specialFormat;
-    const answerCount = defaultAnswerCount[egeNumber] || 1;
-    
-    if (isSpecial) {
-        answerHeader.textContent = 'Ответ (особый формат)';
-    } else if (answerCount === 2) {
-        answerHeader.textContent = 'Ответ 1 / Ответ 2';
-    } else {
-        answerHeader.textContent = 'Ответ';
-    }
-    
-    tbody.innerHTML = uploadedFiles.map((file, index) => {
-        let answerHtml = '';
-        
-        if (isSpecial) {
-            answerHtml = `
-                <textarea class="answer-textarea" name="answer_text_${index}" 
-                    placeholder="${specialFormat[egeNumber].description}"></textarea>
-                <input type="hidden" name="image_path_${index}" value="${file.filename}">
-            `;
-        } else if (answerCount === 2) {
-            answerHtml = `
-                <div class="answer-inputs">
-                    <input type="text" class="answer-input" name="answer_1_${index}" placeholder="Ответ 1" required autocomplete="off">
-                    <input type="text" class="answer-input" name="answer_2_${index}" placeholder="Ответ 2" required autocomplete="off">
+    grid.innerHTML = uploadedFiles.map((file, index) => {
+        const answerCount = file.answerCount || 1;
+        let answersHtml = '';
+        for (let i = 1; i <= answerCount; i++) {
+            const value = (file.answers && file.answers[i - 1]) ? file.answers[i - 1] : '';
+            answersHtml += `
+                <div class="bulk-meta-row">
+                    <label>Ответ ${i}</label>
+                    <input type="text" class="answer-input" name="answer_${i}_${index}" placeholder="Ответ ${i}" value="${value}" required autocomplete="off" oninput="syncAnswerValue(${index}, ${i - 1}, this.value)">
                 </div>
-                <input type="hidden" name="image_path_${index}" value="${file.filename}">
-            `;
-        } else {
-            answerHtml = `
-                <input type="text" class="answer-input" name="answer_1_${index}" placeholder="Ответ" required autocomplete="off">
-                <input type="hidden" name="image_path_${index}" value="${file.filename}">
             `;
         }
-        
+
         return `
-            <tr data-index="${index}">
-                <td><img src="${file.url}" class="task-preview" alt="Превью"></td>
-                <td class="task-filename">${file.originalName}</td>
-                <td>${answerHtml}</td>
-                <td>
-                    <button type="button" class="delete-btn" onclick="deleteTask(${index})">🗑</button>
-                </td>
-            </tr>
+            <div class="bulk-task-card" data-index="${index}">
+                <div class="bulk-task-image">
+                    <img src="${file.url}" alt="Задача ${index + 1}" onclick="window.open(this.src, '_blank')">
+                </div>
+                <div class="bulk-task-meta">
+                    <div class="bulk-task-filename">📄 ${file.originalName}</div>
+                    
+                    <div class="bulk-meta-row">
+                        <label>Количество ответов</label>
+                        <input type="number" min="1" max="20" class="answer-input" style="width:80px;" name="answer_count_${index}" value="${answerCount}" onchange="changeAnswerCount(${index}, this.value)">
+                        <input type="hidden" name="image_path_${index}" value="${file.filename}">
+                    </div>
+                    
+                    ${answersHtml}
+                    
+                    <div class="bulk-meta-row">
+                        <label>Файл данных (опц.)</label>
+                        <input type="file" name="attachment_${index}" accept=".txt,.ods,.xls,.xlsx,.csv" style="font-size:12px;">
+                    </div>
+                    
+                    <button type="button" class="btn btn-danger btn-small" onclick="deleteTask(${index})" style="margin-top:8px;">
+                        🗑 Удалить
+                    </button>
+                </div>
+            </div>
         `;
     }).join('');
+}
+
+function changeAnswerCount(index, value) {
+    let count = parseInt(value || '1', 10);
+    if (Number.isNaN(count) || count < 1) count = 1;
+    if (count > 20) count = 20;
+    const file = uploadedFiles[index];
+    if (!file) return;
+    file.answerCount = count;
+    const prev = Array.isArray(file.answers) ? file.answers : [];
+    file.answers = [];
+    for (let i = 0; i < count; i++) {
+        file.answers.push(prev[i] || '');
+    }
+    renderTasks();
+}
+
+function syncAnswerValue(fileIndex, answerIndex, value) {
+    if (!uploadedFiles[fileIndex]) return;
+    if (!Array.isArray(uploadedFiles[fileIndex].answers)) {
+        uploadedFiles[fileIndex].answers = [];
+    }
+    uploadedFiles[fileIndex].answers[answerIndex] = value || '';
 }
 
 async function deleteTask(index) {
@@ -444,7 +490,10 @@ async function deleteTask(index) {
     try {
         await fetch('{{ url_for("api_delete_image") }}', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN || ''
+            },
             body: JSON.stringify({ filename: file.filename })
         });
     } catch (e) {
@@ -462,7 +511,10 @@ async function clearAll() {
         try {
             await fetch('{{ url_for("api_delete_image") }}', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.CSRF_TOKEN || ''
+                },
                 body: JSON.stringify({ filename: file.filename })
             });
         } catch (e) {}
@@ -473,7 +525,8 @@ async function clearAll() {
 }
 
 function changeEge(value) {
-    window.location.href = '{{ url_for("tasks_bulk_upload") }}?ege=' + value;
+    if (uploadMode !== 'ege') return;
+    window.location.href = '{{ url_for("tasks_bulk_upload") }}?mode=ege&ege=' + value;
 }
 
 // Валидация формы
@@ -484,8 +537,17 @@ document.getElementById('bulkForm').addEventListener('submit', function(e) {
         return;
     }
     
+    // Сохраняем введённые ответы в память перед переиндексацией
+    const cardsBefore = document.querySelectorAll('.bulk-task-card');
+    cardsBefore.forEach((card) => {
+        const idx = Number(card.dataset.index);
+        if (!Number.isFinite(idx) || !uploadedFiles[idx]) return;
+        const inputs = card.querySelectorAll('input[name^="answer_"][type="text"]');
+        uploadedFiles[idx].answers = Array.from(inputs).map((x) => x.value || '');
+    });
+
     // Обновляем индексы в форме
-    const rows = document.querySelectorAll('#tasksBody tr');
+    const rows = document.querySelectorAll('.bulk-task-card');
     rows.forEach((row, newIndex) => {
         const oldIndex = row.dataset.index;
         row.querySelectorAll('input, textarea').forEach(input => {

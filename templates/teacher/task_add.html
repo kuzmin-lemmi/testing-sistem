@@ -7,15 +7,32 @@
     <div class="page-header">
         <h1>➕ Добавить задачу</h1>
         <div class="header-actions">
+            {% if mode == 'ege' %}
             <a href="{{ url_for('tasks_bulk_upload', ege=ege_number) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
-            <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+            <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+            {% else %}
+            <a href="{{ url_for('tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">← Назад к списку</a>
+            {% endif %}
         </div>
     </div>
     
-    <form action="{{ url_for('task_add') }}" method="POST" enctype="multipart/form-data" class="task-form card" id="taskForm">
+    <form action="{{ url_for('task_add', mode=mode, class_id=class_id) }}" method="POST" enctype="multipart/form-data" class="task-form card" id="taskForm">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        {% if mode == 'class' %}
+        <div class="form-group">
+            <label for="class_id">Класс</label>
+            <select name="class_id" id="class_id" required>
+                {% for c in classes %}
+                <option value="{{ c.id }}" {% if c.id == class_id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        {% if mode == 'ege' %}
         <div class="form-group">
             <label for="ege_number">Номер ЕГЭ</label>
-            <select name="ege_number" id="ege_number" required onchange="updateAnswerFormat()">
+            <select name="ege_number" id="ege_number" required>
                 {% for num in range(1, 28) %}
                 <option value="{{ num }}" {% if num == ege_number %}selected{% endif %}>
                     Задание №{{ num }}
@@ -23,6 +40,7 @@
                 {% endfor %}
             </select>
         </div>
+        {% endif %}
         
         <div class="form-group">
             <label>Изображение задачи (PNG)</label>
@@ -46,46 +64,28 @@
         
         <div class="form-group">
             <label for="attachment">Файл данных (опционально)</label>
-            <input type="file" name="attachment" id="attachment" accept=".txt,.xlsx,.csv">
-            <small class="form-hint">Для задач с внешними данными (TXT, XLSX, CSV)</small>
+            <input type="file" name="attachment" id="attachment" accept=".txt,.ods,.xls,.xlsx,.csv">
+            <small class="form-hint">Для задач с внешними данными (TXT, ODS, XLS, XLSX, CSV)</small>
         </div>
-        
-        <!-- Стандартные ответы (1-2 числа) -->
-        <div id="standardAnswers">
-            <div class="form-group">
-                <label for="answer_count">Количество ответов</label>
-                <select name="answer_count" id="answer_count" onchange="toggleSecondAnswer()">
-                    <option value="1">1 ответ</option>
-                    <option value="2">2 ответа</option>
-                </select>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="answer_1">Ответ 1</label>
-                    <input type="text" name="answer_1" id="answer_1" placeholder="Напр.: 25 или AB12" autocomplete="off">
-                </div>
-                
-                <div class="form-group" id="answer2Group" style="display: none;">
-                    <label for="answer_2">Ответ 2</label>
-                    <input type="text" name="answer_2" id="answer_2" placeholder="(если нужно 2 ответа)" autocomplete="off">
-                </div>
-            </div>
+
+        <div class="form-group">
+            <label for="answer_count">Количество проверяемых ответов</label>
+            <input type="number" name="answer_count" id="answer_count" min="1" max="20" value="1" oninput="renderAnswerInputs()">
+            <small class="form-hint">Можно указать 1, 2, 3 или больше. Ответы: цифры или буквы.</small>
         </div>
-        
-        <!-- Особый формат ответа (№25, №27) -->
-        <div id="specialAnswers" style="display: none;">
-            <div class="form-group">
-                <label for="answer_text">Ответ (особый формат)</label>
-                <textarea name="answer_text" id="answer_text" class="answer-textarea" rows="4" 
-                    placeholder="Введите ответ в особом формате"></textarea>
-                <small class="form-hint" id="specialHint"></small>
-            </div>
+
+        <div class="form-group">
+            <label>Ответы</label>
+            <div id="answersContainer"></div>
         </div>
         
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">💾 Сохранить задачу</button>
-            <a href="{{ url_for('tasks_list', ege=ege_number) }}" class="btn btn-secondary">Отмена</a>
+            {% if mode == 'ege' %}
+            <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">Отмена</a>
+            {% else %}
+            <a href="{{ url_for('tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">Отмена</a>
+            {% endif %}
         </div>
     </form>
 </div>
@@ -104,7 +104,7 @@
     cursor: pointer;
     transition: var(--transition);
     background: var(--bg-sidebar);
-    min-height: 200px;
+    min-height: 300px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -143,8 +143,8 @@
 }
 
 .dropzone-preview img {
-    max-width: 100%;
-    max-height: 300px;
+    width: 100%;
+    height: auto;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
 }
@@ -188,12 +188,6 @@
 </style>
 
 <script>
-const defaultAnswerCount = {{ default_answer_count | tojson }};
-const specialFormat = {
-    25: {type: 'multiline', description: 'N строк, в каждой по 2 числа через пробел'},
-    27: {type: 'multiline_fixed', lines: 2, description: '2 строки, в каждой по 2 числа через пробел'}
-};
-
 // Dropzone
 const dropzone = document.getElementById('dropzone');
 const dropzoneContent = document.getElementById('dropzoneContent');
@@ -260,52 +254,28 @@ function removeImage() {
     imageInput.value = '';
 }
 
-// Обновление формата ответа
-function updateAnswerFormat() {
-    const egeNumber = parseInt(document.getElementById('ege_number').value);
-    const standardDiv = document.getElementById('standardAnswers');
-    const specialDiv = document.getElementById('specialAnswers');
-    const specialHint = document.getElementById('specialHint');
-    const answerCount = document.getElementById('answer_count');
-    
-    if (egeNumber in specialFormat) {
-        standardDiv.style.display = 'none';
-        specialDiv.style.display = 'block';
-        specialHint.textContent = specialFormat[egeNumber].description;
-        
-        // Снимаем required со стандартных полей
-        document.getElementById('answer_1').required = false;
-        document.getElementById('answer_text').required = true;
-    } else {
-        standardDiv.style.display = 'block';
-        specialDiv.style.display = 'none';
-        
-        // Устанавливаем количество ответов по умолчанию
-        const defaultCount = defaultAnswerCount[egeNumber] || 1;
-        answerCount.value = defaultCount;
-        toggleSecondAnswer();
-        
-        document.getElementById('answer_1').required = true;
-        document.getElementById('answer_text').required = false;
-    }
-}
+function renderAnswerInputs() {
+    const countEl = document.getElementById('answer_count');
+    const wrap = document.getElementById('answersContainer');
+    if (!countEl || !wrap) return;
+    let count = parseInt(countEl.value || '1', 10);
+    if (Number.isNaN(count) || count < 1) count = 1;
+    if (count > 20) count = 20;
+    countEl.value = String(count);
 
-function toggleSecondAnswer() {
-    const count = document.getElementById('answer_count').value;
-    const group = document.getElementById('answer2Group');
-    const input = document.getElementById('answer_2');
-    
-    if (count === '2') {
-        group.style.display = 'block';
-        input.required = true;
-    } else {
-        group.style.display = 'none';
-        input.required = false;
-        input.value = '';
+    const items = [];
+    for (let i = 1; i <= count; i++) {
+        items.push(`
+            <div class="form-group" style="margin-bottom:8px;">
+                <label for="answer_${i}">Ответ ${i}</label>
+                <input type="text" name="answer_${i}" id="answer_${i}" placeholder="Ответ ${i}" autocomplete="off" required>
+            </div>
+        `);
     }
+    wrap.innerHTML = items.join('');
 }
 
 // Инициализация
-updateAnswerFormat();
+renderAnswerInputs();
 </script>
 {% endblock %}

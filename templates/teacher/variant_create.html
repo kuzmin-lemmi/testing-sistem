@@ -8,6 +8,36 @@
         <h1>➕ Создать вариант</h1>
         <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">← Назад к списку</a>
     </div>
+
+    <div class="mode-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
+        <a href="{{ url_for('variant_create', scope='ege') }}" class="btn {% if scope == 'ege' %}btn-primary{% else %}btn-outline{% endif %}">ЕГЭ</a>
+        <a href="{{ url_for('variant_create', scope='class') }}" class="btn {% if scope == 'class' %}btn-primary{% else %}btn-outline{% endif %}">Обычные классы</a>
+    </div>
+
+    {% if scope == 'class' %}
+    <form action="{{ url_for('variant_create', scope='class') }}" method="POST" class="card">
+        <input type="hidden" name="variant_scope" value="class">
+        <div class="form-group">
+            <label>Название варианта</label>
+            <input type="text" name="name" placeholder="Например: Контрольная 7Б" required>
+        </div>
+        <div class="form-group">
+            <label>Класс</label>
+            <select name="class_id" required>
+                {% for c in classes %}
+                <option value="{{ c.id }}">{{ c.name }} ({{ class_tasks[c.id]|length }} задач)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Задачи для включения</label>
+            <p class="hint">Все задачи класса будут добавлены в вариант</p>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Создать вариант</button>
+        </div>
+    </form>
+    {% else %}
     
     <div class="create-steps">
         <!-- Шаг 1: Выбор типа -->
@@ -184,19 +214,33 @@
                 <div id="manualFullSelection" style="display: none;">
                     <div class="form-group">
                         <label>Выберите по одной задаче для каждого номера</label>
-                        <div class="full-variant-selection">
-                            {% for ege_num in range(1, 28) %}
-                            <div class="ege-row">
-                                <span class="ege-label">№{{ ege_num }}</span>
-                                <select name="task_ege_{{ ege_num }}" class="task-select">
-                                    <option value="">— Не выбрано —</option>
-                                    {% for task in all_tasks.get(ege_num, []) %}
-                                    <option value="{{ task.id }}">#{{ task.id }} (ответ: {{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %})</option>
-                                    {% endfor %}
-                                </select>
-                                <span class="available-count">{{ all_tasks.get(ege_num, [])|length }} доступно</span>
+                        <div class="full-selection-workspace">
+                            <div class="full-variant-selection">
+                                {% for ege_num in range(1, 28) %}
+                                <div class="ege-row">
+                                    <span class="ege-label">№{{ ege_num }}</span>
+                                    <select name="task_ege_{{ ege_num }}" class="task-select" onchange="updateFullPreviewFromSelect(this)">
+                                        <option value="">— Не выбрано —</option>
+                                        {% for task in all_tasks.get(ege_num, []) %}
+                                        <option value="{{ task.id }}"
+                                                data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                                                data-answer="{{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %}"
+                                                data-ege="{{ ege_num }}">#{{ task.id }} (ответ: {{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %})</option>
+                                        {% endfor %}
+                                    </select>
+                                    <span class="available-count">{{ all_tasks.get(ege_num, [])|length }} доступно</span>
+                                </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
+                            <div class="full-preview-panel">
+                                <div class="preview-toolbar">
+                                    <div class="preview-meta" id="fullPreviewMeta">Выберите задачу в списке слева</div>
+                                </div>
+                                <div class="preview-image-wrap">
+                                    <img id="fullPreviewImage" alt="Предпросмотр задачи" style="display:none;">
+                                    <div id="fullPreviewEmpty" class="empty-small">Предпросмотр появится после выбора задачи</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -598,12 +642,57 @@
     border: 1px solid var(--border);
 }
 
+.full-selection-workspace {
+    display: grid;
+    grid-template-columns: 370px 1fr;
+    gap: 12px;
+}
+
 .full-variant-selection {
-    max-height: 500px;
+    max-height: 520px;
     overflow-y: auto;
     padding: 16px;
     background: var(--bg-sidebar);
     border-radius: var(--radius);
+}
+
+.full-preview-panel {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: white;
+    padding: 12px;
+}
+
+.preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.preview-meta {
+    font-weight: 600;
+}
+
+.preview-image-wrap {
+    width: 100%;
+    min-height: 420px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+
+#fullPreviewImage {
+    max-width: 100%;
+    max-height: 70vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
 }
 
 .ege-row {
@@ -637,6 +726,20 @@
     color: var(--text-muted);
     width: 100px;
     text-align: right;
+}
+
+@media (max-width: 1100px) {
+    .full-selection-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .full-variant-selection {
+        max-height: 280px;
+    }
+
+    .preview-image-wrap {
+        min-height: 280px;
+    }
 }
 </style>
 
@@ -699,6 +802,7 @@ function updateMode() {
         } else if (type === 'full') {
             manualThematic.style.display = 'none';
             manualFull.style.display = 'block';
+            initFullPreviewSelection();
         }
     } else {
         manualThematic.style.display = 'none';
@@ -730,6 +834,41 @@ function updateTasksList() {
             </div>
         </label>
     `).join('');
+}
+
+function updateFullPreviewFromSelect(selectEl) {
+    const selected = selectEl ? selectEl.options[selectEl.selectedIndex] : null;
+    const imgEl = document.getElementById('fullPreviewImage');
+    const metaEl = document.getElementById('fullPreviewMeta');
+    const emptyEl = document.getElementById('fullPreviewEmpty');
+
+    if (!imgEl || !metaEl || !emptyEl || !selected || !selected.value) {
+        if (imgEl) imgEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (metaEl) metaEl.textContent = 'Выберите задачу в списке слева';
+        return;
+    }
+
+    const image = selected.dataset.image || '';
+    const answer = selected.dataset.answer || '';
+    const ege = selected.dataset.ege || '';
+    const taskId = selected.value;
+
+    imgEl.src = image;
+    imgEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    metaEl.textContent = `#${taskId} • №${ege} • Ответ: ${answer}`;
+}
+
+function initFullPreviewSelection() {
+    const selects = document.querySelectorAll('#manualFullSelection .task-select');
+    for (const sel of selects) {
+        if (sel.value) {
+            updateFullPreviewFromSelect(sel);
+            return;
+        }
+    }
+    updateFullPreviewFromSelect(null);
 }
 
 function updateMixedTotal() {
@@ -822,28 +961,27 @@ function addTaskRow(file, index) {
                 <div class="task-edit-row">
                     <span class="task-order">#${index + 1}</span>
                     <label>Номер ЕГЭ:</label>
-                    <select name="ege_number_${index}" required onchange="updateAnswerFields(${index})">
+                    <select name="ege_number_${index}" required>
                         ${generateEgeOptions()}
                     </select>
                     <button type="button" class="btn-remove-task" onclick="removeTask(${index})">✕ Удалить</button>
                 </div>
                 <div class="task-edit-row">
-                    <label>Ответ 1:</label>
-                    <input type="text" name="answer1_${index}" required autocomplete="off">
-                    <span id="answer2-wrapper-${index}">
-                        <label>Ответ 2:</label>
-                        <input type="text" name="answer2_${index}" autocomplete="off">
-                    </span>
+                    <label>Ответов:</label>
+                    <input type="number" name="answer_count_${index}" value="1" min="1" max="20" style="width:80px;" onchange="renderUploadAnswerInputs(${index}, this.value)">
+                    <span class="hint" style="font-size:12px;color:var(--text-muted);">1..20</span>
+                </div>
+                <div class="task-edit-row" id="upload-answers-${index}">
                 </div>
                 <div class="task-edit-row">
                     <label>Файл данных:</label>
-                    <input type="file" name="attachment_${index}" accept=".txt,.xlsx,.csv">
+                    <input type="file" name="attachment_${index}" accept=".txt,.ods,.xls,.xlsx,.csv">
                     <span class="hint" style="font-size:12px;color:var(--text-muted);">(для №9, №18, №26, №27)</span>
                 </div>
             </div>
         `;
         tasksList.appendChild(row);
-        updateAnswerFields(index);
+        renderUploadAnswerInputs(index, 1);
     };
     reader.readAsDataURL(file);
 }
@@ -856,18 +994,19 @@ function generateEgeOptions() {
     return options;
 }
 
-function updateAnswerFields(index) {
-    const select = document.querySelector(`select[name="ege_number_${index}"]`);
-    const wrapper = document.getElementById(`answer2-wrapper-${index}`);
-    if (select && wrapper) {
-        const egeNum = parseInt(select.value);
-        // Номера 17-25 требуют два ответа
-        if (egeNum >= 17 && egeNum <= 25) {
-            wrapper.style.display = 'inline';
-        } else {
-            wrapper.style.display = 'none';
-        }
+function renderUploadAnswerInputs(index, value) {
+    const wrap = document.getElementById(`upload-answers-${index}`);
+    if (!wrap) return;
+    let count = parseInt(value || '1', 10);
+    if (Number.isNaN(count) || count < 1) count = 1;
+    if (count > 20) count = 20;
+    const countInput = document.querySelector(`input[name="answer_count_${index}"]`);
+    if (countInput) countInput.value = String(count);
+    let html = '';
+    for (let i = 1; i <= count; i++) {
+        html += `<label>Ответ ${i}:</label><input type="text" name="answer_${i}_${index}" required autocomplete="off">`;
     }
+    wrap.innerHTML = html;
 }
 
 function removeTask(index) {
@@ -931,6 +1070,7 @@ if (document.getElementById('uploadForm')) {
 document.addEventListener('DOMContentLoaded', function() {
     updateType();
     updateTasksList();
+    initFullPreviewSelection();
 });
 
 const variantForm = document.getElementById('variantForm');
@@ -966,4 +1106,5 @@ if (variantForm) {
     });
 }
 </script>
+{% endif %}
 {% endblock %}

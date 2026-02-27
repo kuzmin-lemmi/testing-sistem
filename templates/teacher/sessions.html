@@ -8,219 +8,175 @@
         <h1>▶️ Тестирования</h1>
         <a href="{{ url_for('session_new') }}" class="btn btn-primary">➕ Запустить тестирование</a>
     </div>
-    
+
     {% if active_session %}
     <div class="active-session-banner card">
-        <div class="banner-content">
-            <div class="banner-icon">🟢</div>
-            <div class="banner-info">
-                <h3>Активное тестирование</h3>
-                <p>{{ active_session.variant_name if active_session.variant_id else 'Индивидуальные варианты' }}</p>
-                {% if active_session.access_code %}
-                <div class="access-code">
-                    Код доступа: <strong>{{ active_session.access_code }}</strong>
-                </div>
-                {% endif %}
-            </div>
-            <div class="banner-actions">
-                <a href="{{ url_for('session_monitor', session_id=active_session.id) }}" class="btn btn-secondary">👁 Мониторинг</a>
-                {% if active_session.paused %}
-                <form action="{{ url_for('session_resume', session_id=active_session.id) }}" method="POST" class="inline-form">
-                    <button type="submit" class="btn btn-primary">▶️ Продолжить</button>
-                </form>
-                {% else %}
-                <form action="{{ url_for('session_pause', session_id=active_session.id) }}" method="POST" class="inline-form">
-                    <button type="submit" class="btn btn-warning">⏸ Пауза</button>
-                </form>
-                {% endif %}
-                <form action="{{ url_for('session_extend', session_id=active_session.id) }}" method="POST" class="inline-form">
-                    <input type="hidden" name="minutes" value="5">
-                    <button type="submit" class="btn btn-secondary">+5 мин</button>
-                </form>
-                <form action="{{ url_for('session_extend', session_id=active_session.id) }}" method="POST" class="inline-form">
-                    <input type="hidden" name="minutes" value="10">
-                    <button type="submit" class="btn btn-secondary">+10 мин</button>
-                </form>
-                <form action="{{ url_for('session_close', session_id=active_session.id) }}" method="POST" class="inline-form">
-                    <button type="submit" class="btn btn-danger" onclick="return confirm('Завершить тестирование?')">⏹ Завершить</button>
-                </form>
-            </div>
-        </div>
+        <strong>Активное тестирование:</strong>
+        {{ active_session.variant_name if active_session.variant_id else 'Индивидуальные варианты' }}
+        {% if active_session.access_code %} · Код: <strong>{{ active_session.access_code }}</strong>{% endif %}
+        <a href="{{ url_for('session_monitor', session_id=active_session.id) }}" class="btn btn-small btn-secondary" style="margin-left:10px;">Мониторинг</a>
     </div>
     {% endif %}
-    
-    <h2>История тестирований</h2>
-    
-    {% if sessions %}
-    <div class="sessions-list">
-        {% for session in sessions %}
-        <div class="session-row card">
-            <div class="session-status">
-                {% if session.status == 'active' %}
-                <span class="status-dot active"></span>
-                {% else %}
-                <span class="status-dot closed"></span>
-                {% endif %}
+
+    <div class="filters-bar card">
+        <form method="GET" class="filters-form" id="sessionsFilterForm">
+            <input type="hidden" name="session_id" value="{{ selected_session_id or '' }}">
+            <div class="filter-row">
+                <select name="status" onchange="document.getElementById('sessionsFilterForm').submit()">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Все</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
+                    <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Завершённые</option>
+                </select>
+                <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Поиск по названию теста">
+                <button type="submit" class="btn btn-small">Найти</button>
             </div>
-            <div class="session-info">
-                <div class="session-name">{{ session.variant_name }}</div>
-                <div class="session-meta">
-                    <span>📅 {{ session.created_at[:16] }}</span>
-                    <span>⏱ {{ session.time_limit }} мин</span>
-                    <span>👥 {{ session.students_count }} учеников</span>
-                    <span>✅ {{ session.finished_count }} завершили</span>
-                    {% if session.access_code %}
-                    <span>🔑 {{ session.access_code }}</span>
+        </form>
+        <div class="results-count">Всего тестирований: <strong>{{ sessions|length }}</strong></div>
+    </div>
+
+    <div class="results-layout">
+        <aside class="session-tree card">
+            <div class="tree-title">Список тестирований</div>
+            {% if sessions %}
+            <form action="{{ url_for('session_delete_bulk') }}" method="POST" onsubmit="return confirmSessionBulkDelete()">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                <input type="hidden" name="q" value="{{ search_query }}">
+                <div class="tree-bulk-actions">
+                    <label class="tree-check-all"><input type="checkbox" id="checkAllSessionsPage"> Все</label>
+                    <button type="submit" class="btn btn-danger btn-small">🗑 Удалить отмеченные</button>
+                </div>
+                <div class="tree-list">
+                    {% for s in sessions %}
+                    <div class="tree-item-row {% if selected_session_id == s.id %}active{% endif %}">
+                        <label class="tree-check-item">
+                            <input type="checkbox" name="session_ids" value="{{ s.id }}" class="session-checkbox-page">
+                        </label>
+                        <a class="tree-item" href="{{ url_for('sessions_list', status=status_filter, q=search_query, session_id=s.id) }}">
+                            <div class="tree-item-title">{{ s.variant_name }}</div>
+                            <div class="tree-item-meta">{{ s.created_at|local_dt }} · {{ s.finished_count }}/{{ s.students_count }} · {% if s.status == 'active' %}🟢{% else %}⚪{% endif %}</div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </form>
+            {% else %}
+            <div class="empty-small">Нет тестирований</div>
+            {% endif %}
+        </aside>
+
+        <section class="session-details card">
+            {% if selected_session %}
+            <div class="details-header">
+                <div>
+                    <h2>{{ selected_session.variant_name }}</h2>
+                    <div class="details-meta">
+                        <span>📅 {{ selected_session.created_at|local_dt }}</span>
+                        <span>⏱ {{ selected_session.time_limit }} мин</span>
+                        <span>👥 {{ selected_session.finished_count }}/{{ selected_session.students_count }}</span>
+                        <span>Статус: {% if selected_session.status == 'active' %}🟢 активен{% else %}⚪ завершён{% endif %}</span>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                    <a href="{{ url_for('session_monitor', session_id=selected_session.id) }}" class="btn btn-secondary btn-small">👁 Мониторинг</a>
+                    {% if selected_session.status == 'active' %}
+                    {% if selected_session.paused %}
+                    <form action="{{ url_for('session_resume', session_id=selected_session.id) }}" method="POST" class="inline-form"><button type="submit" class="btn btn-primary btn-small">▶️ Продолжить</button></form>
+                    {% else %}
+                    <form action="{{ url_for('session_pause', session_id=selected_session.id) }}" method="POST" class="inline-form"><button type="submit" class="btn btn-warning btn-small">⏸ Пауза</button></form>
                     {% endif %}
+                    <form action="{{ url_for('session_close', session_id=selected_session.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Завершить тестирование?')"><button type="submit" class="btn btn-danger btn-small">⏹ Завершить</button></form>
+                    {% endif %}
+                    <form action="{{ url_for('session_delete', session_id=selected_session.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить это тестирование и все его результаты?')">
+                        <input type="hidden" name="status" value="{{ status_filter }}">
+                        <input type="hidden" name="q" value="{{ search_query }}">
+                        <button type="submit" class="btn btn-danger btn-small">🗑 Удалить</button>
+                    </form>
                 </div>
             </div>
-            <div class="session-actions">
-                <a href="{{ url_for('session_monitor', session_id=session.id) }}" class="btn btn-secondary btn-small">📊 Подробнее</a>
-                {% if session.status == 'active' %}
-                <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form">
-                    <button type="submit" class="btn btn-danger btn-small">⏹</button>
-                </form>
-                {% endif %}
+
+            <div class="students-table-wrap">
+                <table class="students-table">
+                    <thead>
+                        <tr>
+                            <th>ФИО</th>
+                            <th>Статус</th>
+                            <th>Баллы</th>
+                            <th>Оценка</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for st in selected_students %}
+                        <tr>
+                            <td>{{ st.last_name }} {{ st.first_name }}</td>
+                            <td>{% if st.status == 'finished' %}✅ завершил{% else %}⏳ в процессе{% endif %}</td>
+                            <td>{% if st.status == 'finished' %}{{ st.correct_count }}/{{ st.total_tasks }}{% else %}—{% endif %}</td>
+                            <td>{% if st.status == 'finished' %}<span class="grade-badge grade-{{ st.grade }}">{{ st.grade }}</span>{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </div>
-        {% endfor %}
+            {% else %}
+            <div class="empty-state"><div class="empty-icon">📂</div><h3>Выберите тестирование слева</h3></div>
+            {% endif %}
+        </section>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-icon">📝</div>
-        <h3>Тестирований пока нет</h3>
-        <p>Запустите первое тестирование</p>
-        <a href="{{ url_for('session_new') }}" class="btn btn-primary">➕ Запустить тестирование</a>
-    </div>
-    {% endif %}
 </div>
 
 <style>
-.active-session-banner {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-    border: none;
-    margin-bottom: 30px;
-}
-
-.banner-content {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.banner-icon {
-    font-size: 2.5em;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.banner-info {
-    flex: 1;
-}
-
-.banner-info h3 {
-    margin-bottom: 4px;
-}
-
-.banner-info p {
-    opacity: 0.9;
-    margin-bottom: 8px;
-}
-
-.access-code {
-    font-size: 1.2em;
-}
-
-.access-code strong {
-    background: rgba(255,255,255,0.2);
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 2px;
-}
-
-.banner-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.sessions-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.session-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    margin-bottom: 0;
-}
-
-.status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-}
-
-.status-dot.active {
-    background: var(--success);
-    box-shadow: 0 0 8px var(--success);
-}
-
-.status-dot.closed {
-    background: var(--text-muted);
-}
-
-.session-info {
-    flex: 1;
-}
-
-.session-name {
-    font-weight: 600;
-    margin-bottom: 6px;
-}
-
-.session-meta {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    color: var(--text-muted);
-    font-size: 13px;
-}
-
-.session-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    border: 2px dashed var(--border);
-}
-
-.empty-icon {
-    font-size: 4em;
-    margin-bottom: 20px;
-    opacity: 0.5;
-}
-
-.empty-state h3 {
-    margin-bottom: 10px;
-}
-
-.empty-state p {
-    color: var(--text-secondary);
-    margin-bottom: 20px;
+.active-session-banner { margin-bottom: 14px; }
+.results-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.filters-bar { margin-bottom: 16px; }
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-row select, .filter-row input { padding: 8px 10px; border: 2px solid var(--border); border-radius: var(--radius); }
+.results-count { margin-top: 8px; color: var(--text-muted); font-size: 14px; }
+.session-tree { padding: 0; overflow: hidden; max-height: calc(100vh - 220px); position: sticky; top: 86px; }
+.tree-title { padding: 14px 16px; border-bottom: 1px solid var(--border-light); font-weight: 700; background: var(--bg-sidebar); }
+.tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
+.tree-check-all { font-size: 13px; color: var(--text-secondary); }
+.tree-list { max-height: calc(100vh - 320px); overflow-y: auto; }
+.tree-item-row { display: grid; grid-template-columns: auto 1fr; align-items: stretch; border-bottom: 1px solid var(--border-light); }
+.tree-item-row:hover { background: var(--primary-bg); }
+.tree-item-row.active { background: var(--primary-bg); border-left: 4px solid var(--primary); }
+.tree-check-item { display: flex; align-items: center; padding: 0 8px 0 10px; }
+.tree-item { display: block; padding: 12px 14px; text-decoration: none; color: inherit; }
+.tree-item-title { font-weight: 600; margin-bottom: 4px; }
+.tree-item-meta { font-size: 12px; color: var(--text-muted); }
+.session-details { min-height: 500px; }
+.details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; }
+.details-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 13px; flex-wrap: wrap; }
+.students-table-wrap { overflow-x: auto; }
+.students-table { width: 100%; border-collapse: collapse; }
+.students-table th, .students-table td { padding: 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
+.students-table th { font-size: 13px; color: var(--text-muted); }
+.grade-badge { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 700; }
+.grade-badge.grade-5 { background: #d1fae5; color: #065f46; }
+.grade-badge.grade-4 { background: #dbeafe; color: #1e40af; }
+.grade-badge.grade-3 { background: #fef3c7; color: #92400e; }
+.grade-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+.empty-small { padding: 16px; color: var(--text-muted); }
+.empty-state { text-align: center; padding: 80px 20px; }
+@media (max-width: 980px) {
+  .results-layout { grid-template-columns: 1fr; }
+  .session-tree { position: static; max-height: 320px; }
+  .tree-list { max-height: 220px; }
 }
 </style>
+
+<script>
+const checkAllSessionsPage = document.getElementById('checkAllSessionsPage');
+if (checkAllSessionsPage) {
+    checkAllSessionsPage.addEventListener('change', function() {
+        document.querySelectorAll('.session-checkbox-page').forEach((cb) => cb.checked = checkAllSessionsPage.checked);
+    });
+}
+function confirmSessionBulkDelete() {
+    const checked = Array.from(document.querySelectorAll('.session-checkbox-page')).filter((cb) => cb.checked).length;
+    if (checked === 0) {
+        alert('Отметьте хотя бы одно тестирование.');
+        return false;
+    }
+    return confirm(`Удалить отмеченные тестирования: ${checked} шт.?`);
+}
+</script>
 {% endblock %}

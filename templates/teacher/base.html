@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}ЕГЭ Информатика{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,6 +40,21 @@
     </main>
     
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        window.CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form[method="POST"], form[method="post"]');
+            forms.forEach(function(form) {
+                if (form.querySelector('input[name="csrf_token"]')) return;
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = window.CSRF_TOKEN;
+                form.appendChild(input);
+            });
+        });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

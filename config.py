@@ -15,13 +15,21 @@ EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
 # Настройки сервера
 HOST = '0.0.0.0'  # Доступ из локальной сети
 PORT = 8080
+SECRET_KEY = os.environ.get('EGE_SECRET_KEY', 'ege-local-secret-change-me')
+
+# IP-адреса, которым разрешён доступ к панели учителя
+# По умолчанию: только текущий компьютер (localhost)
+_teacher_ips_raw = os.environ.get('TEACHER_ALLOWED_IPS', '127.0.0.1,::1')
+TEACHER_ALLOWED_IPS = {
+    ip.strip() for ip in _teacher_ips_raw.split(',') if ip.strip()
+}
 
 # Ограничения файлов
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 МБ
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 МБ
 MAX_IMPORT_ZIP_SIZE = 50 * 1024 * 1024  # 50 МБ
 ALLOWED_IMAGE_EXTENSIONS = {'png'}
-ALLOWED_ATTACHMENT_EXTENSIONS = {'txt', 'xlsx', 'csv'}
+ALLOWED_ATTACHMENT_EXTENSIONS = {'txt', 'xlsx', 'xls', 'ods', 'csv'}
 
 # Количество ответов по умолчанию для номеров ЕГЭ
 DEFAULT_ANSWER_COUNT = {

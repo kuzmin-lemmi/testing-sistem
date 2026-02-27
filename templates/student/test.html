@@ -97,6 +97,21 @@
         
         .main { display: flex; min-height: calc(100vh - 70px); }
         
+        .main-content-wrapper {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 0fr;
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .main-content-wrapper.py-open {
+            grid-template-columns: 1fr minmax(400px, 40%);
+        }
+
+        .main-content-wrapper.py-fullscreen {
+            grid-template-columns: 0fr 1fr;
+        }
+        
         .sidebar {
             width: 100px;
             background: var(--card);
@@ -139,13 +154,20 @@
             background: #f59e0b;
         }
         
-        .content { flex: 1; padding: 24px; max-width: 1100px; margin: 0 auto; }
+        .content { 
+            padding: 24px; 
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
         
         .task-card {
             background: var(--card);
             border-radius: 16px;
             padding: 24px 32px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            flex-shrink: 0;
         }
         .task-header {
             display: flex;
@@ -433,72 +455,349 @@
 
         .calc-history div { padding: 2px 0; }
 
+        /* Python правая боковая панель */
         .py-panel {
-            position: fixed;
-            right: 16px;
-            top: 86px;
-            width: 420px;
-            max-width: calc(100vw - 32px);
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-            border: 1px solid var(--border);
-            display: none;
-            z-index: 1200;
+            position: static;
+            background: var(--card);
+            border-left: 1px solid var(--border);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
-
-        .py-panel.active { display: block; }
 
         .py-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 12px 14px;
-            border-bottom: 1px solid var(--border);
+            align-items: center;
             font-weight: 700;
+            flex-shrink: 0;
         }
 
-        .py-body { padding: 12px; }
+        .py-header-actions {
+            display: flex;
+            gap: 8px;
+        }
 
-        .py-editor {
-            width: 100%;
-            height: 180px;
-            resize: vertical;
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
+        /* Убираем resize-handles */
+        .py-resize-handle {
+            display: none;
+        }
+
+        .zoom-hint-banner {
+            position: fixed;
+            top: 56px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            color: #9a3412;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+            z-index: 1700;
+            display: none;
+        }
+
+        .zoom-hint-banner.active { display: block; }
+
+        .py-body {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 10px 12px 12px;
+            overflow: hidden;
         }
 
         .py-actions {
             display: flex;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 6px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
         }
 
-        .py-output {
-            margin-top: 10px;
-            background: #0f172a;
-            color: #e2e8f0;
-            border-radius: 10px;
-            padding: 10px;
-            height: 140px;
-            overflow: auto;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
+        .py-actions .nav-btn {
+            padding: 7px 12px;
+            font-size: 13px;
         }
 
         .py-status {
-            margin-top: 6px;
-            color: var(--text-secondary);
             font-size: 12px;
+            color: var(--muted);
         }
 
         .py-file {
-            margin-top: 8px;
             font-size: 12px;
+            color: #374151;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 5px 10px;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+            display: none;
+        }
+
+        .py-file.has-file {
+            display: block;
+        }
+
+        .py-inline-toggle {
+            margin-left: 4px;
+            font-size: 13px;
             color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .py-layout {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow: hidden;
+        }
+
+        .py-editor-workbench {
+            flex: 2;
+            min-height: 60px;
+            display: flex;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .py-resize-divider {
+            flex-shrink: 0;
+            height: 6px;
+            background: #e5e7eb;
+            border-left: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+            cursor: row-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .py-resize-divider::after {
+            content: '';
+            width: 32px;
+            height: 2px;
+            background: #9ca3af;
+            border-radius: 2px;
+        }
+
+        .py-resize-divider:hover {
+            background: #d1d5db;
+        }
+
+        .py-gutter {
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 12px 8px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            line-height: 1.65;
+            user-select: none;
+            min-width: 44px;
+        }
+
+        .py-editor-wrap {
+            flex: 1;
+            position: relative;
+        }
+
+        .py-highlight, .py-editor {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1.65;
+            padding: 12px;
+            margin: 0;
+            border: none;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+        }
+
+        .py-editor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            color: transparent;
+            caret-color: #111827;
+            resize: none;
+            outline: none;
+        }
+
+        .py-highlight {
+            pointer-events: none;
+            color: #111827;
+        }
+
+        .py-line {
+            display: block;
+            min-height: 1.65em;
+        }
+
+        /* IDLE Classic цвета */
+        .py-token-kw  { color: #ff7700; font-weight: bold; }   /* оранжевый — ключевые слова */
+        .py-token-str { color: #008000; }                       /* зелёный   — строки */
+        .py-token-num { color: #0000cc; }                       /* синий     — числа */
+        .py-token-com { color: #dd0000; font-style: italic; }  /* красный   — комментарии */
+        .py-token-blt { color: #900090; }                       /* фиолетовый — встроенные функции */
+        .py-token-op  { color: #111827; }                       /* чёрный    — всё остальное */
+
+        .py-output {
+            flex: 1;
+            min-height: 40px;
+            background: #ffffff;
+            color: #111827;
+            border: 1px solid #d1d5db;
+            border-top: none;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 0 0 8px 8px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Ошибки — красным как в IDLE */
+        .py-output.error {
+            color: #cc0000;
+            background: #fff8f8;
+            border-color: #fca5a5;
+        }
+
+
+
+        .sketch-panel {
+            position: fixed;
+            left: 0;
+            top: 70px;
+            width: 100vw;
+            height: calc(100vh - 70px);
+            background: white;
+            border-radius: 0;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+            border: none;
+            border-top: 1px solid var(--border);
+            resize: none;
+            overflow: hidden;
+            display: none;
+            z-index: 5050;
+        }
+
+        .sketch-panel.active { display: flex; flex-direction: column; }
+
+        .sketch-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            cursor: default;
+            user-select: none;
+            background: #ffffff;
+        }
+
+        .sketch-tools {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .sketch-tools button,
+        .sketch-tools select {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            padding: 6px 10px;
+            font-family: inherit;
+        }
+
+        .sketch-tools button { cursor: pointer; font-weight: 700; }
+
+        .sketch-tool.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .sketch-palette {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .sketch-color {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #cbd5e1;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .sketch-color.active {
+            border-color: #0f172a;
+            transform: scale(1.06);
+        }
+
+        .sketch-body {
+            flex: 1;
+            min-height: 0;
+            padding: 12px;
+            overflow: hidden;
+        }
+
+        .sketch-canvas-wrap {
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: auto;
+            background: #f8fafc;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            position: relative;
+        }
+
+        #sketchBgCanvas,
+        #sketchCanvas {
+            display: block;
+            touch-action: none;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        #sketchCanvas { cursor: crosshair; }
+
+        @media (max-width: 900px) {
+            .sketch-panel {
+                top: 60px;
+                height: calc(100vh - 60px);
+            }
         }
         
         @media (max-width: 768px) {
@@ -517,6 +816,7 @@
             {% if python_enabled %}
             <button type="button" class="calc-toggle" onclick="togglePython()">🐍 Python</button>
             {% endif %}
+            <button type="button" class="calc-toggle" onclick="toggleSketchPanel()">✏ Черновик</button>
             <div class="timer" id="timer">--:--</div>
         </div>
         <div class="header-finish">
@@ -552,6 +852,8 @@
         <button class="fullscreen-btn" onclick="enterFullscreen()">Вернуться</button>
     </div>
     {% endif %}
+
+    <div class="zoom-hint-banner" id="zoomHint">Масштаб браузера не 100%. Для точности нажмите Ctrl+0.</div>
 
     <div class="pause-banner" id="pauseOverlay">Пауза учителя — ввод отключен</div>
 
@@ -597,37 +899,63 @@
     </div>
     {% endif %}
 
-    {% if python_enabled %}
-    <div class="py-panel" id="pyPanel">
-        <div class="py-header">
-            <span>🐍 Python</span>
-            <button type="button" class="calc-close" onclick="togglePython()">✕</button>
-        </div>
-        <div class="py-body">
-            <textarea id="pyEditor" class="py-editor" placeholder="print('Hello')"></textarea>
-            <div class="py-actions">
-                <button type="button" class="nav-btn primary" onclick="runPython()">▶ Запустить</button>
-                <button type="button" class="nav-btn secondary" onclick="insertPythonResult()">Вставить в ответ</button>
+    <div class="sketch-panel" id="sketchPanel">
+        <div class="sketch-header" id="sketchHeader">
+            <span>✏ Черновик по задаче</span>
+            <div class="sketch-tools">
+                <div class="sketch-palette" id="sketchPalette">
+                    <button type="button" class="sketch-color active" data-color="#dc2626" style="background:#dc2626" aria-label="Красный"></button>
+                    <button type="button" class="sketch-color" data-color="#2563eb" style="background:#2563eb" aria-label="Синий"></button>
+                    <button type="button" class="sketch-color" data-color="#16a34a" style="background:#16a34a" aria-label="Зелёный"></button>
+                    <button type="button" class="sketch-color" data-color="#111827" style="background:#111827" aria-label="Чёрный"></button>
+                </div>
+                <button type="button" id="toolPencil" class="sketch-tool active">Карандаш</button>
+                <button type="button" id="toolEraser" class="sketch-tool">Ластик</button>
+                <button type="button" id="toolLine" class="sketch-tool">Линия</button>
+                <button type="button" id="toolRect" class="sketch-tool">Прямоуг.</button>
+                <button type="button" id="toolArrow" class="sketch-tool">Стрелка</button>
+                <label>Толщина
+                    <select id="sketchSize">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="6" selected>6</option>
+                        <option value="8">8</option>
+                        <option value="10">10</option>
+                        <option value="14">14</option>
+                        <option value="20">20</option>
+                    </select>
+                </label>
+                <button type="button" id="expandCanvasBtn" style="display:none" onclick="expandSketchCanvas()"></button>
+                <button type="button" id="resetCanvasBtn" style="display:none" onclick="resetSketchCanvasSize()"></button>
+                <button type="button" id="sketchUndoBtn" onclick="sketchUndo()" title="Отменить (Ctrl+Z)">↩</button>
+                <button type="button" id="sketchRedoBtn" onclick="sketchRedo()" title="Повторить (Ctrl+Y)">↪</button>
+                <button type="button" onclick="clearSketch()">Очистить</button>
+                <button type="button" class="calc-close" onclick="toggleSketchPanel()">✕</button>
             </div>
-            <div class="py-status" id="pyStatus">Первый запуск может занять до минуты.</div>
-            <div class="py-file" id="pyFile"></div>
-            <pre class="py-output" id="pyOutput"></pre>
+        </div>
+        <div class="sketch-body">
+            <div class="sketch-canvas-wrap">
+                <canvas id="sketchBgCanvas"></canvas>
+                <canvas id="sketchCanvas"></canvas>
+            </div>
         </div>
     </div>
-    {% endif %}
     
-    <div class="main">
-        <aside class="sidebar">
-            {% for task in tasks %}
-            <button class="task-btn {% if loop.index0 == current_task %}current{% endif %} {% if task.id in answers %}answered{% endif %}"
-                    onclick="goToTask({{ loop.index0 }})" data-task="{{ loop.index0 }}">
-                {{ loop.index }}
-                <span class="save-dot"></span>
-            </button>
-            {% endfor %}
-        </aside>
-        
-        <main class="content">
+     <div class="main">
+         <aside class="sidebar">
+             {% for task in tasks %}
+             <button class="task-btn {% if loop.index0 == current_task %}current{% endif %} {% if task.id in answers %}answered{% endif %}"
+                     onclick="goToTask({{ loop.index0 }})" data-task="{{ loop.index0 }}">
+                 {{ loop.index }}
+                 <span class="save-dot"></span>
+             </button>
+             {% endfor %}
+         </aside>
+         
+         <div class="main-content-wrapper">
+         <main class="content">
             {% for task in tasks %}
             <div class="task-card" id="task-{{ loop.index0 }}" data-task-id="{{ task.id }}" style="{% if loop.index0 != current_task %}display:none{% endif %}">
                 <div class="task-header">
@@ -649,27 +977,48 @@
                 <div class="answer-section">
                     <label>Ваш ответ:</label>
                     <div class="answer-row">
+                        {% set saved = answers.get(task.id, {}) %}
                         {% if task.answer_count == 0 %}
                         <textarea class="answer-input" style="width:100%; max-width:700px; height:140px; text-align:left; font-family: 'JetBrains Mono', monospace;"
                                   data-task-id="{{ task.id }}"
                                   data-answer="text"
+                                  name="answer_text_{{ student.id }}_{{ task.id }}"
+                                  autocomplete="section-student-{{ student.id }} new-password"
+                                  autocorrect="off"
+                                  autocapitalize="off"
+                                  spellcheck="false"
+                                  data-lpignore="true"
                                   placeholder="Введите ответ (текст / несколько строк)"
-                                  oninput="scheduleSave({{ task.id }})">{{ answers.get(task.id, {}).get('answer_text', '') or '' }}</textarea>
-                        {% else %}
+                                  oninput="scheduleSave({{ task.id }})">{{ saved.get('answer_text', '') or '' }}</textarea>
+                        {% elif task.answer_count == 1 %}
                         <input type="text" class="answer-input" 
                                data-task-id="{{ task.id }}" 
                                data-answer="1"
-                               value="{{ answers.get(task.id, {}).get('answer_1', '') or '' }}"
-                               placeholder="Ответ{% if task.answer_count == 2 %} 1{% endif %}"
+                               name="answer_1_{{ student.id }}_{{ task.id }}"
+                               autocomplete="section-student-{{ student.id }} new-password"
+                               autocorrect="off"
+                               autocapitalize="off"
+                               spellcheck="false"
+                               data-lpignore="true"
+                               value="{{ saved.get('answer_1', '') or '' }}"
+                               placeholder="Ответ"
                                oninput="scheduleSave({{ task.id }})">
-                        {% if task.answer_count == 2 %}
-                        <input type="text" class="answer-input" 
-                               data-task-id="{{ task.id }}" 
-                               data-answer="2"
-                               value="{{ answers.get(task.id, {}).get('answer_2', '') or '' }}"
-                               placeholder="Ответ 2"
+                        {% else %}
+                        {% set extra_saved = (saved.get('answer_text', '') or '').split('\n') %}
+                        {% for idx in range(1, task.answer_count + 1) %}
+                        <input type="text" class="answer-input"
+                               data-task-id="{{ task.id }}"
+                               data-answer="{{ idx }}"
+                               name="answer_{{ idx }}_{{ student.id }}_{{ task.id }}"
+                               autocomplete="section-student-{{ student.id }} new-password"
+                               autocorrect="off"
+                               autocapitalize="off"
+                               spellcheck="false"
+                               data-lpignore="true"
+                               value="{% if idx == 1 %}{{ saved.get('answer_1', '') or '' }}{% elif idx == 2 %}{{ saved.get('answer_2', '') or '' }}{% else %}{{ extra_saved[idx - 3] if extra_saved|length > (idx - 3) else '' }}{% endif %}"
+                               placeholder="Ответ {{ idx }}"
                                oninput="scheduleSave({{ task.id }})">
-                        {% endif %}
+                        {% endfor %}
                         {% endif %}
                     </div>
                 </div>
@@ -687,9 +1036,42 @@
                 </div>
                 <div class="save-status" id="saveStatus-{{ task.id }}">Все изменения сохранены</div>
             </div>
-            {% endfor %}
-        </main>
-    </div>
+             {% endfor %}
+         </main>
+         {% if python_enabled %}
+         <div class="py-panel" id="pyPanel">
+             <div class="py-header" id="pyHeader">
+                 <span>🐍 Python</span>
+                 <div class="py-header-actions">
+                     <button type="button" class="calc-close" onclick="togglePythonFullscreen()">⤢ Развернуть/Свернуть</button>
+                     <button type="button" class="calc-close" onclick="togglePython()">✕</button>
+                 </div>
+             </div>
+             <div class="py-body">
+                 <div class="py-actions">
+                     <button type="button" class="nav-btn primary" onclick="runPython()">▶ Запустить</button>
+                     <button type="button" class="nav-btn secondary" onclick="insertPythonResult()">Вставить в ответ</button>
+                     <button type="button" class="nav-btn secondary" onclick="clearPythonEditor()">Очистить</button>
+                     <label class="py-inline-toggle"><input type="checkbox" id="pyShowSpaces"> Показать отступы</label>
+                 </div>
+                 <div class="py-file" id="pyFile"></div>
+                 <div class="py-status" id="pyStatus" style="display:none"></div>
+                  <div class="py-layout" id="pyLayout">
+                      <div class="py-editor-workbench" id="pyEditorWorkbench">
+                          <pre id="pyGutter" class="py-gutter" aria-hidden="true"></pre>
+                          <div class="py-editor-wrap">
+                              <pre id="pyHighlight" class="py-highlight" aria-hidden="true"></pre>
+                              <textarea id="pyEditor" class="py-editor" spellcheck="false" placeholder=""></textarea>
+                          </div>
+                      </div>
+                      <div class="py-resize-divider" id="pyResizeDivider"></div>
+                      <pre class="py-output" id="pyOutput"></pre>
+                  </div>
+             </div>
+         </div>
+         {% endif %}
+         </div>
+     </div>
     
     <div class="zoom-overlay" id="zoomOverlay" onclick="closeZoom()"></div>
     <div class="save-indicator" id="saveIndicator">✓ Сохранено</div>
@@ -717,6 +1099,7 @@
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ];
+        let sketchState = null;
         
         // Зум изображения
         function toggleZoom(img) {
@@ -766,6 +1149,19 @@
             updateFullscreenUI();
             document.addEventListener('fullscreenchange', updateFullscreenUI);
         }
+
+        function updateZoomHint() {
+            const hint = document.getElementById('zoomHint');
+            if (!hint) return;
+            const scale = window.visualViewport && window.visualViewport.scale ? window.visualViewport.scale : 1;
+            hint.classList.toggle('active', Math.abs(scale - 1) > 0.05);
+        }
+
+        updateZoomHint();
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', updateZoomHint);
+        }
+        window.addEventListener('resize', updateZoomHint);
 
         // Калькулятор
         if (calculatorEnabled) {
@@ -934,86 +1330,373 @@
         if (pythonEnabled) {
             const pyPanel = document.getElementById('pyPanel');
             const pyEditor = document.getElementById('pyEditor');
+            const pyGutter = document.getElementById('pyGutter');
+            const pyHighlight = document.getElementById('pyHighlight');
             const pyOutput = document.getElementById('pyOutput');
             const pyStatus = document.getElementById('pyStatus');
             const pyFile = document.getElementById('pyFile');
-            let pyodideReady = null;
+            const pyShowSpaces = document.getElementById('pyShowSpaces');
+
+            const PY_STORAGE_KEY = `py_editor_v1:${{ student.id }}`;
+            const PY_DEFAULT_CODE = "";
+
+            function loadCodeStorage() {
+                try {
+                    return JSON.parse(localStorage.getItem(PY_STORAGE_KEY) || '{}');
+                } catch (_) {
+                    return {};
+                }
+            }
+
+            function saveCodeStorage(store) {
+                try {
+                    localStorage.setItem(PY_STORAGE_KEY, JSON.stringify(store));
+                } catch (_) {
+                    // ignore storage errors
+                }
+            }
+
+            function currentTaskIdForCode() {
+                return getTaskIdByIndex(currentTask);
+            }
+
+            function saveCodeForCurrentTask() {
+                if (!pyEditor) return;
+                const taskId = currentTaskIdForCode();
+                if (!taskId) return;
+                const store = loadCodeStorage();
+                store[String(taskId)] = pyEditor.value;
+                saveCodeStorage(store);
+            }
+
+            function loadCodeForCurrentTask() {
+                if (!pyEditor) return;
+                const taskId = currentTaskIdForCode();
+                const store = loadCodeStorage();
+                let code = taskId ? store[String(taskId)] : null;
+                if (code === "# Используйте Ctrl+Enter для запуска\nprint('Hello')\n") {
+                    code = '';
+                }
+                pyEditor.value = typeof code === 'string' ? code : PY_DEFAULT_CODE;
+                refreshEditorView();
+
+                // Показываем/скрываем информацию о файле задачи
+                const meta = taskMeta[currentTask] || {};
+                const attachmentName = meta.attachment_name || '';
+                if (pyFile) {
+                    if (attachmentName) {
+                        pyFile.innerHTML = `📎 Файл задачи: <strong>${escapeHtml(attachmentName)}</strong> &nbsp;—&nbsp; пиши в коде: <code>open('${escapeHtml(attachmentName)}')</code>`;
+                        pyFile.classList.add('has-file');
+                    } else {
+                        pyFile.textContent = '';
+                        pyFile.classList.remove('has-file');
+                    }
+                }
+            }
+
+            function escapeHtml(text) {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+
+            function markVisibleWhitespace(text) {
+                if (!pyShowSpaces || !pyShowSpaces.checked) return text;
+                const indentMatch = text.match(/^[\t ]+/);
+                if (!indentMatch) return text;
+                const indentRaw = indentMatch[0];
+                const indentMarked = indentRaw.replace(/\t/g, '→   ').replace(/ /g, '·');
+                return indentMarked + text.slice(indentRaw.length);
+            }
+
+            const PY_KEYWORDS = new Set(['False','None','True','and','as','assert','async','await','break','class','continue','def','del','elif','else','except','finally','for','from','global','if','import','in','is','lambda','nonlocal','not','or','pass','raise','return','try','while','with','yield']);
+            const PY_BUILTINS = new Set(['print','input','len','range','int','str','float','list','dict','set','tuple','type','enumerate','zip','map','filter','sorted','reversed','sum','min','max','abs','round','open','bool','bytes','chr','ord','hex','oct','bin','repr','id','hash','hasattr','getattr','setattr','delattr','isinstance','issubclass','super','object','staticmethod','classmethod','property','format','vars','dir','iter','next','callable','all','any','pow','divmod']);
+
+            function highlightPyLine(rawLine) {
+                // Process a single raw (unescaped) line into HTML with token spans
+                let result = '';
+                let i = 0;
+                const len = rawLine.length;
+
+                while (i < len) {
+                    // Comment
+                    if (rawLine[i] === '#') {
+                        result += `<span class="py-token-com">${escapeHtml(rawLine.slice(i))}</span>`;
+                        break;
+                    }
+                    // String: triple-quote first
+                    if ((rawLine[i] === '"' || rawLine[i] === "'")) {
+                        const q = rawLine[i];
+                        const triple = rawLine.slice(i, i + 3);
+                        if (triple === q + q + q) {
+                            // triple-quote: consume to end of line (simplified, no multi-line)
+                            const end = rawLine.indexOf(triple, i + 3);
+                            const closeIdx = end === -1 ? len : end + 3;
+                            result += `<span class="py-token-str">${escapeHtml(rawLine.slice(i, closeIdx))}</span>`;
+                            i = closeIdx;
+                            continue;
+                        }
+                        // single-quote string
+                        let j = i + 1;
+                        while (j < len) {
+                            if (rawLine[j] === '\\') { j += 2; continue; }
+                            if (rawLine[j] === q) { j++; break; }
+                            j++;
+                        }
+                        result += `<span class="py-token-str">${escapeHtml(rawLine.slice(i, j))}</span>`;
+                        i = j;
+                        continue;
+                    }
+                    // f-string / b-string / r-string prefix
+                    if (/[fFbBrRuU]/.test(rawLine[i]) && i + 1 < len && (rawLine[i + 1] === '"' || rawLine[i + 1] === "'")) {
+                        const prefix = rawLine[i];
+                        const q = rawLine[i + 1];
+                        const start = i;
+                        i++;
+                        const triple = rawLine.slice(i, i + 3);
+                        if (triple === q + q + q) {
+                            const end = rawLine.indexOf(triple, i + 3);
+                            const closeIdx = end === -1 ? len : end + 3;
+                            result += `<span class="py-token-str">${escapeHtml(rawLine.slice(start, closeIdx))}</span>`;
+                            i = closeIdx;
+                            continue;
+                        }
+                        let j = i + 1;
+                        while (j < len) {
+                            if (rawLine[j] === '\\') { j += 2; continue; }
+                            if (rawLine[j] === q) { j++; break; }
+                            j++;
+                        }
+                        result += `<span class="py-token-str">${escapeHtml(rawLine.slice(start, j))}</span>`;
+                        i = j;
+                        continue;
+                    }
+                    // Number
+                    if (/[0-9]/.test(rawLine[i]) || (rawLine[i] === '.' && i + 1 < len && /[0-9]/.test(rawLine[i + 1]))) {
+                        let j = i;
+                        while (j < len && /[0-9a-fA-FxXoObB_\.]/.test(rawLine[j])) j++;
+                        result += `<span class="py-token-num">${escapeHtml(rawLine.slice(i, j))}</span>`;
+                        i = j;
+                        continue;
+                    }
+                    // Identifier (keyword / builtin / plain)
+                    if (/[a-zA-Z_]/.test(rawLine[i])) {
+                        let j = i;
+                        while (j < len && /[a-zA-Z0-9_]/.test(rawLine[j])) j++;
+                        const word = rawLine.slice(i, j);
+                        if (PY_KEYWORDS.has(word)) {
+                            result += `<span class="py-token-kw">${escapeHtml(word)}</span>`;
+                        } else if (PY_BUILTINS.has(word)) {
+                            result += `<span class="py-token-blt">${escapeHtml(word)}</span>`;
+                        } else {
+                            result += escapeHtml(word);
+                        }
+                        i = j;
+                        continue;
+                    }
+                    // Operator chars
+                    if (/[+\-*/%=<>!&|^~@,.:;()[\]{}]/.test(rawLine[i])) {
+                        result += `<span class="py-token-op">${escapeHtml(rawLine[i])}</span>`;
+                        i++;
+                        continue;
+                    }
+                    // Anything else (space, etc.)
+                    result += escapeHtml(rawLine[i]);
+                    i++;
+                }
+                return result || '&nbsp;';
+            }
+
+            function renderEditorHighlight() {
+                if (!pyHighlight || !pyEditor || !pyGutter) return;
+                const lines = pyEditor.value.split('\n');
+                const html = lines.map((line) => {
+                    const markedLine = markVisibleWhitespace(line);
+                    // If show-spaces is on, markVisibleWhitespace already modified indent chars;
+                    // we highlight the original line for tokens but prefix with marked indent
+                    const body = highlightPyLine(line) || '&nbsp;';
+                    return `<span class="py-line">${body}</span>`;
+                }).join('');
+
+                const gutter = lines.map((_, idx) => String(idx + 1)).join('\n') || '1';
+                pyHighlight.innerHTML = html;
+                pyGutter.textContent = gutter;
+                pyHighlight.scrollTop = pyEditor.scrollTop;
+                pyHighlight.scrollLeft = pyEditor.scrollLeft;
+                pyGutter.scrollTop = pyEditor.scrollTop;
+            }
+
+            // Дебаунс подсветки: рендерим не чаще раза в 16 мс
+            let _highlightRafId = null;
+            function scheduleHighlight() {
+                if (_highlightRafId) return;
+                _highlightRafId = requestAnimationFrame(() => {
+                    _highlightRafId = null;
+                    renderEditorHighlight();
+                });
+            }
+
+            function refreshEditorView() {
+                scheduleHighlight();
+                saveCodeForCurrentTask();
+            }
+
+            // Размер шрифта (Ctrl+= / Ctrl+-)
+            const PY_FONT_KEY = 'py_font_size_v1';
+            const PY_FONT_MIN = 10;
+            const PY_FONT_MAX = 24;
+            let pyFontSize = parseInt(localStorage.getItem(PY_FONT_KEY) || '15', 10);
+
+            function applyFontSize(size) {
+                pyFontSize = Math.max(PY_FONT_MIN, Math.min(PY_FONT_MAX, size));
+                const px = pyFontSize + 'px';
+                const els = [pyEditor, pyHighlight, pyGutter, pyOutput].filter(Boolean);
+                els.forEach(el => el.style.fontSize = px);
+                try { localStorage.setItem(PY_FONT_KEY, String(pyFontSize)); } catch(_) {}
+                renderEditorHighlight();
+            }
+
+            applyFontSize(pyFontSize);
+
+            function updateRunningState(running) {
+                // Блокируем/разблокируем кнопку запуска
+                const runBtn = document.querySelector('.py-actions .nav-btn.primary');
+                if (runBtn) runBtn.disabled = running;
+            }
+
+            function normalizeOutputText(text) {
+                return String(text || '').replace(/\r\n?/g, '\n');
+            }
+
 
             window.togglePython = function() {
-                if (!pyPanel) return;
-                pyPanel.classList.toggle('active');
-                if (pyPanel.classList.contains('active')) {
+                const wrapper = document.querySelector('.main-content-wrapper');
+                if (!wrapper) return;
+                
+                // Если панель в полноэкранном режиме, сначала выходим из него
+                if (wrapper.classList.contains('py-fullscreen')) {
+                    wrapper.classList.remove('py-fullscreen');
+                }
+                
+                // Переключаем открытие/закрытие
+                wrapper.classList.toggle('py-open');
+                if (wrapper.classList.contains('py-open')) {
+                    loadCodeForCurrentTask();
                     setTimeout(() => pyEditor && pyEditor.focus(), 0);
                 }
             };
 
-            async function loadPyodideScript() {
-                if (window.loadPyodide) return;
-                return new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = '/static/pyodide/pyodide.js';
-                    script.onload = () => resolve();
-                    script.onerror = () => reject(new Error('Pyodide load failed'));
-                    document.head.appendChild(script);
-                });
-            }
-
-            async function initPyodide() {
-                if (pyodideReady) return pyodideReady;
-                pyStatus.textContent = 'Загрузка Python... Подождите.';
-                pyodideReady = (async () => {
-                    await loadPyodideScript();
-                    const pyodide = await loadPyodide({
-                        indexURL: '/static/pyodide/'
-                    });
-                    pyStatus.textContent = 'Python готов к запуску.';
-                    return pyodide;
-                })().catch((e) => {
-                    pyStatus.textContent = 'Не удалось загрузить Python. Нужны файлы Pyodide в static/pyodide.';
-                    throw e;
-                });
-                return pyodideReady;
-            }
-
-            function currentTaskAttachment() {
-                const meta = taskMeta[currentTask];
-                if (!meta || !meta.attachment_path) return null;
-                return {
-                    path: meta.attachment_path,
-                    name: meta.attachment_name || meta.attachment_path
-                };
-            }
-
-            async function loadAttachment(pyodide) {
-                const file = currentTaskAttachment();
-                if (!file) {
-                    pyFile.textContent = '';
-                    return null;
+            window.togglePythonFullscreen = function() {
+                const wrapper = document.querySelector('.main-content-wrapper');
+                if (!wrapper) return;
+                
+                // Если панель закрыта, открываем её сначала
+                if (!wrapper.classList.contains('py-open')) {
+                    wrapper.classList.add('py-open');
                 }
-                pyFile.textContent = `Файл доступен: ${file.name}`;
-                const res = await fetch(`/attachments/${file.path}`);
-                const buf = new Uint8Array(await res.arrayBuffer());
-                pyodide.FS.writeFile(file.name, buf);
-                return file.name;
+                
+                // Переключаем полноэкранный режим
+                wrapper.classList.toggle('py-fullscreen');
+            };
+
+
+            function setPyOutput(text, isError) {
+                if (!pyOutput) return;
+                pyOutput.textContent = normalizeOutputText(text || '');
+                pyOutput.classList.toggle('error', !!isError);
             }
+
 
             window.runPython = async function() {
                 if (!pyEditor || !pyOutput) return;
                 const code = pyEditor.value;
                 if (!code.trim()) return;
-                pyOutput.textContent = '';
-                try {
-                    const pyodide = await initPyodide();
-                    await loadAttachment(pyodide);
-                    let output = '';
-                    pyodide.setStdout({ batched: (s) => { output += s; } });
-                    pyodide.setStderr({ batched: (s) => { output += s; } });
-                    await pyodide.runPythonAsync(code);
-                    output = output.replace(/\r\n?/g, '\n');
-                    pyOutput.textContent = output || 'Готово.';
-                } catch (e) {
-                    pyOutput.textContent = String(e);
+                saveCodeForCurrentTask();
+                setPyOutput('', false);
+                pyStatus.textContent = 'Выполнение...';
+                updateRunningState(true);
+
+                // Получаем информацию о файле текущей задачи
+                const meta = taskMeta[currentTask] || {};
+                const attachmentPath = meta.attachment_path || '';
+                const attachmentName = meta.attachment_name || '';
+
+                // Обновляем подсказку о файле в панели
+                if (pyFile) {
+                    if (attachmentName) {
+                        pyFile.innerHTML = `📎 Файл задачи: <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">${escapeHtml(attachmentName)}</code> &nbsp;—&nbsp; пиши: <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">open('${escapeHtml(attachmentName)}')</code>`;
+                    } else {
+                        pyFile.textContent = '';
+                    }
                 }
+
+                try {
+                    const response = await fetch('/test/run-python', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code, attachment_path: attachmentPath, attachment_name: attachmentName })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        const msg = err.error || `Ошибка сервера (HTTP ${response.status})`;
+                        setPyOutput(msg, true);
+                        pyStatus.textContent = '';
+                        updateRunningState(false);
+                        return;
+                    }
+
+                    const result = await response.json();
+
+                    // Формируем вывод как в IDLE:
+                    // сначала stdout (обычный вывод), потом stderr (ошибки/traceback) — красным
+                    const hasStdout = result.stdout && result.stdout.trim();
+                    const hasStderr = result.stderr && result.stderr.trim();
+
+                    if (!hasStdout && !hasStderr) {
+                        pyOutput.textContent = '';
+                        pyOutput.classList.remove('error');
+                        pyStatus.textContent = '';
+                    } else if (result.success) {
+                        // Успех: показываем stdout
+                        pyOutput.textContent = result.stdout || '';
+                        pyOutput.classList.remove('error');
+                        pyStatus.textContent = '';
+                    } else {
+                        // Ошибка: показываем и stdout (если был) и stderr как в IDLE
+                        let out = '';
+                        if (hasStdout) out += result.stdout + '\n';
+                        if (hasStderr) out += result.stderr;
+                        pyOutput.textContent = out.trim();
+                        pyOutput.classList.add('error');
+                        pyStatus.textContent = '';
+                    }
+
+                } catch (e) {
+                    setPyOutput('Нет связи с сервером: ' + e.message, true);
+                    pyStatus.textContent = '';
+                }
+
+                updateRunningState(false);
+            };
+
+            window.clearPythonEditor = function() {
+                if (!pyEditor) return;
+                pyEditor.value = '';
+                refreshEditorView();
+                setPyOutput('', false);
+            };
+
+            window.resetPythonCode = function() {
+                if (!pyEditor) return;
+                pyEditor.value = PY_DEFAULT_CODE;
+                refreshEditorView();
+                setPyOutput('', false);
+            };
+
+            window.pySaveCurrentCode = function() {
+                saveCodeForCurrentTask();
             };
 
             window.insertPythonResult = function() {
@@ -1037,26 +1720,184 @@
                 }
             };
 
+            function transformSelectedLines(editor, transformer) {
+                const value = editor.value;
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+                const lineEndPos = value.indexOf('\n', end);
+                const blockEnd = lineEndPos === -1 ? value.length : lineEndPos;
+                const block = value.slice(lineStart, blockEnd);
+                const lines = block.split('\n');
+                const transformed = transformer(lines);
+                editor.value = value.slice(0, lineStart) + transformed.join('\n') + value.slice(blockEnd);
+                editor.selectionStart = lineStart;
+                editor.selectionEnd = lineStart + transformed.join('\n').length;
+                refreshEditorView();
+            }
+
+            function toggleCommentSelection(editor) {
+                transformSelectedLines(editor, (lines) => {
+                    const allCommented = lines.every((line) => line.trim() === '' || line.trimStart().startsWith('#'));
+                    if (allCommented) {
+                        return lines.map((line) => line.replace(/^(\s*)#\s?/, '$1'));
+                    }
+                    return lines.map((line) => {
+                        if (!line.trim()) return line;
+                        return line.replace(/^(\s*)/, '$1# ');
+                    });
+                });
+            }
+
             if (pyEditor) {
+                loadCodeForCurrentTask();
+                updateRunningState(false);
+
+                pyEditor.addEventListener('input', refreshEditorView);
+                pyEditor.addEventListener('scroll', () => {
+                    if (!pyHighlight || !pyGutter) return;
+                    pyHighlight.scrollTop = pyEditor.scrollTop;
+                    pyHighlight.scrollLeft = pyEditor.scrollLeft;
+                    pyGutter.scrollTop = pyEditor.scrollTop;
+                });
+
+                if (pyShowSpaces) {
+                    pyShowSpaces.addEventListener('change', renderEditorHighlight);
+                }
+
                 pyEditor.addEventListener('keydown', (e) => {
                     const value = pyEditor.value;
                     const start = pyEditor.selectionStart;
                     const end = pyEditor.selectionEnd;
 
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        window.runPython();
+                        return;
+                    }
+
+                    if (e.ctrlKey && e.key === '/') {
+                        e.preventDefault();
+                        toggleCommentSelection(pyEditor);
+                        return;
+                    }
+
+                    // Размер шрифта: Ctrl+= (плюс) или Ctrl+- (минус)
+                    if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+                        e.preventDefault();
+                        applyFontSize(pyFontSize + 1);
+                        return;
+                    }
+                    if (e.ctrlKey && e.key === '-') {
+                        e.preventDefault();
+                        applyFontSize(pyFontSize - 1);
+                        return;
+                    }
+
+                    // Автодополнение парных символов
+                    const PAIRS = { '(': ')', '[': ']', '{': '}' };
+                    const CLOSING = new Set([')', ']', '}']);
+                    const QUOTE_CHARS = new Set(['"', "'"]);
+
+                    if (PAIRS[e.key] && !e.ctrlKey && !e.altKey) {
+                        // Если есть выделение — оборачиваем его
+                        if (start !== end) {
+                            e.preventDefault();
+                            const sel = value.slice(start, end);
+                            const ins = e.key + sel + PAIRS[e.key];
+                            pyEditor.value = value.slice(0, start) + ins + value.slice(end);
+                            pyEditor.selectionStart = start + 1;
+                            pyEditor.selectionEnd = end + 1;
+                            refreshEditorView();
+                            return;
+                        }
+                        // Иначе вставляем пару и помещаем курсор между ними
+                        e.preventDefault();
+                        const ins = e.key + PAIRS[e.key];
+                        pyEditor.value = value.slice(0, start) + ins + value.slice(end);
+                        pyEditor.selectionStart = pyEditor.selectionEnd = start + 1;
+                        refreshEditorView();
+                        return;
+                    }
+
+                    // Пропуск закрывающей скобки если она уже следует
+                    if (CLOSING.has(e.key) && !e.ctrlKey && !e.altKey) {
+                        if (start === end && value[start] === e.key) {
+                            e.preventDefault();
+                            pyEditor.selectionStart = pyEditor.selectionEnd = start + 1;
+                            return;
+                        }
+                    }
+
+                    // Автодополнение кавычек
+                    if (QUOTE_CHARS.has(e.key) && !e.ctrlKey && !e.altKey) {
+                        const q = e.key;
+                        // Пропустить закрывающую если следующий символ — такая же кавычка
+                        if (start === end && value[start] === q) {
+                            e.preventDefault();
+                            pyEditor.selectionStart = pyEditor.selectionEnd = start + 1;
+                            return;
+                        }
+                        // Если выделение — оборачиваем
+                        if (start !== end) {
+                            e.preventDefault();
+                            const sel = value.slice(start, end);
+                            pyEditor.value = value.slice(0, start) + q + sel + q + value.slice(end);
+                            pyEditor.selectionStart = start + 1;
+                            pyEditor.selectionEnd = end + 1;
+                            refreshEditorView();
+                            return;
+                        }
+                        // Обычная вставка пары
+                        e.preventDefault();
+                        pyEditor.value = value.slice(0, start) + q + q + value.slice(end);
+                        pyEditor.selectionStart = pyEditor.selectionEnd = start + 1;
+                        refreshEditorView();
+                        return;
+                    }
+
+                    // Backspace: удаляем пустую пару
+                    if (e.key === 'Backspace' && start === end && start > 0) {
+                        const before = value[start - 1];
+                        const after = value[start];
+                        const isEmptyPair =
+                            (PAIRS[before] && PAIRS[before] === after) ||
+                            (QUOTE_CHARS.has(before) && before === after);
+                        if (isEmptyPair) {
+                            e.preventDefault();
+                            pyEditor.value = value.slice(0, start - 1) + value.slice(start + 1);
+                            pyEditor.selectionStart = pyEditor.selectionEnd = start - 1;
+                            refreshEditorView();
+                            return;
+                        }
+                    }
+
                     if (e.key === 'Tab') {
                         e.preventDefault();
                         const indent = '    ';
+                        if (start !== end) {
+                            transformSelectedLines(pyEditor, (lines) => {
+                                if (e.shiftKey) {
+                                    return lines.map((line) => line.startsWith(indent) ? line.slice(4) : line.replace(/^\s{1,3}/, ''));
+                                }
+                                return lines.map((line) => indent + line);
+                            });
+                            return;
+                        }
+
                         if (e.shiftKey) {
                             const lineStart = value.lastIndexOf('\n', start - 1) + 1;
                             if (value.slice(lineStart, lineStart + 4) === indent) {
                                 pyEditor.value = value.slice(0, lineStart) + value.slice(lineStart + 4);
                                 pyEditor.selectionStart = Math.max(start - 4, lineStart);
                                 pyEditor.selectionEnd = Math.max(end - 4, lineStart);
+                                refreshEditorView();
                             }
                             return;
                         }
                         pyEditor.value = value.slice(0, start) + indent + value.slice(end);
                         pyEditor.selectionStart = pyEditor.selectionEnd = start + indent.length;
+                        refreshEditorView();
                         return;
                     }
 
@@ -1070,11 +1911,471 @@
                         pyEditor.value = value.slice(0, start) + insert + value.slice(end);
                         const newPos = start + insert.length;
                         pyEditor.selectionStart = pyEditor.selectionEnd = newPos;
+                        refreshEditorView();
                         return;
                     }
                 });
             }
+
+            window.pyEditorOnTaskChange = function() {
+                loadCodeForCurrentTask();
+                pyStatus.textContent = '';
+                setPyOutput('', false);
+            };
+
+            // Перетаскиваемый разделитель editor / output
+            (function initResizeDivider() {
+                const divider = document.getElementById('pyResizeDivider');
+                const workbench = document.getElementById('pyEditorWorkbench');
+                const output = document.getElementById('pyOutput');
+                const layout = document.getElementById('pyLayout');
+                if (!divider || !workbench || !output || !layout) return;
+
+                let dragging = false;
+                let startY = 0;
+                let startEditorH = 0;
+                let startOutputH = 0;
+
+                divider.addEventListener('pointerdown', (e) => {
+                    dragging = true;
+                    startY = e.clientY;
+                    startEditorH = workbench.getBoundingClientRect().height;
+                    startOutputH = output.getBoundingClientRect().height;
+                    divider.setPointerCapture(e.pointerId);
+                    e.preventDefault();
+                });
+
+                divider.addEventListener('pointermove', (e) => {
+                    if (!dragging) return;
+                    const dy = e.clientY - startY;
+                    const newEditorH = Math.max(60, startEditorH + dy);
+                    const newOutputH = Math.max(40, startOutputH - dy);
+                    workbench.style.flex = 'none';
+                    workbench.style.height = newEditorH + 'px';
+                    output.style.flex = 'none';
+                    output.style.height = newOutputH + 'px';
+                    // Keep highlight scroll in sync after resize
+                    if (pyHighlight) pyHighlight.scrollTop = pyEditor ? pyEditor.scrollTop : 0;
+                });
+
+                divider.addEventListener('pointerup', (e) => {
+                    dragging = false;
+                    try { divider.releasePointerCapture(e.pointerId); } catch(_) {}
+                });
+
+                // Double-click: сброс пропорций
+                divider.addEventListener('dblclick', () => {
+                    workbench.style.flex = '2';
+                    workbench.style.height = '';
+                    output.style.flex = '1';
+                    output.style.height = '';
+                });
+            })();
         }
+
+        // Черновик по текущей задаче
+        (function initSketch() {
+            const panel = document.getElementById('sketchPanel');
+            const header = document.getElementById('sketchHeader');
+            const bgCanvas = document.getElementById('sketchBgCanvas');
+            const canvas = document.getElementById('sketchCanvas');
+            const sizeInput = document.getElementById('sketchSize');
+            const palette = document.getElementById('sketchPalette');
+            const pencilBtn = document.getElementById('toolPencil');
+            const eraserBtn = document.getElementById('toolEraser');
+            const lineBtn = document.getElementById('toolLine');
+            const rectBtn = document.getElementById('toolRect');
+            const arrowBtn = document.getElementById('toolArrow');
+            const expandBtn = document.getElementById('expandCanvasBtn');
+            const resetCanvasBtn = document.getElementById('resetCanvasBtn');
+            const undoBtn = document.getElementById('sketchUndoBtn');
+            const redoBtn = document.getElementById('sketchRedoBtn');
+            if (!panel || !header || !bgCanvas || !canvas || !sizeInput || !palette || !pencilBtn || !eraserBtn || !lineBtn || !rectBtn || !arrowBtn || !expandBtn || !resetCanvasBtn || !undoBtn || !redoBtn) return;
+
+            const ctx = canvas.getContext('2d');
+            const bgCtx = bgCanvas.getContext('2d');
+            const bg = new Image();
+            bg.crossOrigin = 'anonymous';
+            let drawing = false;
+            let loadedTaskIndex = null;
+            let dpr = Math.max(1, window.devicePixelRatio || 1);
+            let activeColor = '#dc2626';
+            let activeTool = 'pencil';
+            let startPoint = null;
+            let moved = false;
+            let previewBase = null;
+            let history = [];
+            let historyIndex = -1;
+            let baseImageWidth = 1200;
+            let baseImageHeight = 800;
+            let extraCanvasWidth = 0;
+            let extraCanvasHeight = 0;
+
+            const MIN_CANVAS_WIDTH = 1600;
+            const MIN_CANVAS_HEIGHT = 1000;
+            const EXPAND_STEP_WIDTH = 500;
+            const EXPAND_STEP_HEIGHT = 350;
+
+
+
+            function toolButtons() {
+                return [pencilBtn, eraserBtn, lineBtn, rectBtn, arrowBtn];
+            }
+
+            function setActiveTool(tool) {
+                activeTool = tool;
+                toolButtons().forEach(btn => btn.classList.remove('active'));
+                if (tool === 'pencil') pencilBtn.classList.add('active');
+                if (tool === 'eraser') eraserBtn.classList.add('active');
+                if (tool === 'line') lineBtn.classList.add('active');
+                if (tool === 'rect') rectBtn.classList.add('active');
+                if (tool === 'arrow') arrowBtn.classList.add('active');
+                canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+            }
+
+            function updateHistoryButtons() {
+                undoBtn.disabled = historyIndex <= 0;
+                redoBtn.disabled = historyIndex >= history.length - 1;
+            }
+
+            function cloneImageData(data) {
+                return new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
+            }
+
+            function pushHistoryState() {
+                const snapshot = cloneImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                history = history.slice(0, historyIndex + 1);
+                history.push(snapshot);
+                if (history.length > 40) {
+                    history.shift();
+                }
+                historyIndex = history.length - 1;
+                updateHistoryButtons();
+            }
+
+            function restoreHistoryState(index) {
+                if (index < 0 || index >= history.length) return;
+                historyIndex = index;
+                const state = history[historyIndex];
+                ctx.putImageData(state, 0, 0);
+                updateHistoryButtons();
+            }
+
+            function resetHistory() {
+                history = [];
+                historyIndex = -1;
+                pushHistoryState();
+            }
+
+            function getCurrentTaskImage() {
+                const card = document.getElementById('task-' + currentTask);
+                if (!card) return null;
+                return card.querySelector('.task-image img');
+            }
+
+            function toCanvasPoint(evt) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = evt.clientX ?? (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
+                const clientY = evt.clientY ?? (evt.touches && evt.touches[0] ? evt.touches[0].clientY : 0);
+                return {
+                    x: (clientX - rect.left),
+                    y: (clientY - rect.top)
+                };
+            }
+
+            function setupCanvasFromImage(imageEl) {
+                baseImageWidth = imageEl && imageEl.naturalWidth ? imageEl.naturalWidth : 1200;
+                baseImageHeight = imageEl && imageEl.naturalHeight ? imageEl.naturalHeight : 800;
+                extraCanvasWidth = 0;
+                extraCanvasHeight = 0;
+                applyCanvasSize(true);
+                resetHistory();
+            }
+
+            function applyCanvasSize(resetDrawing) {
+                const targetW = Math.max(baseImageWidth + extraCanvasWidth, MIN_CANVAS_WIDTH);
+                const targetH = Math.max(baseImageHeight + extraCanvasHeight, MIN_CANVAS_HEIGHT);
+
+                let drawingSnapshot = null;
+                let prevWidth = 0;
+                let prevHeight = 0;
+                if (!resetDrawing && canvas.width > 0 && canvas.height > 0) {
+                    prevWidth = canvas.width;
+                    prevHeight = canvas.height;
+                    drawingSnapshot = ctx.getImageData(0, 0, prevWidth, prevHeight);
+                }
+
+                dpr = Math.max(1, window.devicePixelRatio || 1);
+                bgCanvas.style.width = targetW + 'px';
+                bgCanvas.style.height = targetH + 'px';
+                canvas.style.width = targetW + 'px';
+                canvas.style.height = targetH + 'px';
+                bgCanvas.width = Math.round(targetW * dpr);
+                bgCanvas.height = Math.round(targetH * dpr);
+                canvas.width = Math.round(targetW * dpr);
+                canvas.height = Math.round(targetH * dpr);
+                bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                drawBackgroundLayer();
+
+                if (drawingSnapshot) {
+                    const tmp = document.createElement('canvas');
+                    tmp.width = prevWidth;
+                    tmp.height = prevHeight;
+                    const tctx = tmp.getContext('2d');
+                    tctx.putImageData(drawingSnapshot, 0, 0);
+                    ctx.drawImage(tmp, 0, 0, prevWidth / dpr, prevHeight / dpr);
+                } else {
+                    clearDrawingLayer();
+                }
+            }
+
+            function drawBackgroundLayer() {
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+                bgCtx.fillStyle = '#ffffff';
+                bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+                if (bg.complete && bg.naturalWidth > 0) {
+                    bgCtx.drawImage(bg, 0, 0, baseImageWidth, baseImageHeight);
+                }
+            }
+
+            function clearDrawingLayer() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            function drawShape(from, to) {
+                const width = Number(sizeInput.value || 6);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = activeColor;
+                ctx.lineWidth = width;
+
+                if (activeTool === 'line') {
+                    ctx.beginPath();
+                    ctx.moveTo(from.x, from.y);
+                    ctx.lineTo(to.x, to.y);
+                    ctx.stroke();
+                    ctx.closePath();
+                    return;
+                }
+
+                if (activeTool === 'rect') {
+                    const w = to.x - from.x;
+                    const h = to.y - from.y;
+                    ctx.strokeRect(from.x, from.y, w, h);
+                    return;
+                }
+
+                if (activeTool === 'arrow') {
+                    const head = Math.max(14, width * 2.2);
+                    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+                    ctx.beginPath();
+                    ctx.moveTo(from.x, from.y);
+                    ctx.lineTo(to.x, to.y);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(to.x, to.y);
+                    ctx.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
+                    ctx.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6));
+                    ctx.lineTo(to.x, to.y);
+                    ctx.fillStyle = activeColor;
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            }
+
+            function loadCurrentTaskImage() {
+                const imageEl = getCurrentTaskImage();
+                setupCanvasFromImage(imageEl);
+                const src = imageEl ? imageEl.currentSrc || imageEl.src : '';
+                loadedTaskIndex = currentTask;
+                if (!src) {
+                    bg.src = '';
+                    drawBackgroundLayer();
+                    clearDrawingLayer();
+                    resetHistory();
+                    return;
+                }
+                bg.onload = function() {
+                    drawBackgroundLayer();
+                    clearDrawingLayer();
+                    resetHistory();
+                };
+                bg.onerror = function() {
+                    drawBackgroundLayer();
+                    clearDrawingLayer();
+                    resetHistory();
+                };
+                bg.src = src;
+            }
+
+            function expandCanvas() {
+                ensureLoadedForCurrentTask();
+                extraCanvasWidth += EXPAND_STEP_WIDTH;
+                extraCanvasHeight += EXPAND_STEP_HEIGHT;
+                applyCanvasSize(false);
+                pushHistoryState();
+            }
+
+            function resetCanvasSize() {
+                ensureLoadedForCurrentTask();
+                extraCanvasWidth = 0;
+                extraCanvasHeight = 0;
+                applyCanvasSize(false);
+                pushHistoryState();
+            }
+
+            function ensureLoadedForCurrentTask() {
+                if (loadedTaskIndex !== currentTask) {
+                    loadCurrentTaskImage();
+                }
+            }
+
+            function startDraw(evt) {
+                evt.preventDefault();
+                ensureLoadedForCurrentTask();
+                drawing = true;
+                moved = false;
+                const p = toCanvasPoint(evt);
+                startPoint = p;
+                ctx.globalCompositeOperation = activeTool === 'eraser' ? 'destination-out' : 'source-over';
+                ctx.strokeStyle = activeTool === 'eraser' ? '#000000' : activeColor;
+                ctx.lineWidth = Number(sizeInput.value || 6);
+
+                if (activeTool === 'pencil' || activeTool === 'eraser') {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                } else {
+                    previewBase = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            function moveDraw(evt) {
+                if (!drawing) return;
+                evt.preventDefault();
+                const p = toCanvasPoint(evt);
+                moved = true;
+
+                if (activeTool === 'pencil' || activeTool === 'eraser') {
+                    ctx.lineTo(p.x, p.y);
+                    ctx.stroke();
+                    return;
+                }
+
+                if (previewBase && startPoint) {
+                    ctx.putImageData(previewBase, 0, 0);
+                    drawShape(startPoint, p);
+                }
+            }
+
+            function endDraw(evt) {
+                if (!drawing) return;
+                evt.preventDefault();
+                drawing = false;
+
+                const p = toCanvasPoint(evt);
+
+                if (activeTool === 'pencil' || activeTool === 'eraser') {
+                    if (!moved && startPoint) {
+                        ctx.beginPath();
+                        ctx.arc(startPoint.x, startPoint.y, Math.max(1, Number(sizeInput.value || 6) / 2), 0, Math.PI * 2);
+                        if (activeTool === 'eraser') {
+                            ctx.fillStyle = '#000';
+                            ctx.globalCompositeOperation = 'destination-out';
+                        } else {
+                            ctx.fillStyle = activeColor;
+                            ctx.globalCompositeOperation = 'source-over';
+                        }
+                        ctx.fill();
+                    }
+                    ctx.closePath();
+                } else if (previewBase && startPoint) {
+                    ctx.putImageData(previewBase, 0, 0);
+                    drawShape(startPoint, p);
+                    previewBase = null;
+                }
+
+                startPoint = null;
+                pushHistoryState();
+            }
+
+            canvas.addEventListener('pointerdown', startDraw);
+            canvas.addEventListener('pointermove', moveDraw);
+            canvas.addEventListener('pointerup', endDraw);
+            canvas.addEventListener('pointerleave', endDraw);
+            canvas.addEventListener('pointercancel', endDraw);
+
+            palette.addEventListener('click', function(evt) {
+                const btn = evt.target.closest('.sketch-color');
+                if (!btn) return;
+                activeColor = btn.dataset.color || '#dc2626';
+                palette.querySelectorAll('.sketch-color').forEach(el => el.classList.remove('active'));
+                btn.classList.add('active');
+                setActiveTool('pencil');
+            });
+
+            pencilBtn.addEventListener('click', function() {
+                setActiveTool('pencil');
+            });
+
+            eraserBtn.addEventListener('click', function() {
+                setActiveTool('eraser');
+            });
+
+            lineBtn.addEventListener('click', function() {
+                setActiveTool('line');
+            });
+
+            rectBtn.addEventListener('click', function() {
+                setActiveTool('rect');
+            });
+
+            arrowBtn.addEventListener('click', function() {
+                setActiveTool('arrow');
+            });
+
+            window.toggleSketchPanel = function() {
+                panel.classList.toggle('active');
+                if (panel.classList.contains('active')) {
+                    ensureLoadedForCurrentTask();
+                }
+            };
+
+            window.clearSketch = function() {
+                ensureLoadedForCurrentTask();
+                clearDrawingLayer();
+                pushHistoryState();
+            };
+
+            window.sketchUndo = function() {
+                if (historyIndex <= 0) return;
+                restoreHistoryState(historyIndex - 1);
+            };
+
+            window.sketchRedo = function() {
+                if (historyIndex >= history.length - 1) return;
+                restoreHistoryState(historyIndex + 1);
+            };
+
+            window.expandSketchCanvas = function() {
+                expandCanvas();
+            };
+
+            window.resetSketchCanvasSize = function() {
+                resetCanvasSize();
+            };
+
+            setActiveTool('pencil');
+            updateHistoryButtons();
+
+            sketchState = {
+                panel,
+                ensureLoadedForCurrentTask
+            };
+        })();
         
         // Таймер
         let timeOver = false;
@@ -1124,6 +2425,7 @@
         // Навигация
         async function goToTask(index) {
             if (index < 0 || index >= {{ tasks|length }}) return;
+            const previousTask = currentTask;
 
             const currentTaskId = getTaskIdByIndex(currentTask);
             if (currentTaskId && dirtyTasks.has(currentTaskId)) {
@@ -1136,7 +2438,19 @@
             document.querySelectorAll('.task-btn').forEach(el => el.classList.remove('current'));
             document.querySelector('.task-btn[data-task="' + index + '"]').classList.add('current');
 
+            if (typeof window.pySaveCurrentCode === 'function' && previousTask !== index) {
+                window.pySaveCurrentCode();
+            }
+
             currentTask = index;
+
+            if (typeof window.pyEditorOnTaskChange === 'function' && previousTask !== currentTask) {
+                window.pyEditorOnTaskChange();
+            }
+
+            if (sketchState && sketchState.panel.classList.contains('active')) {
+                sketchState.ensureLoadedForCurrentTask();
+            }
         }
         
         // Сохранение ответа
@@ -1176,13 +2490,11 @@
         }
 
         function isTaskAnswered(taskId) {
-            const input1 = document.querySelector(`input[data-task-id="${taskId}"][data-answer="1"]`);
-            const input2 = document.querySelector(`input[data-task-id="${taskId}"][data-answer="2"]`);
             const textarea = document.querySelector(`textarea[data-task-id="${taskId}"][data-answer="text"]`);
-            if (textarea) return textarea.value.trim().length > 0;
-            const v1 = input1 ? input1.value.trim() : '';
-            const v2 = input2 ? input2.value.trim() : '';
-            return v1.length > 0 || v2.length > 0;
+            if (textarea) return (textarea.value || '').trim().length > 0;
+            const inputs = Array.from(document.querySelectorAll(`input[data-task-id="${taskId}"][data-answer]`));
+            if (inputs.length === 0) return false;
+            return inputs.some((el) => (el.value || '').trim().length > 0);
         }
 
         function updateAnsweredState(taskId) {
@@ -1212,15 +2524,56 @@
         }
 
         async function saveAnswer(taskId) {
-            const input1 = document.querySelector(`input[data-task-id="${taskId}"][data-answer="1"]`);
-            const input2 = document.querySelector(`input[data-task-id="${taskId}"][data-answer="2"]`);
             const textarea = document.querySelector(`textarea[data-task-id="${taskId}"][data-answer="text"]`);
+            if (textarea) {
+                const data = {
+                    task_id: taskId,
+                    answer_1: null,
+                    answer_2: null,
+                    answer_text: textarea.value
+                };
+
+                try {
+                    const response = await fetch('{{ url_for("student_save_answer") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        const resp = await response.json().catch(() => ({}));
+                        if (resp && resp.finished && resp.redirect) {
+                            window.location.href = resp.redirect;
+                            return;
+                        }
+
+                        dirtyTasks.delete(taskId);
+                        updateSaveButton(taskId);
+                        updateAnsweredState(taskId);
+
+                        const indicator = document.getElementById('saveIndicator');
+                        indicator.classList.add('show');
+                        setTimeout(() => indicator.classList.remove('show'), 1500);
+                    }
+                } catch (e) {
+                    console.error('Ошибка сохранения:', e);
+                }
+                return;
+            }
+
+            const inputs = Array.from(document.querySelectorAll(`input[data-task-id="${taskId}"][data-answer]`))
+                .sort((a, b) => Number(a.dataset.answer || '0') - Number(b.dataset.answer || '0'));
+
+            const answer1 = inputs[0] ? inputs[0].value : null;
+            const answer2 = inputs[1] ? inputs[1].value : null;
+            const extra = inputs.slice(2).map((el) => (el.value || '').trim());
+            const packedExtra = extra.some((x) => x !== '') ? extra.join('\n') : null;
 
             const data = {
                 task_id: taskId,
-                answer_1: input1 ? input1.value : null,
-                answer_2: input2 ? input2.value : null,
-                answer_text: textarea ? textarea.value : null
+                answer_1: answer1,
+                answer_2: answer2,
+                answer_text: packedExtra
             };
             
             try {
