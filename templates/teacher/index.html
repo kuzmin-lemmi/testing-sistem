@@ -17,6 +17,15 @@
                 </button>
             </div>
             <div class="info-row">
+                <span class="label">Ярлык для учеников:</span>
+                <a href="{{ url_for('student_shortcut_download') }}" class="btn btn-small" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
+                    💾 Скачать «Тестирование.html»
+                </a>
+            </div>
+            <div class="info-row" style="font-size: 0.85em; opacity: 0.85;">
+                Один раз скопируйте файл на рабочий стол каждого компьютера ученика. Ученик открывает его и ждёт: когда вы запустите тестирование, откроется форма входа. Ярлык ищет этот компьютер по адресам: {% for url in student_urls %}<code>{{ url }}</code>{% if not loop.last %}, {% endif %}{% endfor %}. Если имя или адрес компьютера изменятся, скачайте ярлык заново.
+            </div>
+            <div class="info-row">
                 <span class="label">Статус:</span>
                 <span class="status-badge status-active">🟢 Сервер запущен</span>
             </div>

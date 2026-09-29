@@ -18,6 +18,7 @@ from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_U
                     SECRET_KEY, TEACHER_ALLOWED_IPS)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
 from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
+from student_shortcut import local_addresses, student_urls
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -92,6 +93,9 @@ def local_date_filter(value):
 
 def get_local_ip():
     """Получить локальный IP-адрес"""
+    addresses = local_addresses()  # работает и в школьной сети без выхода в интернет
+    if addresses:
+        return addresses[0]
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
@@ -377,9 +381,25 @@ def index():
     return render_template('teacher/index.html',
                          local_ip=get_local_ip(),
                          port=PORT,
+                         student_urls=student_urls(PORT),
                          total_tasks=total_tasks,
                          task_counts=task_counts,
                          variants_count=variants_count)
+
+@app.route('/test/alive')
+def student_alive():
+    """Ярлык на компьютере ученика проверяет, что система запущена (с любого компьютера сети)."""
+    return 'ok', 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+@app.route('/shortcut/download')
+def student_shortcut_download():
+    """Файл «Тестирование.html» для рабочих столов учеников: ждёт запуска системы и сам открывает вход."""
+    import io
+    html = render_template('shortcut/wait.html', addresses=student_urls(PORT))
+    return send_file(io.BytesIO(html.encode('utf-8')), mimetype='text/html', as_attachment=True,
+                     download_name='Тестирование.html')
+
 
 # ==================== БАНК ЗАДАЧ ====================
 

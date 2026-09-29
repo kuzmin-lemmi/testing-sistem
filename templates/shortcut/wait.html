@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование ЕГЭ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Nunito', 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 50px 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            text-align: center;
+            max-width: 480px;
+        }
+        .icon { font-size: 5em; margin-bottom: 20px; opacity: 0.8; }
+        h1 { color: #1e293b; margin-bottom: 16px; }
+        p { color: #64748b; font-size: 1.1em; line-height: 1.6; }
+        #status { margin-top: 22px; font-size: 0.9em; color: #94a3b8; }
+        #help { display: none; margin-top: 16px; font-size: 0.85em; color: #94a3b8; }
+        #help code { display: block; margin-top: 4px; color: #64748b; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">⏳</div>
+        <h1>Тестирование ещё не началось</h1>
+        <p>Оставьте эту страницу открытой. Когда учитель запустит тестирование, откроется форма входа.</p>
+        <div id="status">Ищем компьютер учителя…</div>
+        <div id="help">Если это длится долго, сообщите учителю. Проверяемые адреса:<code id="addresses"></code></div>
+    </div>
+    <script>
+    'use strict';
+    // Адреса компьютера учителя подставляет система при создании ярлыка.
+    const ADDRESSES = {{ addresses|tojson }};
+    let attempts = 0;
+
+    async function reachable(address) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        try {
+            // no-cors: важно лишь то, что компьютер учителя ответил.
+            await fetch(address + '/test/alive', { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+            return true;
+        } catch (error) {
+            return false;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    // Проверяем все адреса одновременно: у компьютера учителя их может быть несколько (Wi-Fi, VPN, виртуальные сети),
+    // ждать по очереди недоступные было бы долго. Побеждает первый ответивший.
+    function firstReachable(addresses) {
+        return new Promise(resolve => {
+            let failed = 0;
+            addresses.forEach(address => reachable(address).then(ok => {
+                if (ok) resolve(address);
+                else if (++failed === addresses.length) resolve(null);
+            }));
+        });
+    }
+
+    async function loop() {
+        for (;;) {
+            const address = await firstReachable(ADDRESSES);
+            if (address) { location.replace(address + '/test'); return; }
+            attempts++;
+            document.getElementById('status').textContent = 'Компьютер учителя пока не отвечает. Проверяем каждые несколько секунд…';
+            if (attempts >= 6) {
+                document.getElementById('addresses').textContent = ADDRESSES.join('   ');
+                document.getElementById('help').style.display = 'block';
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+    }
+    loop();
+    </script>
+</body>
+</html>
