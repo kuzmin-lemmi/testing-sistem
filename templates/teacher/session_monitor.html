@@ -76,6 +76,17 @@
             </div>
         </div>
         {% endif %}
+
+        {% if session_variants %}
+        <div class="grade-criteria-info">
+            <span class="criteria-title">📚 Варианты в этой работе:</span>
+            <div class="criteria-badges">
+                {% for item in session_variants %}
+                <span class="criteria-badge variant-choice-badge">В{{ item.label }}: {{ item.name }} ({{ item.tasks_count }} задач)</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <div class="students-section">
@@ -98,7 +109,12 @@
                 <tbody>
                     {% for student in students %}
                     <tr>
-                        <td class="student-name">{{ student.last_name }} {{ student.first_name }}</td>
+                        <td class="student-name">
+                            {{ student.last_name }} {{ student.first_name }}
+                            {% if student.variant_label %}
+                            <span class="badge-variant">Вариант {{ student.variant_label }}</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if student.is_online %}
                             <span class="status-pill online">●</span>
@@ -183,6 +199,7 @@
 .criteria-badge.grade-4 { background: #dbeafe; color: #1e40af; }
 .criteria-badge.grade-3 { background: #fef3c7; color: #92400e; }
 .criteria-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+.criteria-badge.variant-choice-badge { background: #eef2ff; color: #3730a3; }
 
 .criteria-total {
     color: var(--text-muted);
@@ -333,6 +350,18 @@
     font-size: 12px;
     font-weight: 600;
     margin-left: 6px;
+}
+
+.badge-variant {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 3px 8px;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
 }
 </style>
 

@@ -120,6 +120,48 @@
             grid-template-columns: 1fr 1fr;
             gap: 16px;
         }
+
+        .variant-choice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .variant-choice {
+            cursor: pointer;
+        }
+
+        .variant-choice input {
+            display: none;
+        }
+
+        .variant-choice-box {
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 16px 12px;
+            text-align: center;
+            transition: 0.2s;
+        }
+
+        .variant-choice input:checked + .variant-choice-box {
+            border-color: #6366f1;
+            background: #eef2ff;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .variant-choice-number {
+            display: block;
+            font-size: 1.4em;
+            font-weight: 800;
+            color: #1e293b;
+        }
+
+        .variant-choice-hint {
+            display: block;
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -161,6 +203,22 @@
                     <input type="text" name="code" class="code-input" maxlength="6" required placeholder="XXXX"
                            autocomplete="section-{{ autocomplete_section }} one-time-code"
                            autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true">
+                </div>
+            {% endif %}
+            {% if multi_variant_mode %}
+                <div class="form-group">
+                    <label>Какой вариант вам назначил учитель?</label>
+                    <div class="variant-choice-grid">
+                        {% for item in session_variants %}
+                        <label class="variant-choice">
+                            <input type="radio" name="variant_choice" value="{{ item.label }}" {% if loop.first %}checked{% endif %} required>
+                            <div class="variant-choice-box">
+                                <span class="variant-choice-number">Вариант {{ item.label }}</span>
+                                <span class="variant-choice-hint">Выберите свой номер</span>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
                 </div>
             {% endif %}
             {% if app_mode %}

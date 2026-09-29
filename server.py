@@ -128,6 +128,33 @@ def _calc_remaining_seconds(student, test_session):
     remaining = max(0, time_limit * 60 + extra_seconds - effective_elapsed)
     return int(remaining)
 
+
+def _get_session_variant_options(session_id, include_task_counts=False):
+    variants = TestSession.get_variants(session_id)
+    for item in variants:
+        item['label'] = str(item['position'])
+        if include_task_counts:
+            item['tasks_count'] = len(Variant.get_tasks(item['variant_id']))
+    return variants
+
+
+def _get_session_display_name(session_data):
+    if not session_data:
+        return 'Без варианта'
+    if session_data.get('individual_mode'):
+        return 'Индивидуальные варианты'
+
+    session_variants = _get_session_variant_options(session_data['id'])
+    if session_variants:
+        labels = ', '.join(item['label'] for item in session_variants)
+        return f'Несколько вариантов ({labels})'
+
+    if session_data.get('variant_id'):
+        variant = Variant.get_by_id(session_data['variant_id'])
+        return variant['name'] if variant else 'Удалён'
+
+    return 'Без варианта'
+
 def generate_unique_filename(original_filename):
     """Генерирует уникальное имя файла"""
     ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
@@ -1472,9 +1499,8 @@ def sessions_list():
 
     sessions = TestSession.get_all()
     active_session = TestSession.get_active()
-    if active_session and active_session.get('variant_id'):
-        active_variant = Variant.get_by_id(active_session['variant_id'])
-        active_session['variant_name'] = active_variant['name'] if active_variant else 'Удалён'
+    if active_session:
+        active_session['variant_name'] = _get_session_display_name(active_session)
     
     # Добавляем информацию о студентах
     filtered_sessions = []
@@ -1482,11 +1508,7 @@ def sessions_list():
         students = TestSession.get_students(s['id'])
         s['students_count'] = len(students)
         s['finished_count'] = len([st for st in students if st['status'] == 'finished'])
-        if s['variant_id']:
-            variant = Variant.get_by_id(s['variant_id'])
-            s['variant_name'] = variant['name'] if variant else 'Удалён'
-        else:
-            s['variant_name'] = 'Индивидуальные варианты'
+        s['variant_name'] = _get_session_display_name(s)
 
         if status_filter in ('active', 'closed') and s['status'] != status_filter:
             continue
@@ -1611,6 +1633,32 @@ def session_new():
                 grade_3_min=grade_3_min,
                 total_tasks=total_tasks
             )
+        elif variant_mode == 'multi_choice':
+            variant_ids = [int(v) for v in request.form.getlist('variant_ids') if str(v).isdigit()]
+            if len(variant_ids) < 2:
+                flash('Выберите минимум два готовых варианта', 'error')
+                return redirect(url_for('session_new'))
+
+            task_counts = [len(Variant.get_tasks(variant_id)) for variant_id in variant_ids]
+            if len(set(task_counts)) > 1:
+                flash('Для режима выбора учениками все варианты должны содержать одинаковое количество задач', 'error')
+                return redirect(url_for('session_new'))
+
+            session_id = TestSession.create(
+                variant_id=None,
+                individual_mode=False,
+                time_limit=time_limit,
+                access_code=access_code,
+                show_answers=show_answers,
+                teacher_finish_only=teacher_finish_only,
+                calculator_enabled=calculator_enabled,
+                python_enabled=python_enabled,
+                grade_5_min=grade_5_min,
+                grade_4_min=grade_4_min,
+                grade_3_min=grade_3_min,
+                total_tasks=total_tasks
+            )
+            TestSession.set_variants(session_id, variant_ids)
         else:
             # Индивидуальные варианты
             individual_type = request.form.get('individual_type')
@@ -1667,7 +1715,7 @@ def session_new():
                          variants=variants,
                          task_counts=task_counts,
                          preselected_variant=preselected_variant,
-                         saved_criteria=saved_criteria)
+                          saved_criteria=saved_criteria)
 
 @app.route('/sessions/<int:session_id>/close', methods=['POST'])
 def session_close(session_id):
@@ -1719,6 +1767,7 @@ def session_monitor(session_id):
         return redirect(url_for('sessions_list'))
     
     students = TestSession.get_students(session_id)
+    session_variants = _get_session_variant_options(session_id, include_task_counts=True)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     online_count = 0
     for s in students:
@@ -1730,9 +1779,10 @@ def session_monitor(session_id):
         s['file_uploads_count'] = Answer.count_uploads_for_student(s['id'])
     
     return render_template('teacher/session_monitor.html',
-                         session=session,
-                         students=students,
-                         online_count=online_count)
+                          session=session,
+                          students=students,
+                          online_count=online_count,
+                          session_variants=session_variants)
 
 
 # ==================== ИНТЕРФЕЙС УЧЕНИКА ====================
@@ -1743,6 +1793,8 @@ def student_login():
     active_session = TestSession.get_active()
     if not active_session:
         return render_template('student/no_test.html')
+
+    session_variants = _get_session_variant_options(active_session['id'])
 
     from flask import session
     student_id = session.get('student_id')
@@ -1760,9 +1812,11 @@ def student_login():
     app_mode = request.args.get('app') == '1'
     autocomplete_section = secrets.token_hex(8)
     return render_template('student/login.html',
-                          need_code=need_code,
-                          app_mode=app_mode,
-                          autocomplete_section=autocomplete_section)
+                           need_code=need_code,
+                           app_mode=app_mode,
+                           autocomplete_section=autocomplete_section,
+                           multi_variant_mode=bool(session_variants),
+                           session_variants=session_variants)
 
 @app.route('/test/start', methods=['POST'])
 def student_start():
@@ -1840,11 +1894,26 @@ def student_start():
             task_ids = [t['id'] for t in selected]
         
         Variant.add_tasks(variant_id, task_ids)
+        variant_label = None
     else:
-        variant_id = active_session['variant_id']
+        session_variants = _get_session_variant_options(active_session['id'])
+        if session_variants:
+            chosen_position = request.form.get('variant_choice', type=int)
+            if not chosen_position:
+                flash('Выберите номер варианта', 'error')
+                return redirect(url_for('student_login'))
+            chosen_variant = TestSession.get_variant_by_position(active_session['id'], chosen_position)
+            if not chosen_variant:
+                flash('Выбран недоступный вариант', 'error')
+                return redirect(url_for('student_login'))
+            variant_id = chosen_variant['variant_id']
+            variant_label = str(chosen_variant['position'])
+        else:
+            variant_id = active_session['variant_id']
+            variant_label = None
     
     # Создаём запись ученика
-    student_id = Student.create(active_session['id'], first_name, last_name, variant_id)
+    student_id = Student.create(active_session['id'], first_name, last_name, variant_id, variant_label=variant_label)
     Student.touch(student_id)
     
     # Сохраняем в сессию
@@ -1900,7 +1969,8 @@ def student_test():
                           app_mode=bool(session.get('app_mode')),
                           paused=bool(test_session and test_session.get('paused')),
                           calculator_enabled=bool(test_session and test_session.get('calculator_enabled')),
-                          python_enabled=bool(test_session and test_session.get('python_enabled')))
+                          python_enabled=bool(test_session and test_session.get('python_enabled')),
+                          variant_label=student.get('variant_label'))
 
 @app.route('/test/save', methods=['POST'])
 def student_save_answer():
@@ -1986,6 +2056,7 @@ def student_run_python():
     import ast
     import json
     import subprocess
+    import sys
     import tempfile
     import shutil
     import textwrap
@@ -2008,10 +2079,21 @@ def student_run_python():
     if len(code) > 50000:
         return jsonify({'error': 'Код слишком большой (максимум 50 000 символов)'}), 400
 
-    # Жесткая валидация AST: опасные импорты/вызовы/атрибуты блокируются до запуска
+    # Разрешаем обычные модули стандартной библиотеки, но блокируем опасные корни.
+    blocked_import_roots = {
+        'asyncio', 'builtins', 'code', 'codecs', 'codeop', 'compileall',
+        'concurrent', 'ctypes', 'dbm', 'filecmp', 'fileinput', 'ftplib',
+        'glob', 'http', 'imaplib', 'importlib', 'inspect', 'io', 'mailbox',
+        'marshal', 'mmap', 'multiprocessing', 'os', 'pathlib', 'pickle',
+        'poplib', 'posix', 'pty', 'resource', 'runpy', 'selectors', 'shlex',
+        'shutil', 'signal', 'site', 'smtplib', 'socket', 'socketserver',
+        'ssl', 'subprocess', 'sys', 'tempfile', 'telnetlib', 'threading',
+        'urllib', 'webbrowser', 'xmlrpc', 'zipfile', 'zipimport'
+    }
+    stdlib_roots = set(getattr(sys, 'stdlib_module_names', set()))
     allowed_import_roots = {
-        'math', 'random', 'itertools', 'functools', 'collections', 'heapq',
-        'bisect', 'string', 're', 'statistics', 'fractions', 'decimal', 'datetime'
+        root for root in stdlib_roots
+        if root and not root.startswith('_') and root not in blocked_import_roots
     }
     blocked_call_names = {
         '__import__', 'eval', 'exec', 'compile', 'breakpoint', 'help'
@@ -2273,10 +2355,11 @@ def student_result():
                           correct_count=correct_count,
                           total=total,
                           grade=grade,
-                         show_answers=(
-                             True if (test_session and test_session.get('teacher_finish_only') and test_session['status'] == 'closed')
-                             else (test_session['show_answers'] if test_session else False)
-                         ))
+                          show_answers=(
+                              True if (test_session and test_session.get('teacher_finish_only') and test_session['status'] == 'closed')
+                              else (test_session['show_answers'] if test_session else False)
+                          ),
+                          variant_label=student.get('variant_label'))
 
 # ==================== РЕЗУЛЬТАТЫ ====================
 
@@ -2305,11 +2388,7 @@ def results_list():
 
     filtered_sessions = []
     for s in sessions:
-        if s['variant_id']:
-            variant = Variant.get_by_id(s['variant_id'])
-            s['variant_name'] = variant['name'] if variant else 'Удалён'
-        else:
-            s['variant_name'] = 'Индивидуальные варианты'
+        s['variant_name'] = _get_session_display_name(s)
 
         if cutoff:
             try:
@@ -2449,35 +2528,101 @@ def result_export(session_id):
         return redirect(url_for('results_list'))
     
     students = TestSession.get_students(session_id)
+    session_criteria = {
+        'grade_5_min': session.get('grade_5_min'),
+        'grade_4_min': session.get('grade_4_min'),
+        'grade_3_min': session.get('grade_3_min')
+    }
+
+    def _format_answer(task, answer):
+        if not answer:
+            return ''
+        if task.get('answer_kind') == 'file_upload':
+            return answer.get('upload_name') or 'Файл не загружен'
+
+        values = []
+        if answer.get('answer_text') not in (None, ''):
+            values.append(str(answer['answer_text']))
+        else:
+            if answer.get('answer_1') is not None:
+                values.append(str(answer['answer_1']))
+            if answer.get('answer_2') is not None:
+                values.append(str(answer['answer_2']))
+        return ', '.join(values)
+
+    def _format_status(task, answer):
+        if not answer:
+            return ''
+        if task.get('answer_kind') == 'file_upload' and answer.get('upload_name') and answer.get('is_correct') is None:
+            return '🟡 Не проверено'
+        return '🟢 Верно' if answer.get('is_correct') else '🔴 Неверно'
+
+    students_export = []
+    max_tasks = 0
+    for st in students:
+        tasks = Variant.get_tasks(st['variant_id'])
+        answers = Student.get_answers(st['id'])
+        answers_dict = {a['task_id']: a for a in answers}
+        correct = len([a for a in answers if a['is_correct']])
+        total = len(tasks)
+        grade = GradeCriteria.calculate_grade(correct, total, session_criteria)
+
+        task_cells = []
+        for task in tasks:
+            ans = answers_dict.get(task['id'])
+            task_cells.extend([
+                f"№{task['ege_number']}",
+                _format_answer(task, ans),
+                _format_status(task, ans),
+            ])
+
+        max_tasks = max(max_tasks, len(tasks))
+        students_export.append({
+            'student': st,
+            'correct': correct,
+            'total': total,
+            'grade': grade,
+            'task_cells': task_cells,
+        })
     
     # Создаём CSV
     output = StringIO()
     writer = csv.writer(output, delimiter=';')
     
     # Заголовок
-    writer.writerow(['Фамилия', 'Имя', 'Начало', 'Завершение', 'Правильных', 'Всего', 'Оценка'])
-    
-    for st in students:
-        answers = Student.get_answers(st['id'])
-        tasks = Variant.get_tasks(st['variant_id'])
-        correct = len([a for a in answers if a['is_correct']])
-        total = len(tasks)
-        grade = GradeCriteria.calculate_grade(correct, total)
-        
-        writer.writerow([
+    header = ['Фамилия', 'Имя', 'Вариант', 'Начало', 'Завершение', 'Правильных', 'Всего', 'Оценка']
+    for i in range(1, max_tasks + 1):
+        header.extend([
+            f'Задание {i} (№ ЕГЭ)',
+            f'Задание {i} (ответ)',
+            f'Задание {i} (статус)'
+        ])
+    writer.writerow(header)
+
+    for item in students_export:
+        st = item['student']
+        row = [
             st['last_name'],
             st['first_name'],
+            st.get('variant_label') or '',
             to_local_dt(st['started_at']) if st['started_at'] else '',
             to_local_dt(st['finished_at']) if st['finished_at'] else '',
-            correct,
-            total,
-            grade
+            item['correct'],
+            item['total'],
+            item['grade']
+        ]
+        row.extend(item['task_cells'])
+        missing_cells = (max_tasks * 3) - len(item['task_cells'])
+        if missing_cells > 0:
+            row.extend([''] * missing_cells)
+        writer.writerow([
+            *row
         ])
     
-    output.seek(0)
+    csv_text = '\ufeff' + output.getvalue()
     
     return Response(
-        output.getvalue(),
+        csv_text,
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename=results_{session_id}.csv'}
     )

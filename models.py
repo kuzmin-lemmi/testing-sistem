@@ -263,6 +263,22 @@ def migrate_db():
     if not _table_has_column(conn, 'answers', 'upload_uploaded_at'):
         cur.execute("ALTER TABLE answers ADD COLUMN upload_uploaded_at DATETIME")
 
+    # 13) students: visible variant label for multi-variant sessions
+    if not _table_has_column(conn, 'students', 'variant_label'):
+        cur.execute("ALTER TABLE students ADD COLUMN variant_label TEXT")
+
+    # 14) session_variants: list of ready variants available in a session
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS session_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            variant_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES test_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY (variant_id) REFERENCES variants(id) ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -362,11 +378,23 @@ def init_db():
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
             variant_id INTEGER NOT NULL,
+            variant_label TEXT,
             started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             finished_at DATETIME,
             status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress', 'finished')),
             FOREIGN KEY (session_id) REFERENCES test_sessions(id) ON DELETE CASCADE,
             FOREIGN KEY (variant_id) REFERENCES variants(id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            variant_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES test_sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY (variant_id) REFERENCES variants(id) ON DELETE CASCADE
         )
     ''')
     
@@ -715,6 +743,9 @@ class Variant:
                 cursor.execute('SELECT 1 FROM test_sessions WHERE variant_id = ? LIMIT 1', (variant_id,))
                 if cursor.fetchone():
                     return False
+                cursor.execute('SELECT 1 FROM session_variants WHERE variant_id = ? LIMIT 1', (variant_id,))
+                if cursor.fetchone():
+                    return False
                 cursor.execute('SELECT 1 FROM students WHERE variant_id = ? LIMIT 1', (variant_id,))
                 if cursor.fetchone():
                     return False
@@ -725,9 +756,22 @@ class Variant:
             # Cascade delete: remove all results and sessions linked to the variant
             cursor.execute('''
                 DELETE FROM answers
-                WHERE student_id IN (SELECT id FROM students WHERE variant_id = ?)
+                WHERE student_id IN (
+                    SELECT id FROM students WHERE variant_id = ?
+                    UNION
+                    SELECT st.id
+                    FROM students st
+                    JOIN session_variants sv ON sv.session_id = st.session_id
+                    WHERE sv.variant_id = ?
+                )
+            ''', (variant_id, variant_id))
+            cursor.execute('''
+                DELETE FROM students
+                WHERE session_id IN (SELECT session_id FROM session_variants WHERE variant_id = ?)
             ''', (variant_id,))
             cursor.execute('DELETE FROM students WHERE variant_id = ?', (variant_id,))
+            cursor.execute('DELETE FROM test_sessions WHERE id IN (SELECT session_id FROM session_variants WHERE variant_id = ?)', (variant_id,))
+            cursor.execute('DELETE FROM session_variants WHERE variant_id = ?', (variant_id,))
             cursor.execute('DELETE FROM test_sessions WHERE variant_id = ?', (variant_id,))
             cursor.execute('DELETE FROM variant_tasks WHERE variant_id = ?', (variant_id,))
             cursor.execute('DELETE FROM variants WHERE id = ?', (variant_id,))
@@ -864,6 +908,60 @@ class TestSession:
         session = cursor.fetchone()
         conn.close()
         return dict(session) if session else None
+
+    @staticmethod
+    def set_variants(session_id, variant_ids):
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM session_variants WHERE session_id = ?', (session_id,))
+            rows = [
+                (session_id, variant_id, position)
+                for position, variant_id in enumerate(variant_ids, 1)
+            ]
+            if rows:
+                cursor.executemany('''
+                    INSERT INTO session_variants (session_id, variant_id, position)
+                    VALUES (?, ?, ?)
+                ''', rows)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_variants(session_id):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT sv.session_id, sv.variant_id, sv.position, v.name, v.variant_type,
+                   v.variant_scope, v.class_id, v.created_at
+            FROM session_variants sv
+            JOIN variants v ON v.id = sv.variant_id
+            WHERE sv.session_id = ?
+            ORDER BY sv.position
+        ''', (session_id,))
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_variant_by_position(session_id, position):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT sv.session_id, sv.variant_id, sv.position, v.name, v.variant_type,
+                   v.variant_scope, v.class_id, v.created_at
+            FROM session_variants sv
+            JOIN variants v ON v.id = sv.variant_id
+            WHERE sv.session_id = ? AND sv.position = ?
+            LIMIT 1
+        ''', (session_id, position))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
     
     @staticmethod
     def get_active():
@@ -970,14 +1068,14 @@ class TestSession:
 
 class Student:
     @staticmethod
-    def create(session_id, first_name, last_name, variant_id):
+    def create(session_id, first_name, last_name, variant_id, variant_label=None):
         conn = get_db()
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO students (session_id, first_name, last_name, variant_id, status)
-                VALUES (?, ?, ?, ?, 'in_progress')
-            ''', (session_id, first_name, last_name, variant_id))
+                INSERT INTO students (session_id, first_name, last_name, variant_id, variant_label, status)
+                VALUES (?, ?, ?, ?, ?, 'in_progress')
+            ''', (session_id, first_name, last_name, variant_id, variant_label))
             student_id = cursor.lastrowid
             conn.commit()
             return student_id

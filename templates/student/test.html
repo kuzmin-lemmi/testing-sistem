@@ -31,7 +31,23 @@
             top: 0;
             z-index: 100;
         }
+        .student-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
         .student-name { font-weight: 700; font-size: 1.1em; }
+        .variant-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            font-weight: 800;
+            letter-spacing: 0.3px;
+        }
         .header-actions {
             display: flex;
             align-items: center;
@@ -875,7 +891,12 @@
 </head>
 <body>
     <header class="header">
-        <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>
+        <div class="student-meta">
+            <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>
+            {% if variant_label %}
+            <div class="variant-badge">Ваш вариант: {{ variant_label }}</div>
+            {% endif %}
+        </div>
         <div class="header-actions">
             {% if calculator_enabled %}
             <button type="button" class="calc-toggle" onclick="toggleCalculator()">🧮 Калькулятор</button>

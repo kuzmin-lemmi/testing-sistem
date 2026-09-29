@@ -34,6 +34,16 @@
                         </div>
                     </div>
                 </label>
+                <label class="mode-option">
+                    <input type="radio" name="variant_mode" value="multi_choice" onchange="updateMode()">
+                    <div class="mode-content">
+                        <div class="mode-icon">1️⃣</div>
+                        <div class="mode-info">
+                            <h3>Несколько готовых вариантов</h3>
+                            <p>Учитель выбирает несколько вариантов, ученик указывает свой номер при входе</p>
+                        </div>
+                    </div>
+                </label>
             </div>
         </div>
         
@@ -56,6 +66,32 @@
                 </label>
                 {% endfor %}
             </div>
+            {% else %}
+            <div class="no-variants">
+                <p>Нет сохранённых вариантов</p>
+                <a href="{{ url_for('variant_create') }}" class="btn btn-secondary">Создать вариант</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Настройки для нескольких готовых вариантов -->
+        <div class="step-card card" id="multiSettings" style="display: none;">
+            <h2>2️⃣ Выберите несколько вариантов</h2>
+            <p class="hint-text">Отметьте готовые варианты. Ученик увидит только номера: Вариант 1, Вариант 2, Вариант 3 и т.д.</p>
+            {% if variants %}
+            <div class="variants-select multi-variants-select">
+                {% for variant in variants %}
+                <label class="variant-option multi-variant-option">
+                    <input type="checkbox" name="variant_ids" value="{{ variant.id }}" data-tasks-count="{{ variant.tasks_count }}" onchange="syncTotalTasks()">
+                    <div class="variant-content">
+                        <span class="variant-type">📝</span>
+                        <span class="variant-name">{{ variant.name }}</span>
+                        <span class="variant-count">{{ variant.tasks_count }} задач</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            <p class="hint-text" style="margin-top: 12px;">Рекомендуется выбирать варианты с одинаковым количеством задач.</p>
             {% else %}
             <div class="no-variants">
                 <p>Нет сохранённых вариантов</p>
@@ -310,6 +346,23 @@
     background: var(--primary-bg);
 }
 
+.multi-variant-option input {
+    display: none;
+}
+
+.multi-variant-option .variant-type {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: var(--primary);
+    font-size: 14px;
+    font-weight: 800;
+}
+
 .variant-type {
     font-size: 1.3em;
 }
@@ -440,6 +493,7 @@ function updateMode() {
     const mode = document.querySelector('input[name="variant_mode"]:checked').value;
     document.getElementById('singleSettings').style.display = mode === 'single' ? 'block' : 'none';
     document.getElementById('individualSettings').style.display = mode === 'individual' ? 'block' : 'none';
+    document.getElementById('multiSettings').style.display = mode === 'multi_choice' ? 'block' : 'none';
     syncTotalTasks();
 }
 
@@ -454,6 +508,10 @@ document.querySelectorAll('input[name="individual_type"]').forEach(input => {
 });
 
 document.querySelectorAll('input[name="variant_id"]').forEach(input => {
+    input.addEventListener('change', syncTotalTasks);
+});
+
+document.querySelectorAll('input[name="variant_ids"]').forEach(input => {
     input.addEventListener('change', syncTotalTasks);
 });
 
@@ -482,6 +540,14 @@ function syncTotalTasks() {
     const mode = modeInput.value;
     if (mode === 'single') {
         const selected = document.querySelector('input[name="variant_id"]:checked');
+        if (selected && selected.dataset.tasksCount) {
+            totalInput.value = selected.dataset.tasksCount;
+            updateGradeHints();
+        }
+        return;
+    }
+    if (mode === 'multi_choice') {
+        const selected = document.querySelector('input[name="variant_ids"]:checked');
         if (selected && selected.dataset.tasksCount) {
             totalInput.value = selected.dataset.tasksCount;
             updateGradeHints();

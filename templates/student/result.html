@@ -27,6 +27,16 @@
         .congrats { font-size: 4em; margin-bottom: 16px; }
         h1 { color: #1e293b; margin-bottom: 8px; }
         .student-name { color: #64748b; margin-bottom: 32px; font-size: 1.1em; }
+        .variant-pill {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 0.9em;
+            font-weight: 800;
+        }
         
         .score-circle {
             width: 180px;
@@ -107,7 +117,10 @@
         <div class="result-card">
             <div class="congrats">🎉</div>
             <h1>Тест завершён!</h1>
-            <p class="student-name">{{ student.last_name }} {{ student.first_name }}</p>
+            <p class="student-name">
+                {{ student.last_name }} {{ student.first_name }}
+                {% if variant_label %}<span class="variant-pill">Вариант {{ variant_label }}</span>{% endif %}
+            </p>
             
             <div class="score-circle">
                 <span class="score-number">{{ correct_count }}</span>

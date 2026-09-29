@@ -22,6 +22,12 @@
                 <span class="grade-label">Оценка</span>
             </div>
             <div class="time-info">
+                {% if student.variant_label %}
+                <div class="time-row">
+                    <span class="time-label">Вариант:</span>
+                    <span class="time-value"><span class="variant-pill">{{ student.variant_label }}</span></span>
+                </div>
+                {% endif %}
                 <div class="time-row">
                     <span class="time-label">Начал:</span>
                     <span class="time-value">{{ student.started_at|local_dt if student.started_at else '—' }}</span>
@@ -274,6 +280,19 @@ async function markAnswer(studentId, taskId, isCorrect) {
 .status-pending {
     color: #92400e;
     font-weight: 600;
+}
+
+.variant-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-weight: 800;
 }
 
 .mark-buttons {
