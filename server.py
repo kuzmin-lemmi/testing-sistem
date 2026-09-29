@@ -342,6 +342,12 @@ def _check_csrf():
         return False
     return secrets.compare_digest(expected, actual)
 
+def _clear_student_session():
+    """Забывает ученика в этом браузере, но не трогает CSRF-токен учителя (иначе при проверке
+    «учитель и ученик в одном браузере» кнопки учителя вдруг отвечают «Недействительный CSRF-токен»)."""
+    for key in ('student_id', 'start_time', 'time_limit', 'app_mode'):
+        session.pop(key, None)
+
 @app.context_processor
 def inject_csrf_token():
     return {'csrf_token': _get_csrf_token}
@@ -1897,7 +1903,7 @@ def student_login():
                 return redirect(url_for('student_test'))
             if test_session and test_session['status'] == 'closed':
                 return redirect(url_for('student_result'))
-        session.clear()
+        _clear_student_session()
     
     need_code = active_session['access_code'] is not None
     app_mode = request.args.get('app') == '1'
@@ -2027,7 +2033,7 @@ def student_test():
     
     student = Student.get_by_id(student_id)
     if not student or student['status'] == 'finished':
-        session.clear()
+        _clear_student_session()
         return redirect(url_for('student_login'))
 
     test_session = TestSession.get_by_id(student['session_id'])
@@ -2406,7 +2412,7 @@ def student_result():
     
     student = Student.get_by_id(student_id)
     if not student:
-        flask_session.clear()
+        _clear_student_session()
         return redirect(url_for('student_login'))
 
     test_session = TestSession.get_by_id(student['session_id'])
@@ -2436,7 +2442,7 @@ def student_result():
     grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
     
     # Очищаем сессию
-    flask_session.clear()
+    _clear_student_session()
     
     return render_template('student/result.html',
                           student=student,

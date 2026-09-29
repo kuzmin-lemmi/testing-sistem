@@ -311,5 +311,31 @@ class ImportTests(unittest.TestCase):
         self.assertNotIn('№1', html)  # у заданий из общего банка нет номера ЕГЭ
 
 
+class SharedBrowserTests(unittest.TestCase):
+    """Учитель и ученик в одном браузере (так проверяют дома): вход ученика не должен ломать кнопки учителя."""
+
+    def test_student_pages_do_not_reset_teacher_csrf_token(self):
+        client = server.app.test_client()
+        client.get('/variants')
+        with client.session_transaction() as session:
+            token = session['_csrf_token']
+        client.post('/variants/import-localshot', content_type='multipart/form-data',
+                    data={'csrf_token': token, 'file': (io.BytesIO(make_variant_file(
+                        [{'id': 'd1d1d1000001', 'answers': ['1']}], name='Один браузер')), 'v.variant')})
+        variant = next(v for v in Variant.get_all() if v['name'] == 'Один браузер')
+        session_id = TestSession.create(variant['id'], 0, 45, None, 1, 0, 0, 0)
+
+        self.assertEqual(client.post('/test/start', data={'first_name': 'Анна', 'last_name': 'Петрова'}).status_code, 302)
+        client.post('/test/finish', json={})
+        client.get('/test/result')      # результат ученика раньше сбрасывал весь сеанс
+        client.get('/test')             # и страница входа тоже
+        with client.session_transaction() as session:
+            self.assertEqual(session.get('_csrf_token'), token)
+            self.assertNotIn('student_id', session)
+
+        response = client.post(f'/sessions/{session_id}/close', data={'csrf_token': token})
+        self.assertEqual(response.status_code, 302)  # 400 «Недействительный CSRF-токен» было раньше
+
+
 if __name__ == '__main__':
     unittest.main()
