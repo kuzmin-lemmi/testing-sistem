@@ -11,12 +11,13 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 
 from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR,
-                    MAX_IMAGE_SIZE, MAX_ATTACHMENT_SIZE, MAX_IMPORT_ZIP_SIZE,
+                    MAX_IMAGE_SIZE, MAX_ATTACHMENT_SIZE, MAX_IMPORT_ZIP_SIZE, MAX_LOCALSHOT_FILE_SIZE,
                     MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
                     SECRET_KEY, TEACHER_ALLOWED_IPS)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
+from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -219,6 +220,8 @@ def _validate_upload(file_obj, max_size, allowed_extensions, kind):
         return False, 'Файл не является ZIP'
     if kind == 'xlsx' and not _validate_zip(file_obj):
         return False, 'Файл не является XLSX'
+    if kind == 'pdf' and _peek_bytes(file_obj, 4) != b'%PDF':
+        return False, 'Файл не является PDF'
     if kind in ('txt', 'csv') and not _validate_text(file_obj):
         return False, 'Файл не является текстовым'
 
@@ -226,8 +229,10 @@ def _validate_upload(file_obj, max_size, allowed_extensions, kind):
 
 def _validate_attachment_file(file_obj):
     ext = file_obj.filename.rsplit('.', 1)[1].lower() if file_obj and file_obj.filename and '.' in file_obj.filename else ''
-    if ext in ('xlsx', 'ods'):
+    if ext in ('xlsx', 'ods', 'odt', 'docx', 'zip'):
         kind = 'xlsx'
+    elif ext == 'pdf':
+        kind = 'pdf'
     elif ext == 'csv':
         kind = 'csv'
     elif ext == 'xls':
@@ -937,7 +942,8 @@ def serve_image(filename):
 @app.route('/attachments/<filename>')
 def serve_attachment(filename):
     """Отдача прикреплённых файлов"""
-    return send_from_directory(ATTACHMENTS_DIR, filename, as_attachment=True)
+    return send_from_directory(ATTACHMENTS_DIR, filename, as_attachment=True,
+                               download_name=Task.get_attachment_name(filename) or filename)
 
 
 # ==================== ЗАГРУЗКА ФАЙЛОВ УЧЕНИКОВ ====================
@@ -1487,6 +1493,91 @@ def variant_upload():
     
     flash(f'Вариант "{name}" создан! Добавлено задач: {len(task_ids)}', 'success')
     return redirect(url_for('variant_view', variant_id=variant_id))
+
+
+def _unique_variant_name(name):
+    """«Урок 29.09» → «Урок 29.09 (2)», если такой вариант уже есть."""
+    taken = {(v['name'] or '').casefold() for v in Variant.get_all()}
+    if name.casefold() not in taken:
+        return name
+    number = 2
+    while f'{name} ({number})'.casefold() in taken:
+        number += 1
+    return f'{name} ({number})'
+
+
+@app.route('/variants/import-localshot', methods=['POST'])
+def variant_import_localshot():
+    """Загрузка файла .variant, собранного в LocalShot. Всё или ничего: при любой ошибке ничего не создаётся."""
+    file = request.files.get('file')
+    if not file or not file.filename:
+        flash('Выберите файл варианта (.variant)', 'error')
+        return redirect(url_for('variants_list'))
+    valid, error = _validate_upload(file, MAX_LOCALSHOT_FILE_SIZE, {'variant', 'zip'}, None)
+    if not valid:
+        flash(f'Не удалось загрузить вариант: {error}. Нужен файл .variant, собранный в LocalShot.', 'error')
+        return redirect(url_for('variants_list'))
+    try:
+        parsed = parse_variant_file(file.stream, fallback_name=os.path.splitext(file.filename)[0])
+    except VariantFileError as error:
+        flash(str(error), 'error')
+        return redirect(url_for('variants_list'))
+    except Exception:
+        app.logger.exception('Не удалось прочитать файл варианта')
+        flash('Не удалось прочитать файл: он повреждён или это не вариант LocalShot.', 'error')
+        return redirect(url_for('variants_list'))
+
+    name = _unique_variant_name(parsed.name)
+    class_id = ClassGroup.get_default_id()  # «Общий банк»
+    saved_files, task_ids, variant_id = [], [], None
+    try:
+        variant_id = Variant.create(name, 'uploaded')
+        for item in parsed.tasks:
+            image_name = f'{uuid.uuid4().hex}.png'
+            with open(os.path.join(IMAGES_DIR, image_name), 'wb') as stream:
+                saved_files.append(stream.name)
+                stream.write(item.image)
+
+            attachment_stored = None
+            if item.attachment is not None:
+                extension = item.attachment_name.rsplit('.', 1)[-1].lower()
+                attachment_stored = f'{uuid.uuid4().hex}.{extension}'
+                with open(os.path.join(ATTACHMENTS_DIR, attachment_stored), 'wb') as stream:
+                    saved_files.append(stream.name)
+                    stream.write(item.attachment)
+
+            if item.mode == MODE_MULTILINE:
+                # Ответ из нескольких строк: ученик видит большое поле, сравнение построчно
+                answer_count, answer_1, answer_2, answer_text = 0, None, None, item.answers[0]
+            else:
+                answer_count = len(item.answers)
+                answer_1, answer_2, answer_text = _pack_answers_for_task(item.answers)
+            task_ids.append(Task.create(
+                ege_number=1,  # в LocalShot нет номера ЕГЭ: задания живут в «Общем банке»
+                image_path=image_name,
+                answer_count=answer_count, answer_1=answer_1, answer_2=answer_2, answer_text=answer_text,
+                attachment_path=attachment_stored, attachment_name=item.attachment_name,
+                answer_kind='classic', task_scope='class', class_id=class_id))
+        Variant.add_tasks(variant_id, task_ids)
+    except Exception:
+        app.logger.exception('Не удалось загрузить вариант из LocalShot')
+        for task_id in task_ids:
+            Task.delete(task_id)
+        if variant_id is not None:
+            Variant.delete(variant_id)
+        for path in saved_files:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        flash('Не удалось загрузить вариант: ошибка записи. Ничего не создано, попробуйте ещё раз.', 'error')
+        return redirect(url_for('variants_list'))
+
+    message = f'Вариант «{name}» загружен из LocalShot. Заданий: {len(task_ids)}.'
+    if name != parsed.name:
+        message += f' Такой вариант уже был, поэтому этот назван «{name}».'
+    flash(message, 'success')
+    return redirect(url_for('variants_list', variant_id=variant_id))
 
 # ==================== ТЕСТИРОВАНИЯ ====================
 
@@ -2571,7 +2662,7 @@ def result_export(session_id):
         for task in tasks:
             ans = answers_dict.get(task['id'])
             task_cells.extend([
-                f"№{task['ege_number']}",
+                f"№{task['ege_number']}" if task.get('task_scope', 'ege') == 'ege' else '',
                 _format_answer(task, ans),
                 _format_status(task, ans),
             ])

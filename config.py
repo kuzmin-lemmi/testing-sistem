@@ -6,7 +6,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Пути к данным
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = os.environ.get('EGE_DATA_DIR') or os.path.join(BASE_DIR, 'data')  # EGE_DATA_DIR — для автоматических тестов
 DATABASE_PATH = os.path.join(DATA_DIR, 'database.db')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 ATTACHMENTS_DIR = os.path.join(DATA_DIR, 'attachments')
@@ -32,7 +32,12 @@ MAX_IMPORT_ZIP_SIZE = 50 * 1024 * 1024  # 50 МБ
 MAX_STUDENT_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 МБ
 ALLOWED_STUDENT_UPLOAD_EXTENSIONS = {'ods', 'odt'}
 ALLOWED_IMAGE_EXTENSIONS = {'png'}
-ALLOWED_ATTACHMENT_EXTENSIONS = {'txt', 'xlsx', 'xls', 'ods', 'csv'}
+ALLOWED_ATTACHMENT_EXTENSIONS = {'txt', 'xlsx', 'xls', 'ods', 'csv', 'odt', 'docx', 'pdf', 'py', 'zip'}
+
+# Загрузка варианта из LocalShot (.variant): скриншот всего экрана бывает больше 5 МБ
+MAX_LOCALSHOT_FILE_SIZE = 200 * 1024 * 1024
+MAX_LOCALSHOT_IMAGE_SIZE = 30 * 1024 * 1024
+MAX_LOCALSHOT_TASKS = 200
 
 # Количество ответов по умолчанию для номеров ЕГЭ
 DEFAULT_ANSWER_COUNT = {

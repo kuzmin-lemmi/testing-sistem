@@ -1048,7 +1048,7 @@
             <div class="task-card" id="task-{{ loop.index0 }}" data-task-id="{{ task.id }}" style="{% if loop.index0 != current_task %}display:none{% endif %}">
                 <div class="task-header">
                     <span class="task-number">Задание {{ loop.index }} из {{ tasks|length }}</span>
-                    <span style="color: var(--muted);">№{{ task.ege_number }} ЕГЭ</span>
+                    <span style="color: var(--muted);">{% if task.task_scope == 'ege' %}№{{ task.ege_number }} ЕГЭ{% endif %}</span>
                 </div>
                 
                 <div class="task-image">

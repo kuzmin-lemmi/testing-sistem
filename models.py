@@ -478,6 +478,16 @@ class Task:
         return dict(task) if task else None
     
     @staticmethod
+    def get_attachment_name(attachment_path):
+        """Настоящее имя файла к заданию (на диске он хранится под случайным именем)."""
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT attachment_name FROM tasks WHERE attachment_path = ? LIMIT 1', (attachment_path,))
+        row = cursor.fetchone()
+        conn.close()
+        return row['attachment_name'] if row else None
+
+    @staticmethod
     def get_by_ege_number(ege_number):
         conn = get_db()
         cursor = conn.cursor()

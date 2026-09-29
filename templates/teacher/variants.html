@@ -6,7 +6,20 @@
 <div class="variants-page">
     <div class="page-header">
         <h1>📋 Варианты</h1>
-        <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-primary">➕ Создать вариант</a>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" id="importLocalshotBtn"
+                    title="Файл .variant, собранный в программе LocalShot">📥 Загрузить из LocalShot</button>
+            <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-primary">➕ Создать вариант</a>
+        </div>
+    </div>
+
+    <form action="{{ url_for('variant_import_localshot') }}" method="POST" enctype="multipart/form-data" id="importLocalshotForm" style="display:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" id="importLocalshotFile" accept=".variant,.zip">
+    </form>
+    <div id="importDropHint" style="display:none; position:fixed; inset:0; z-index:50; background:rgba(79,70,229,.15);
+         border:4px dashed var(--primary); align-items:center; justify-content:center; font-size:26px; font-weight:700; pointer-events:none;">
+        Отпустите файл варианта, чтобы загрузить
     </div>
 
     <div class="mode-tabs" style="display:flex; gap:10px; margin-bottom:12px;">
@@ -86,8 +99,8 @@
                         {% for task in selected_tasks %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>№{{ task.ege_number }}</td>
-                            <td>{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</td>
+                            <td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>
+                            <td>{% if task.answer_count == 0 %}{{ (task.answer_text or 'проверяется вручную')|truncate(40) }}{% else %}{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% elif task.answer_count > 2 %}, …{% endif %}{% endif %}</td>
                             <td><a href="{{ url_for('task_view', task_id=task.id) }}">Открыть задачу →</a></td>
                         </tr>
                         {% endfor %}
@@ -130,6 +143,45 @@
   .tree-list { max-height: 220px; }
 }
 </style>
+
+<script>
+(function () {
+    const form = document.getElementById('importLocalshotForm');
+    const input = document.getElementById('importLocalshotFile');
+    const hint = document.getElementById('importDropHint');
+    let busy = false;
+
+    function submitWith(file) {
+        if (busy || !file) return;
+        if (!/\.(variant|zip)$/i.test(file.name)) {
+            alert('Нужен файл варианта LocalShot (.variant).');
+            return;
+        }
+        busy = true;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+        form.submit();
+    }
+
+    document.getElementById('importLocalshotBtn').addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { if (input.files.length) { busy = true; form.submit(); } });
+
+    let depth = 0;
+    const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    window.addEventListener('dragenter', e => { if (hasFiles(e)) { depth++; hint.style.display = 'flex'; } });
+    window.addEventListener('dragleave', e => { if (hasFiles(e) && --depth <= 0) { depth = 0; hint.style.display = 'none'; } });
+    window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+    window.addEventListener('drop', e => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        depth = 0;
+        hint.style.display = 'none';
+        submitWith(e.dataTransfer.files[0]);
+    });
+})();
+</script>
+
 
 <script>
 const checkAllVariants = document.getElementById('checkAllVariants');

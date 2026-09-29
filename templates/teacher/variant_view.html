@@ -41,7 +41,7 @@
                 </div>
                 <div class="task-details">
                     <div class="task-header">
-                        <span class="task-ege">№{{ task.ege_number }}</span>
+                        <span class="task-ege">{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}Общий банк{% endif %}</span>
                         <span class="task-id">#{{ task.id }}</span>
                     </div>
                     <div class="task-answer">

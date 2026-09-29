@@ -149,7 +149,7 @@
                     {% for task in tasks %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>№{{ task.ege_number }}</td>
+                        <td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>
                         <td>
                             {% if task.answer_kind == 'file_upload' %}
                                 {% if answers_dict.get(task.id) and answers_dict[task.id].upload_name %}
