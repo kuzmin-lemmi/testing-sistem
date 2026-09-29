@@ -18,6 +18,10 @@ HOST = '0.0.0.0'  # Доступ из локальной сети
 PORT = 8080
 SECRET_KEY = os.environ.get('EGE_SECRET_KEY', 'ege-local-secret-change-me')
 
+# Вход учеников по коду доступа: в интерфейсе скрыт, сама возможность осталась.
+# Чтобы снова показать галочку «Требовать код для входа» при запуске тестирования, задайте EGE_ACCESS_CODE=1.
+SHOW_ACCESS_CODE_OPTION = os.environ.get('EGE_ACCESS_CODE', '') == '1'
+
 # IP-адреса, которым разрешён доступ к панели учителя
 # По умолчанию: только текущий компьютер (localhost)
 _teacher_ips_raw = os.environ.get('TEACHER_ALLOWED_IPS', '127.0.0.1,::1')

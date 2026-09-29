@@ -15,7 +15,7 @@ from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_U
                     MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
-                    SECRET_KEY, TEACHER_ALLOWED_IPS)
+                    SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
 from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
 from student_shortcut import local_addresses, student_urls
@@ -390,6 +390,13 @@ def index():
 def student_alive():
     """Ярлык на компьютере ученика проверяет, что система запущена (с любого компьютера сети)."""
     return 'ok', 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+@app.route('/test/state')
+def student_state():
+    """Есть ли запущенное тестирование: страницы ученика следят за этим и обновляются сами."""
+    active = TestSession.get_active()
+    return jsonify({'active': bool(active), 'session_id': active['id'] if active else None})
 
 
 @app.route('/shortcut/download')
@@ -1832,6 +1839,7 @@ def session_new():
                          variants=variants,
                          task_counts=task_counts,
                          preselected_variant=preselected_variant,
+                          show_access_code_option=SHOW_ACCESS_CODE_OPTION,
                           saved_criteria=saved_criteria)
 
 @app.route('/sessions/<int:session_id>/close', methods=['POST'])
@@ -1930,6 +1938,7 @@ def student_login():
     autocomplete_section = secrets.token_hex(8)
     return render_template('student/login.html',
                            need_code=need_code,
+                           active_session_id=active_session['id'],
                            app_mode=app_mode,
                            autocomplete_section=autocomplete_section,
                            multi_variant_mode=bool(session_variants),

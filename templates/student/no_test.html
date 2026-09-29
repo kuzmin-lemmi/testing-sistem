@@ -29,15 +29,12 @@
         p { color: #64748b; font-size: 1.1em; line-height: 1.6; }
     </style>
 </head>
-<body>
+<body data-watch="none">
     <div class="card">
         <div class="icon">⏳</div>
         <h1>Тестирование не запущено</h1>
-        <p>Дождитесь, пока учитель запустит тестирование, и обновите страницу</p>
+        <p>Ничего нажимать не нужно: как только учитель запустит тестирование, откроется форма входа</p>
     </div>
-    <script>
-        // Автообновление каждые 5 секунд
-        setTimeout(function() { location.reload(); }, 5000);
-    </script>
+    <script src="{{ url_for('static', filename='js/student_watch.js') }}"></script>
 </body>
 </html>

@@ -164,7 +164,7 @@
         }
     </style>
 </head>
-<body>
+<body data-watch="login" data-watch-session="{{ active_session_id }}">
     <div class="login-card">
         <div class="logo">📚</div>
         <h1>Тестирование ЕГЭ</h1>
@@ -227,6 +227,7 @@
             <button type="submit" class="btn">Начать тест →</button>
         </form>
     </div>
+    <script src="{{ url_for('static', filename='js/student_watch.js') }}"></script>
     <script>
         (function() {
             const form = document.getElementById('studentLoginForm');

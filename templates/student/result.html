@@ -112,7 +112,7 @@
         }
     </style>
 </head>
-<body>
+<body data-watch="result" data-watch-session="{{ student.session_id }}">
     <div class="container">
         <div class="result-card">
             <div class="congrats">🎉</div>
@@ -184,6 +184,7 @@
         </div>
         {% endif %}
     </div>
+    <script src="{{ url_for('static', filename='js/student_watch.js') }}"></script>
     <script>
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
