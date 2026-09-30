@@ -4,6 +4,7 @@
 """
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory, send_file, flash, session
 import os
+import re
 import uuid
 import socket
 import secrets
@@ -15,9 +16,12 @@ from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_U
                     MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
-                    SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION, SHOW_EGE_BANKS)
+                    SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION, SHOW_EGE_BANKS, BACKUPS_DIR)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
 from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
+from models import get_setting, set_setting, recheck_task_answers, backup_database, list_backups, variant_usage_counts, remove_task_from_variant
+import results_logic
+from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
 from student_shortcut import local_addresses, student_urls
 
 app = Flask(__name__)
@@ -159,6 +163,12 @@ def _get_session_display_name(session_data):
         return variant['name'] if variant else 'Удалён'
 
     return 'Без варианта'
+
+def _session_title(session_data):
+    """«30.09 12:56 — Урок 29.09»: одинаковые варианты различаются датой."""
+    return f"{to_local_dt(session_data.get('created_at'))[8:10]}.{to_local_dt(session_data.get('created_at'))[5:7]} " \
+           f"{to_local_dt(session_data.get('created_at'))[11:16]} — {_get_session_display_name(session_data)}"
+
 
 def generate_unique_filename(original_filename):
     """Генерирует уникальное имя файла"""
@@ -352,9 +362,33 @@ def _clear_student_session():
     for key in ('student_id', 'start_time', 'time_limit', 'app_mode'):
         session.pop(key, None)
 
+DEFAULT_GRADE_PERCENTS = (85, 65, 45)  # «5», «4», «3» — от доли верных ответов
+
+
+def show_ege_banks():
+    """Банки заданий по номерам ЕГЭ: config/EGE_BANKS=1 или переключатель в «Настройках»."""
+    return bool(SHOW_EGE_BANKS) or get_setting('show_ege_banks') == '1'
+
+
+def show_access_code_option():
+    return bool(SHOW_ACCESS_CODE_OPTION) or get_setting('show_access_code') == '1'
+
+
+def grade_percents():
+    try:
+        values = tuple(int(get_setting(f'grade_{g}_percent', d)) for g, d in zip((5, 4, 3), DEFAULT_GRADE_PERCENTS))
+        if all(1 <= v <= 100 for v in values):
+            return values
+    except (TypeError, ValueError):
+        pass
+    return DEFAULT_GRADE_PERCENTS
+
+
 @app.context_processor
 def inject_csrf_token():
-    return {'csrf_token': _get_csrf_token, 'show_ege_banks': SHOW_EGE_BANKS}
+    return {'csrf_token': _get_csrf_token, 'show_ege_banks': show_ege_banks(),
+            'format_expected': format_expected, 'format_given': format_given, 'expected_answers': expected_answers,
+            'plural': plural, 'tasks_word': tasks_word}
 
 @app.before_request
 def protect_teacher_routes():
@@ -1069,7 +1103,7 @@ def teacher_download_answer_file(student_id, task_id):
 
 @app.route('/teacher/answers/mark', methods=['POST'])
 def teacher_mark_answer():
-    """Учитель вручную ставит ✓ или ✗ на file_upload задаче."""
+    """Учитель вручную ставит ✓ или ✗ на любом задании (например, ответ записан в другой форме)."""
     data = request.get_json(silent=True) or {}
     student_id = data.get('student_id')
     task_id = data.get('task_id')
@@ -1102,6 +1136,11 @@ def variants_list():
     scope = request.args.get('scope', 'all')
     selected_variant_id = request.args.get('variant_id', type=int)
     variants = Variant.get_all(None if scope == 'all' else scope)
+    if not show_ege_banks():
+        variants = [v for v in variants if not (v['name'] or '').startswith('Индивидуальный_')]
+    usage = variant_usage_counts()
+    for v in variants:
+        v['used_count'] = usage.get(v['id'], 0)
     classes_by_id = {c['id']: c for c in ClassGroup.get_all()}
     # Добавляем количество задач в каждом варианте
     for v in variants:
@@ -1260,14 +1299,76 @@ def variant_create():
 
 @app.route('/variants/<int:variant_id>')
 def variant_view(variant_id):
-    """Просмотр варианта"""
+    """Вариант: задания с картинками, правка ответов, порядок, переименование."""
     variant = Variant.get_by_id(variant_id)
     if not variant:
         flash('Вариант не найден', 'error')
         return redirect(url_for('variants_list'))
-
     tasks = Variant.get_tasks(variant_id)
-    return render_template('teacher/variant_view.html', variant=variant, tasks=tasks)
+    return render_template('teacher/variant_view.html', variant=variant, tasks=tasks,
+                           used_count=variant_usage_counts().get(variant_id, 0))
+
+
+def _variant_task_or_404(variant_id, task_id):
+    if task_id not in {t['id'] for t in Variant.get_tasks(variant_id)}:
+        flash('Задание не найдено в этом варианте', 'error')
+        return None
+    return Task.get_by_id(task_id)
+
+
+@app.route('/variants/<int:variant_id>/rename', methods=['POST'])
+def variant_rename(variant_id):
+    name = ' '.join((request.form.get('name') or '').split())[:80]
+    if not name:
+        flash('Название не может быть пустым', 'error')
+    elif Variant.get_by_id(variant_id):
+        Variant.update(variant_id, name=name)
+        flash(f'Вариант переименован: «{name}»', 'success')
+    return redirect(request.referrer or url_for('variant_view', variant_id=variant_id))
+
+
+@app.route('/variants/<int:variant_id>/tasks/<int:task_id>/answer', methods=['POST'])
+def variant_task_answer(variant_id, task_id):
+    """Исправить правильный ответ; уже сохранённые ответы учеников перепроверяются."""
+    task = _variant_task_or_404(variant_id, task_id)
+    if task is None or task.get('answer_kind') == 'file_upload':
+        return redirect(url_for('variant_view', variant_id=variant_id))
+    if int(task.get('answer_count') or 0) == 0:
+        text = (request.form.get('answer_text') or '').strip()
+        if not text:
+            flash('Ответ не может быть пустым', 'error')
+            return redirect(url_for('variant_view', variant_id=variant_id))
+        Task.update(task_id, answer_text=text)
+    else:
+        values = [v.strip() for v in request.form.getlist('answer')][:int(task['answer_count'])]
+        if len(values) != int(task['answer_count']) or any(not v for v in values):
+            flash('Заполните все поля ответа', 'error')
+            return redirect(url_for('variant_view', variant_id=variant_id))
+        answer_1, answer_2, answer_text = _pack_answers_for_task(values)
+        Task.update(task_id, answer_1=answer_1, answer_2=answer_2, answer_text=answer_text)
+    rechecked = recheck_task_answers(task_id)
+    flash('Ответ исправлен' + (f'; перепроверено ответов учеников: {rechecked}' if rechecked else ''), 'success')
+    return redirect(url_for('variant_view', variant_id=variant_id) + f'#task-{task_id}')
+
+
+@app.route('/variants/<int:variant_id>/tasks/<int:task_id>/remove', methods=['POST'])
+def variant_task_remove(variant_id, task_id):
+    if _variant_task_or_404(variant_id, task_id) is not None:
+        remove_task_from_variant(variant_id, task_id)
+        flash('Задание убрано из варианта', 'success')
+    return redirect(url_for('variant_view', variant_id=variant_id))
+
+
+@app.route('/variants/<int:variant_id>/tasks/<int:task_id>/move', methods=['POST'])
+def variant_task_move(variant_id, task_id):
+    ids = [t['id'] for t in Variant.get_tasks(variant_id)]
+    if task_id in ids:
+        index = ids.index(task_id)
+        target = index + (-1 if request.form.get('direction') == 'up' else 1)
+        if 0 <= target < len(ids):
+            ids[index], ids[target] = ids[target], ids[index]
+            Variant.replace_tasks(variant_id, ids)
+    return redirect(url_for('variant_view', variant_id=variant_id) + f'#task-{task_id}')
 
 @app.route('/variants/<int:variant_id>/edit', methods=['GET', 'POST'])
 def variant_edit(variant_id):
@@ -1612,66 +1713,15 @@ def variant_import_localshot():
 
 @app.route('/sessions')
 def sessions_list():
-    """Список тестирований"""
-    status_filter = request.args.get('status', 'all')
-    search_query = (request.args.get('q', '') or '').strip().lower()
-    selected_session_id = request.args.get('session_id', type=int)
-
-    sessions = TestSession.get_all()
+    """Тестирование: если идёт — сразу мониторинг, иначе запуск и последние прошедшие."""
     active_session = TestSession.get_active()
     if active_session:
-        active_session['variant_name'] = _get_session_display_name(active_session)
-
-    # Добавляем информацию о студентах
-    filtered_sessions = []
-    for s in sessions:
-        students = TestSession.get_students(s['id'])
-        s['students_count'] = len(students)
-        s['finished_count'] = len([st for st in students if st['status'] == 'finished'])
-        s['variant_name'] = _get_session_display_name(s)
-
-        if status_filter in ('active', 'closed') and s['status'] != status_filter:
-            continue
-        if search_query and search_query not in s['variant_name'].lower():
-            continue
-        filtered_sessions.append(s)
-
-    selected_session = None
-    selected_students = []
-    if filtered_sessions:
-        ids = {s['id'] for s in filtered_sessions}
-        if not selected_session_id or selected_session_id not in ids:
-            selected_session_id = filtered_sessions[0]['id']
-        selected_session = next((s for s in filtered_sessions if s['id'] == selected_session_id), None)
-
-    if selected_session:
-        selected_students = TestSession.get_students(selected_session['id'])
-        session_criteria = {
-            'grade_5_min': selected_session.get('grade_5_min'),
-            'grade_4_min': selected_session.get('grade_4_min'),
-            'grade_3_min': selected_session.get('grade_3_min')
-        }
-        for st in selected_students:
-            if st['status'] == 'finished':
-                answers = Student.get_answers(st['id'])
-                tasks = Variant.get_tasks(st['variant_id'])
-                st['correct_count'] = len([a for a in answers if a['is_correct']])
-                st['total_tasks'] = len(tasks)
-                st['grade'] = GradeCriteria.calculate_grade(st['correct_count'], st['total_tasks'], session_criteria)
-            else:
-                st['correct_count'] = 0
-                st['total_tasks'] = 0
-                st['grade'] = None
-
-    return render_template('teacher/sessions.html',
-                         sessions=filtered_sessions,
-                         active_session=active_session,
-                         selected_session=selected_session,
-                         selected_students=selected_students,
-                         selected_session_id=selected_session_id,
-                         status_filter=status_filter,
-                         search_query=search_query)
-
+        return redirect(url_for('session_monitor', session_id=active_session['id']))
+    recent = [s for s in TestSession.get_all() if s['status'] == 'closed'][:5]
+    for item in recent:
+        item['title'] = _session_title(item)
+        item['students_count'] = len(TestSession.get_students(item['id']))
+    return render_template('teacher/sessions.html', recent=recent, variants_count=len(Variant.get_all()))
 
 @app.route('/sessions/delete/<int:session_id>', methods=['POST'])
 def session_delete(session_id):
@@ -1709,20 +1759,37 @@ def session_delete_bulk():
 @app.route('/sessions/new', methods=['GET', 'POST'])
 def session_new():
     """Создание нового тестирования"""
+    active = TestSession.get_active()
+    if active:
+        flash('Сейчас уже идёт тестирование. Завершите его, прежде чем запускать новое.', 'error')
+        return redirect(url_for('session_monitor', session_id=active['id']))
     if request.method == 'POST':
         variant_mode = request.form.get('variant_mode')
-        time_limit = int(request.form.get('time_limit', 60))
+        time_limit = max(1, min(300, request.form.get('time_limit', 45, type=int) or 45))
         use_code = request.form.get('use_code') == '1'
         show_answers = request.form.get('show_answers') == '1'
         teacher_finish_only = True  # ученик не завершает сам (иначе его ответы увидит сосед); всё открывается после завершения учителем
         calculator_enabled = request.form.get('calculator_enabled') == '1'
         python_enabled = request.form.get('python_enabled') == '1'
 
-        # Критерии оценки
-        total_tasks = int(request.form.get('total_tasks', 8))
-        grade_5_min = int(request.form.get('grade_5_min', 7))
-        grade_4_min = int(request.form.get('grade_4_min', 5))
-        grade_3_min = int(request.form.get('grade_3_min', 3))
+        set_setting('last_time_limit', time_limit)
+        set_setting('last_calculator', '1' if calculator_enabled else '0')
+        set_setting('last_python', '1' if python_enabled else '0')
+
+        # Критерии оценки: число заданий берём из самого варианта, пороги — из формы или из процентов
+        if variant_mode == 'single' and request.form.get('variant_id', type=int):
+            total_tasks = len(Variant.get_tasks(request.form.get('variant_id', type=int)))
+        elif variant_mode == 'multi_choice' and request.form.getlist('variant_ids'):
+            total_tasks = len(Variant.get_tasks(int(request.form.getlist('variant_ids')[0])))
+        else:
+            total_tasks = request.form.get('total_tasks', 27, type=int) or 27
+        total_tasks = max(1, total_tasks)
+        defaults = results_logic.grade_minimums(total_tasks, grade_percents())
+        grade_5_min, grade_4_min, grade_3_min = (
+            max(1, min(total_tasks, request.form.get(f'grade_{g}_min', d, type=int) or d))
+            for g, d in zip((5, 4, 3), defaults))
+        grade_4_min = min(grade_4_min, grade_5_min)
+        grade_3_min = min(grade_3_min, grade_4_min)
 
         # Генерация кода доступа
         access_code = None
@@ -1820,13 +1887,14 @@ def session_new():
                     total_tasks=total_tasks
                 )
 
-        flash('Тестирование запущено!', 'success')
-        return redirect(url_for('sessions_list'))
+        flash('Тестирование запущено. Ученики увидят форму входа через несколько секунд.', 'success')
+        return redirect(url_for('session_monitor', session_id=session_id))
 
     # GET - показываем форму
-    variants = Variant.get_all()
+    variants = [v for v in Variant.get_all() if not (v['name'] or '').startswith('Индивидуальный_')]
     for v in variants:
         v['tasks_count'] = len(Variant.get_tasks(v['id']))
+    variants = [v for v in variants if v['tasks_count']]
     task_counts = Task.count_by_ege_number()
     preselected_variant = request.args.get('variant_id', type=int)
     saved_criteria = GradeCriteria.get_all()
@@ -1835,16 +1903,20 @@ def session_new():
                          variants=variants,
                          task_counts=task_counts,
                          preselected_variant=preselected_variant,
-                          show_access_code_option=SHOW_ACCESS_CODE_OPTION,
+                          show_access_code_option=show_access_code_option(),
+                          percents=grade_percents(),
+                          last={'time_limit': get_setting('last_time_limit', '45'),
+                                'calculator': get_setting('last_calculator') == '1',
+                                'python': get_setting('last_python') == '1'},
                           saved_criteria=saved_criteria)
 
 @app.route('/sessions/<int:session_id>/close', methods=['POST'])
 def session_close(session_id):
-    """Закрыть тестирование"""
+    """Завершить тестирование: ученики сразу видят оценки, учитель — результаты."""
     Student.finish_all(session_id)
     TestSession.close(session_id)
-    flash('Тестирование завершено', 'success')
-    return redirect(url_for('sessions_list'))
+    flash('Тестирование завершено. Ученики видят свои оценки и правильные ответы.', 'success')
+    return redirect(url_for('results_list', session_id=session_id))
 
 @app.route('/sessions/<int:session_id>/pause', methods=['POST'])
 def session_pause(session_id):
@@ -1881,30 +1953,62 @@ def session_extend(session_id):
 
 @app.route('/sessions/<int:session_id>/monitor')
 def session_monitor(session_id):
-    """Мониторинг тестирования"""
+    """Мониторинг: таймер, кто в сети, сколько ответил. Данные обновляются сами (/live)."""
     session = TestSession.get_by_id(session_id)
     if not session:
         flash('Тестирование не найдено', 'error')
         return redirect(url_for('sessions_list'))
+    if session['status'] == 'closed':
+        return redirect(url_for('results_list', session_id=session_id))
+    return render_template('teacher/session_monitor.html', session=session, title=_get_session_display_name(session),
+                           live=_monitor_state(session),
+                           session_variants=_get_session_variant_options(session_id, include_task_counts=True))
 
-    students = TestSession.get_students(session_id)
-    session_variants = _get_session_variant_options(session_id, include_task_counts=True)
+
+ONLINE_SECONDS = 25  # окно ученика отмечается каждые 5 секунд
+
+
+def _monitor_state(session):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    online_count = 0
-    for s in students:
-        last_seen = _parse_dt(s.get('last_seen_at'))
-        s['last_seen_at'] = last_seen.isoformat() if last_seen else None
-        s['is_online'] = bool(last_seen and (now - last_seen).total_seconds() <= 25)
-        if s['is_online']:
-            online_count += 1
-        s['file_uploads_count'] = Answer.count_uploads_for_student(s['id'])
+    students = []
+    tasks_cache = {}
+    for st in TestSession.get_students(session['id']):
+        tasks = tasks_cache.setdefault(st['variant_id'], Variant.get_tasks(st['variant_id']))
+        score = results_logic.student_score(st, session, tasks)
+        last_seen = _parse_dt(st.get('last_seen_at'))
+        online = bool(last_seen and (now - last_seen).total_seconds() <= ONLINE_SECONDS)
+        remaining = _calc_remaining_seconds(st, session)
+        students.append({
+            'id': st['id'],
+            'name': f"{st['last_name']} {st['first_name']}",
+            'variant': st.get('variant_label'),
+            'online': online,
+            'answered': score['answered'],
+            'total': score['total'],
+            'remaining': remaining,
+            'started': to_local_dt(st.get('started_at'))[11:16],
+            'last_seen': to_local_dt(st.get('last_seen_at'))[11:16] if st.get('last_seen_at') else '',
+            'uploads': Answer.count_uploads_for_student(st['id']),
+        })
+    students.sort(key=lambda s: s['name'].casefold())
+    in_progress = [s['remaining'] for s in students]
+    full = session['time_limit'] * 60 + (session.get('extra_seconds') or 0)
+    return {
+        'status': session['status'],
+        'paused': bool(session.get('paused')),
+        'remaining': max(in_progress) if in_progress else full,
+        'students': students,
+        'online': sum(1 for s in students if s['online']),
+        'finished_all': bool(students) and all(s['remaining'] <= 0 for s in students),
+    }
 
-    return render_template('teacher/session_monitor.html',
-                          session=session,
-                          students=students,
-                          online_count=online_count,
-                          session_variants=session_variants)
 
+@app.route('/sessions/<int:session_id>/live')
+def session_live(session_id):
+    session = TestSession.get_by_id(session_id)
+    if not session:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(_monitor_state(session))
 
 # ==================== ИНТЕРФЕЙС УЧЕНИКА ====================
 
@@ -2546,155 +2650,65 @@ def student_result():
 
 @app.route('/results')
 def results_list():
-    """Список результатов по тестированиям"""
-    from datetime import datetime, timedelta
-
-    filter_period = request.args.get('period', 'all')
+    """Результаты: слева прошедшие тестирования, справа таблица «ученик × задание»."""
     search_query = (request.args.get('q', '') or '').strip().lower()
     selected_session_id = request.args.get('session_id', type=int)
 
-    sessions = TestSession.get_all()
-
-    now = datetime.now()
-    if filter_period == 'week':
-        cutoff = now - timedelta(days=7)
-    elif filter_period == 'month':
-        cutoff = now - timedelta(days=30)
-    elif filter_period == 'quarter':
-        cutoff = now - timedelta(days=90)
-    elif filter_period == 'year':
-        cutoff = now - timedelta(days=365)
-    else:
-        cutoff = None
-
-    filtered_sessions = []
-    for s in sessions:
-        s['variant_name'] = _get_session_display_name(s)
-
-        if cutoff:
-            try:
-                created = datetime.fromisoformat((s.get('created_at') or '').replace(' ', 'T'))
-                if created < cutoff:
-                    continue
-            except Exception:
-                pass
-
-        if search_query and search_query not in s['variant_name'].lower():
+    sessions = []
+    for s in TestSession.get_all():
+        s['title'] = _session_title(s)
+        if search_query and search_query not in s['title'].lower():
             continue
-
-        students = TestSession.get_students(s['id'])
-        s['students_count'] = len(students)
-        s['finished_count'] = len([st for st in students if st['status'] == 'finished'])
-        filtered_sessions.append(s)
+        s['students_count'] = len(TestSession.get_students(s['id']))
+        sessions.append(s)
 
     selected_session = None
-    selected_students = []
+    if sessions:
+        ids = {s['id'] for s in sessions}
+        if not selected_session_id or selected_session_id not in ids:
+            selected_session_id = sessions[0]['id']
+        selected_session = next(s for s in sessions if s['id'] == selected_session_id)
 
-    if filtered_sessions:
-        session_ids = {s['id'] for s in filtered_sessions}
-        if not selected_session_id or selected_session_id not in session_ids:
-            selected_session_id = filtered_sessions[0]['id']
-
-        selected_session = next((s for s in filtered_sessions if s['id'] == selected_session_id), None)
-
-    if selected_session:
-        selected_students = TestSession.get_students(selected_session['id'])
-        session_criteria = {
-            'grade_5_min': selected_session.get('grade_5_min'),
-            'grade_4_min': selected_session.get('grade_4_min'),
-            'grade_3_min': selected_session.get('grade_3_min')
-        }
-
-        total_correct_all = 0
-        finished_for_avg = 0
-        for st in selected_students:
-            if st['status'] == 'finished':
-                answers = Student.get_answers(st['id'])
-                tasks = Variant.get_tasks(st['variant_id'])
-                st['correct_count'] = len([a for a in answers if a['is_correct']])
-                st['total_tasks'] = len(tasks)
-                st['grade'] = GradeCriteria.calculate_grade(st['correct_count'], st['total_tasks'], session_criteria)
-                total_correct_all += st['correct_count']
-                finished_for_avg += 1
-            else:
-                st['correct_count'] = 0
-                st['total_tasks'] = 0
-                st['grade'] = None
-
-        selected_session['avg_score'] = round(total_correct_all / finished_for_avg, 1) if finished_for_avg > 0 else 0
-
-    return render_template(
-        'teacher/results.html',
-        sessions=filtered_sessions,
-        selected_session=selected_session,
-        selected_students=selected_students,
-        selected_session_id=selected_session_id,
-        total_sessions=len(filtered_sessions),
-        filter_period=filter_period,
-        search_query=search_query,
-    )
+    groups, summary = results_logic.session_results(selected_session) if selected_session else ([], None)
+    return render_template('teacher/results.html', sessions=sessions, selected_session=selected_session,
+                           selected_session_id=selected_session_id, groups=groups, summary=summary,
+                           search_query=search_query)
 
 @app.route('/results/session/<int:session_id>')
 def result_session(session_id):
-    """Результаты по конкретному тестированию"""
-    session = TestSession.get_by_id(session_id)
-    if not session:
-        flash('Тестирование не найдено', 'error')
-        return redirect(url_for('results_list'))
-
-    students = TestSession.get_students(session_id)
-
-    # Критерии оценки для этой сессии
-    session_criteria = {
-        'grade_5_min': session.get('grade_5_min'),
-        'grade_4_min': session.get('grade_4_min'),
-        'grade_3_min': session.get('grade_3_min')
-    }
-
-    # Добавляем результаты каждого ученика
-    for st in students:
-        answers = Student.get_answers(st['id'])
-        tasks = Variant.get_tasks(st['variant_id'])
-        st['correct'] = len([a for a in answers if a['is_correct']])
-        st['total'] = len(tasks)
-        st['grade'] = GradeCriteria.calculate_grade(st['correct'], st['total'], session_criteria)
-
-    return render_template('teacher/result_session.html', session=session, students=students)
+    """Старый адрес: результаты тестирования теперь на общей странице «Результаты»."""
+    return redirect(url_for('results_list', session_id=session_id))
 
 @app.route('/results/student/<int:student_id>')
 def result_student(student_id):
-    """Детальный результат ученика"""
+    """Ответы ученика по заданиям; учитель может вручную поставить «верно» или «неверно»."""
     student = Student.get_by_id(student_id)
     if not student:
         flash('Ученик не найден', 'error')
         return redirect(url_for('results_list'))
-
     test_session = TestSession.get_by_id(student['session_id'])
-    answers = Student.get_answers(student_id)
-    tasks = Variant.get_tasks(student['variant_id'])
+    score = results_logic.student_score(student, test_session)
+    return render_template('teacher/result_student.html', student=student, test_session=test_session,
+                           session_title=_session_title(test_session) if test_session else '', score=score)
 
-    # Создаём словарь ответов по task_id
-    answers_dict = {a['task_id']: a for a in answers}
+@app.route('/results/export/<int:session_id>.xlsx')
+def result_export_xlsx(session_id):
+    """Excel: лист «Результаты» (ученик × задание, цветом) и лист «Правильные ответы»."""
+    test_session = TestSession.get_by_id(session_id)
+    if not test_session:
+        flash('Тестирование не найдено', 'error')
+        return redirect(url_for('results_list'))
+    groups, _ = results_logic.session_results(test_session)
+    title = _get_session_display_name(test_session)
+    subtitle = f"Тестирование: {to_local_dt(test_session.get('created_at'))}" + \
+               ('' if test_session['status'] == 'closed' else ' (ещё идёт)')
+    data = results_logic.build_workbook(title, subtitle, groups)
+    stamp = to_local_dt(test_session.get('created_at')).replace(':', '-').replace(' ', '_')
+    safe = re.sub(r'[\\/:*?"<>|]', ' ', title).strip() or 'Результаты'
+    import io
+    return send_file(io.BytesIO(data), as_attachment=True, download_name=f'{safe} {stamp}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-    correct_count = len([a for a in answers if a['is_correct']])
-    total = len(tasks)
-
-    # Рассчитываем оценку с учётом критериев сессии
-    session_criteria = {
-        'grade_5_min': test_session.get('grade_5_min') if test_session else None,
-        'grade_4_min': test_session.get('grade_4_min') if test_session else None,
-        'grade_3_min': test_session.get('grade_3_min') if test_session else None,
-    }
-    grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
-
-    return render_template('teacher/result_student.html',
-                         student=student,
-                         answers=answers,
-                         answers_dict=answers_dict,
-                         tasks=tasks,
-                         correct_count=correct_count,
-                         total=total,
-                         grade=grade)
 
 @app.route('/results/export/<int:session_id>')
 def result_export(session_id):
@@ -2854,11 +2868,41 @@ def result_delete_bulk():
 
 # ==================== НАСТРОЙКИ ====================
 
-@app.route('/settings')
+@app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    """Страница настроек"""
-    criteria = GradeCriteria.get_all()
-    return render_template('teacher/settings.html', criteria=criteria)
+    """Настройки: оценки по умолчанию, ярлык для учеников, копии базы, скрытые разделы."""
+    if request.method == 'POST':
+        try:
+            values = [int(request.form.get(f'grade_{g}_percent', '')) for g in (5, 4, 3)]
+        except ValueError:
+            values = None
+        if not values or not all(1 <= v <= 100 for v in values) or not values[0] >= values[1] >= values[2]:
+            flash('Проценты должны быть от 1 до 100 и не возрастать: «5» ≥ «4» ≥ «3»', 'error')
+        else:
+            for grade, value in zip((5, 4, 3), values):
+                set_setting(f'grade_{grade}_percent', value)
+            set_setting('show_ege_banks', '1' if request.form.get('show_ege_banks') == '1' else '0')
+            set_setting('show_access_code', '1' if request.form.get('show_access_code') == '1' else '0')
+            flash('Настройки сохранены', 'success')
+        return redirect(url_for('settings'))
+    return render_template('teacher/settings.html', percents=grade_percents(),
+                           criteria=GradeCriteria.get_all(), backups=list_backups(BACKUPS_DIR)[:10],
+                           backups_dir=BACKUPS_DIR, student_urls=student_urls(PORT), port=PORT,
+                           ege_banks_forced=bool(SHOW_EGE_BANKS), access_code_forced=bool(SHOW_ACCESS_CODE_OPTION),
+                           ege_banks_on=get_setting('show_ege_banks') == '1',
+                           access_code_on=get_setting('show_access_code') == '1')
+
+
+@app.route('/settings/backup', methods=['POST'])
+def settings_backup():
+    try:
+        path = backup_database(BACKUPS_DIR)
+    except Exception as error:
+        app.logger.exception('Не удалось сделать копию базы')
+        flash(f'Не удалось сделать копию: {error}', 'error')
+    else:
+        flash(f'Копия сохранена: {os.path.basename(path)}', 'success')
+    return redirect(url_for('settings'))
 
 @app.route('/settings/criteria', methods=['POST'])
 def update_criteria():
@@ -3068,6 +3112,10 @@ def tasks_import():
 # ==================== ЗАПУСК ====================
 
 if __name__ == '__main__':
+    try:
+        backup_database(BACKUPS_DIR)  # копия базы при каждом запуске, хранятся последние 20
+    except Exception as error:
+        print(f'Не удалось сделать копию базы: {error}')
     print('=' * 50)
     print('Система тестирования ЕГЭ по информатике')
     print('=' * 50)

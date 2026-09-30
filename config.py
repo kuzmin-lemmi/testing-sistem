@@ -94,3 +94,4 @@ def _load_secret_key():
 
 
 SECRET_KEY = _load_secret_key()
+BACKUPS_DIR = os.path.join(DATA_DIR, 'backups')

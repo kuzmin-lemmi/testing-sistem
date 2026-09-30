@@ -1,6 +1,6 @@
 {% extends "teacher/base.html" %}
 
-{% block title %}Варианты - ЕГЭ Информатика{% endblock %}
+{% block title %}Варианты{% endblock %}
 
 {% block content %}
 <div class="variants-page">
@@ -52,7 +52,7 @@
                             <div class="tree-item-title">{{ v.name }}</div>
                             <div class="tree-item-meta">
                                 {% if show_ege_banks %}{% if v.variant_scope == 'class' %}🏫 {{ v.class_name if v.class_name else 'Класс' }}{% else %}🎓 ЕГЭ{% endif %}
-                                · {% endif %}{{ v.tasks_count }} задач
+                                · {% endif %}{{ tasks_word(v.tasks_count) }} · {{ v.created_at|local_date }}{% if v.used_count %} · ▶ {{ v.used_count }}{% endif %}
                             </div>
                         </a>
                     </div>
@@ -71,7 +71,8 @@
                     <h2>{{ selected_variant.name }}</h2>
                     <div class="details-meta">
                         <span>📅 {{ selected_variant.created_at|local_dt }}</span>
-                        <span>📚 {{ selected_variant.tasks_count }} задач</span>
+                        <span>📚 {{ tasks_word(selected_variant.tasks_count) }}</span>
+                        <span>{% if selected_variant.used_count %}проводился {{ selected_variant.used_count }} {{ plural(selected_variant.used_count, 'раз', 'раза', 'раз') }}{% else %}ещё не проводился{% endif %}</span>
                         {% if show_ege_banks %}
                         {% if selected_variant.variant_scope == 'class' %}
                         <span>🏫 {{ selected_variant.class_name if selected_variant.class_name else 'Класс' }}</span>
@@ -81,12 +82,12 @@
                         {% endif %}
                     </div>
                 </div>
-                <div style="display:flex; gap:8px;">
-                    <a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">👁 Открыть</a>
-                    <a href="{{ url_for('variant_edit', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">✏️ Редактировать</a>
-                    <form action="{{ url_for('variant_delete', variant_id=selected_variant.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить вариант и связанные результаты?')">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a href="{{ url_for('session_new', variant_id=selected_variant.id) }}" class="btn btn-success btn-small">▶️ Запустить</a>
+                    <a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}" class="btn btn-primary btn-small">✏️ Открыть и править</a>
+                    <form action="{{ url_for('variant_delete', variant_id=selected_variant.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить вариант «{{ selected_variant.name }}»{% if selected_variant.used_count %} и все результаты тестирований с ним{% endif %}? Отменить нельзя.')">
                         <input type="hidden" name="scope" value="{{ scope }}">
-                        <button type="submit" class="btn btn-danger btn-small">🗑 Удалить</button>
+                        <button type="submit" class="btn btn-outline btn-small">🗑 Удалить</button>
                     </form>
                 </div>
             </div>
@@ -96,18 +97,18 @@
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>Задание</th>
                             {% if show_ege_banks %}<th>Номер</th>{% endif %}
                             <th>Ответ</th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for task in selected_tasks %}
                         <tr>
                             <td>{{ loop.index }}</td>
+                            <td><a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}#task-{{ task.id }}"><img class="thumb" src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy"></a></td>
                             {% if show_ege_banks %}<td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>{% endif %}
-                            <td>{% if task.answer_count == 0 %}{{ (task.answer_text or 'проверяется вручную')|truncate(40) }}{% else %}{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% elif task.answer_count > 2 %}, …{% endif %}{% endif %}</td>
-                            <td><a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}#task-{{ task.id }}">Открыть →</a></td>
+                            <td><span class="answer">{{ format_expected(task)|truncate(60) }}</span>{% if task.attachment_name %}<div class="muted-small">📎 {{ task.attachment_name }}</div>{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -138,6 +139,9 @@
 .details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .details-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 13px; flex-wrap: wrap; }
 .students-table-wrap { overflow-x: auto; }
+.thumb { width: 220px; max-height: 110px; object-fit: contain; object-position: left top; border: 1px solid var(--border-light); border-radius: 6px; background: #fff; }
+.answer { font-family: 'JetBrains Mono', monospace; }
+.muted-small { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .students-table { width: 100%; border-collapse: collapse; }
 .students-table th, .students-table td { padding: 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
 .students-table th { font-size: 13px; color: var(--text-muted); }

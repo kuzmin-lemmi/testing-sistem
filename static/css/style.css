@@ -1240,3 +1240,21 @@ body {
 }
 .tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
 .tree-check-all { font-size: 13px; color: var(--text-secondary); }
+
+/* Поля ввода вне .form-group (новые страницы): тот же вид, что и в формах */
+main input[type="text"], main input[type="number"], main input[type="search"], main select, main textarea {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    background: #fff;
+    color: var(--text);
+}
+main input[type="text"]:focus, main input[type="number"]:focus, main select:focus, main textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-bg);
+}
+
+/* Атрибут hidden всегда скрывает элемент, даже если у класса задан display */
+[hidden] { display: none !important; }

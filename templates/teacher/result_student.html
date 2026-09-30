@@ -1,305 +1,97 @@
 {% extends "teacher/base.html" %}
 
-{% block title %}{{ student.last_name }} {{ student.first_name }} - Результат{% endblock %}
+{% block title %}{{ student.last_name }} {{ student.first_name }} — ответы{% endblock %}
 
 {% block content %}
-<div class="result-student-page">
+<div class="student-page">
     <div class="page-header">
-        <h1>{{ student.last_name }} {{ student.first_name }}</h1>
-        <a href="{{ url_for('results_list') }}" class="btn btn-secondary">← К результатам</a>
-    </div>
-    
-    <div class="result-summary card">
-        <div class="summary-content">
-            <div class="score-big">
-                <div class="score-circle">
-                    <span class="correct">{{ correct_count }}</span>
-                    <span class="total">из {{ total }}</span>
-                </div>
-            </div>
-            <div class="grade-big">
-                <span class="grade grade-{{ grade }}">{{ grade }}</span>
-                <span class="grade-label">Оценка</span>
-            </div>
-            <div class="time-info">
-                {% if student.variant_label %}
-                <div class="time-row">
-                    <span class="time-label">Вариант:</span>
-                    <span class="time-value"><span class="variant-pill">{{ student.variant_label }}</span></span>
-                </div>
-                {% endif %}
-                <div class="time-row">
-                    <span class="time-label">Начал:</span>
-                    <span class="time-value">{{ student.started_at|local_dt if student.started_at else '—' }}</span>
-                </div>
-                <div class="time-row">
-                    <span class="time-label">Завершил:</span>
-                    <span class="time-value">{{ student.finished_at|local_dt if student.finished_at else '—' }}</span>
-                </div>
-            </div>
+        <div>
+            <h1>{{ student.last_name }} {{ student.first_name }}</h1>
+            <div class="muted">{{ session_title }}{% if student.variant_label %} · вариант {{ student.variant_label }}{% endif %}</div>
         </div>
+        <a href="{{ url_for('results_list', session_id=student.session_id) }}" class="btn btn-secondary">← К результатам</a>
     </div>
-    
-    <div class="answers-detail card">
-        <h2>📋 Ответы по задачам</h2>
-        <table class="answers-table">
-            <thead>
-                <tr>
-                    <th>№</th>
-                    <th>Номер ЕГЭ</th>
-                    <th>Ответ ученика</th>
-                    <th>Правильный ответ</th>
-                    <th>Результат</th>
-                </tr>
-            </thead>
+
+    <section class="card summary">
+        <div class="big">{{ score.correct }} <span class="muted">из {{ score.total }}</span></div>
+        <div class="muted">{{ score.percent }}%</div>
+        {% if score.grade %}<div class="grade g{{ score.grade }}">«{{ score.grade }}»</div>{% endif %}
+        <div class="muted times">
+            Начал: {{ student.started_at|local_dt }}{% if student.finished_at %} · Закончил: {{ student.finished_at|local_dt }}{% endif %}
+            {% if student.status != 'finished' %} · <strong>ещё решает</strong>{% endif %}
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Ответы по заданиям</h2>
+        <table class="answers">
+            <thead><tr><th>№</th><th>Ответ ученика</th><th>Правильный ответ</th><th>Отметка</th></tr></thead>
             <tbody>
-                {% for task in tasks %}
-                {% set ans = answers_dict.get(task.id) %}
+            {% for cell in score.cells %}
+            {% set task = cell.task %}
                 <tr>
                     <td>{{ loop.index }}</td>
-                    <td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>
                     <td>
-                        {% if task.answer_kind == 'file_upload' %}
-                            {% if ans and ans.get('upload_name') %}
-                            <a href="{{ url_for('teacher_download_answer_file', student_id=student.id, task_id=task.id) }}"
-                               class="btn btn-small btn-secondary" download>
-                                📥 {{ ans.upload_name }}
-                            </a>
-                            {% else %}
-                            <span class="no-answer">Файл не загружен</span>
-                            {% endif %}
+                        {% if task.answer_kind == 'file_upload' and cell.answer and cell.answer.upload_name %}
+                        <a href="{{ url_for('teacher_download_answer_file', student_id=student.id, task_id=task.id) }}"
+                           class="btn btn-small btn-secondary" download>📥 {{ cell.answer.upload_name }}</a>
+                        {% elif cell.answered %}
+                        <span class="value {% if cell.correct %}ok{% else %}bad{% endif %}">{{ cell.given }}</span>
                         {% else %}
-                            {% if ans %}
-                            <span class="answer-value {% if ans.is_correct %}correct{% else %}wrong{% endif %}">
-                                {{ ans.answer_1 if ans.answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ ans.answer_2 if ans.answer_2 is not none else '—' }}{% endif %}
-                            </span>
-                            {% else %}
-                            <span class="no-answer">Не отвечено</span>
-                            {% endif %}
+                        <span class="muted">нет ответа</span>
                         {% endif %}
                     </td>
-                    <td>
-                        {% if task.answer_kind == 'file_upload' %}
-                        <span style="color:var(--text-muted);font-size:13px;">ручная проверка</span>
+                    <td><span class="value">{{ format_expected(task) }}</span></td>
+                    <td class="marks">
+                        {% if cell.correct %}<span class="ok-text">✓ Верно</span>
+                        {% elif cell.marked is not none and cell.marked == 0 and task.answer_kind == 'file_upload' %}<span class="bad-text">✗ Не зачтено</span>
+                        {% elif task.answer_kind == 'file_upload' and cell.answered and cell.marked is none %}<span class="muted">⏳ Не проверено</span>
+                        {% else %}<span class="bad-text">✗ Неверно</span>{% endif %}
+                        {% if cell.correct %}
+                        <button type="button" class="btn btn-small btn-outline" onclick="markAnswer({{ task.id }}, false)">Не засчитывать</button>
                         {% else %}
-                        <span class="answer-value correct">
-                            {{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}
-                        </span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if task.answer_kind == 'file_upload' %}
-                            {% if ans and ans.get('upload_name') %}
-                            <div class="mark-buttons" id="mark-{{ student.id }}-{{ task.id }}">
-                                {% if ans.is_correct == true %}
-                                <span class="status-correct">✓ Зачтено</span>
-                                <button type="button" class="btn btn-small btn-danger" onclick="markAnswer({{ student.id }}, {{ task.id }}, false)">✗ Отменить</button>
-                                {% elif ans.is_correct == false %}
-                                <span class="status-wrong">✗ Не зачтено</span>
-                                <button type="button" class="btn btn-small btn-primary" onclick="markAnswer({{ student.id }}, {{ task.id }}, true)">✓ Зачесть</button>
-                                {% else %}
-                                <span class="status-pending">⏳ Не проверено</span>
-                                <button type="button" class="btn btn-small btn-primary" onclick="markAnswer({{ student.id }}, {{ task.id }}, true)">✓ Зачесть</button>
-                                <button type="button" class="btn btn-small btn-danger" onclick="markAnswer({{ student.id }}, {{ task.id }}, false)">✗ Не зачесть</button>
-                                {% endif %}
-                            </div>
-                            {% else %}
-                            <span class="status-wrong">—</span>
-                            {% endif %}
-                        {% else %}
-                            {% if ans and ans.is_correct %}
-                            <span class="status-correct">✓ Верно</span>
-                            {% else %}
-                            <span class="status-wrong">✗ Неверно</span>
-                            {% endif %}
+                        <button type="button" class="btn btn-small btn-outline" onclick="markAnswer({{ task.id }}, true)">Засчитать</button>
                         {% endif %}
                     </td>
                 </tr>
-                {% endfor %}
+            {% endfor %}
             </tbody>
         </table>
-    </div>
+        <p class="muted hint">«Засчитать» — если ответ верный, но записан иначе. Оценка пересчитается сразу.</p>
+    </section>
 </div>
 
 <script>
-async function markAnswer(studentId, taskId, isCorrect) {
-    const resp = await fetch('{{ url_for("teacher_mark_answer") }}', {
+async function markAnswer(taskId, isCorrect) {
+    const response = await fetch({{ url_for('teacher_mark_answer')|tojson }}, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
-        body: JSON.stringify({student_id: studentId, task_id: taskId, is_correct: isCorrect})
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
+        body: JSON.stringify({student_id: {{ student.id }}, task_id: taskId, is_correct: isCorrect})
     });
-    if (resp.ok) {
-        location.reload();
-    } else {
-        alert('Ошибка при сохранении оценки');
-    }
+    if (response.ok) location.reload(); else alert('Не удалось сохранить отметку');
 }
 </script>
 
 <style>
-.result-summary {
-    margin-bottom: 24px;
-}
-
-.summary-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    flex-wrap: wrap;
-    gap: 30px;
-}
-
-.score-circle {
-    width: 140px;
-    height: 140px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary), #764ba2);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: white;
-}
-
-.score-circle .correct {
-    font-size: 3em;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.score-circle .total {
-    font-size: 1em;
-    opacity: 0.9;
-}
-
-.grade-big {
-    text-align: center;
-}
-
-.grade-big .grade {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    font-size: 2.5em;
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-
-.grade-5 { background: var(--success-bg); color: #065f46; }
-.grade-4 { background: #dbeafe; color: #1e40af; }
-.grade-3 { background: var(--warning-bg); color: #92400e; }
-.grade-2 { background: var(--danger-bg); color: #991b1b; }
-
-.grade-label {
-    color: var(--text-muted);
-    font-size: 14px;
-}
-
-.time-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.time-row {
-    display: flex;
-    gap: 12px;
-}
-
-.time-label {
-    color: var(--text-muted);
-}
-
-.time-value {
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.answers-detail h2 {
-    margin-bottom: 20px;
-}
-
-.answers-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.answers-table th,
-.answers-table td {
-    padding: 14px 16px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-light);
-}
-
-.answers-table th {
-    background: var(--bg-sidebar);
-    font-weight: 600;
-    font-size: 13px;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-}
-
-.answers-table tr:last-child td {
-    border-bottom: none;
-}
-
-.answer-value {
-    font-family: 'JetBrains Mono', monospace;
-    padding: 4px 10px;
-    border-radius: 6px;
-}
-
-.answer-value.correct {
-    background: var(--success-bg);
-    color: #065f46;
-}
-
-.answer-value.wrong {
-    background: var(--danger-bg);
-    color: #991b1b;
-}
-
-.no-answer {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-.status-correct {
-    color: var(--success);
-    font-weight: 600;
-}
-
-.status-wrong {
-    color: var(--danger);
-    font-weight: 600;
-}
-
-.status-pending {
-    color: #92400e;
-    font-weight: 600;
-}
-
-.variant-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 28px;
-    height: 28px;
-    padding: 0 10px;
-    border-radius: 999px;
-    background: #eef2ff;
-    color: #4338ca;
-    font-weight: 800;
-}
-
-.mark-buttons {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
+.student-page { max-width: 1000px; margin: 0 auto; }
+.muted { color: var(--text-muted); }
+.summary { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.summary .big { font-size: 40px; font-weight: 800; }
+.summary .times { flex-basis: 100%; font-size: 14px; }
+.grade { display: inline-block; padding: 4px 14px; border-radius: 12px; font-weight: 800; font-size: 22px; }
+.grade.g5 { background: #d1fae5; color: #065f46; }
+.grade.g4 { background: #dbeafe; color: #1e40af; }
+.grade.g3 { background: #fef3c7; color: #92400e; }
+.grade.g2 { background: #fee2e2; color: #991b1b; }
+.answers { width: 100%; border-collapse: collapse; }
+.answers th, .answers td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: left; vertical-align: middle; }
+.answers th { font-size: 13px; color: var(--text-muted); }
+.value { font-family: 'JetBrains Mono', monospace; padding: 3px 8px; border-radius: 6px; background: #f3f4f6; white-space: pre-wrap; }
+.value.ok { background: #dcfce7; color: #166534; }
+.value.bad { background: #fee2e2; color: #991b1b; }
+.marks { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ok-text { color: #059669; font-weight: 700; }
+.bad-text { color: #dc2626; font-weight: 700; }
+.hint { font-size: 13px; margin-top: 10px; }
 </style>
 {% endblock %}

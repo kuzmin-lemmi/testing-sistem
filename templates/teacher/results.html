@@ -1,175 +1,147 @@
 {% extends "teacher/base.html" %}
 
-{% block title %}Результаты - ЕГЭ Информатика{% endblock %}
+{% block title %}Результаты{% endblock %}
 
 {% block content %}
 <div class="results-page">
-    <div class="page-header">
-        <h1>📊 Результаты</h1>
-    </div>
-
-    <div class="filters-bar card">
-        <form method="GET" class="filters-form" id="resultsFilterForm">
-            <input type="hidden" name="session_id" value="{{ selected_session_id or '' }}">
-            <div class="filter-row">
-                <select name="period" onchange="document.getElementById('resultsFilterForm').submit()">
-                    <option value="all" {% if filter_period == 'all' %}selected{% endif %}>Все время</option>
-                    <option value="week" {% if filter_period == 'week' %}selected{% endif %}>Неделя</option>
-                    <option value="month" {% if filter_period == 'month' %}selected{% endif %}>Месяц</option>
-                    <option value="quarter" {% if filter_period == 'quarter' %}selected{% endif %}>Четверть</option>
-                    <option value="year" {% if filter_period == 'year' %}selected{% endif %}>Год</option>
-                </select>
-                <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Поиск по названию теста">
-                <button type="submit" class="btn btn-small">Найти</button>
-            </div>
-        </form>
-        <div class="results-count">Всего тестирований: <strong>{{ total_sessions }}</strong></div>
-    </div>
+    <h1>📊 Результаты</h1>
 
     <div class="results-layout">
         <aside class="session-tree card">
-            <div class="tree-title">Список тестирований</div>
-            {% if sessions %}
-            <form action="{{ url_for('result_delete_bulk') }}" method="POST" onsubmit="return confirmBulkDelete()">
-                <input type="hidden" name="period" value="{{ filter_period }}">
-                <input type="hidden" name="q" value="{{ search_query }}">
-                <div class="tree-bulk-actions">
-                    <label class="tree-check-all"><input type="checkbox" id="checkAllSessions"> Все</label>
-                    <button type="submit" class="btn btn-danger btn-small">🗑 Удалить отмеченные</button>
-                </div>
-                <div class="tree-list">
-                    {% for s in sessions %}
-                    <div class="tree-item-row {% if selected_session_id == s.id %}active{% endif %}">
-                        <label class="tree-check-item">
-                            <input type="checkbox" name="session_ids" value="{{ s.id }}" class="session-checkbox">
-                        </label>
-                        <a class="tree-item"
-                           href="{{ url_for('results_list', period=filter_period, q=search_query, session_id=s.id) }}">
-                            <div class="tree-item-title">{{ s.variant_name }}</div>
-                            <div class="tree-item-meta">{{ s.created_at|local_dt }} · {{ s.finished_count }}/{{ s.students_count }}</div>
-                        </a>
-                    </div>
-                    {% endfor %}
-                </div>
+            <form method="GET" class="tree-search">
+                <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Поиск: дата или вариант">
             </form>
+            {% if sessions %}
+            <div class="tree-list">
+                {% for s in sessions %}
+                <a class="tree-item {% if selected_session_id == s.id %}active{% endif %}"
+                   href="{{ url_for('results_list', q=search_query, session_id=s.id) }}">
+                    <div class="tree-item-title">{{ s.title }}</div>
+                    <div class="tree-item-meta">
+                        {{ s.students_count }} {{ plural(s.students_count, 'ученик', 'ученика', 'учеников') }}
+                        {% if s.status == 'active' %}· <span class="live">идёт сейчас</span>{% endif %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
             {% else %}
-            <div class="empty-small">Нет тестирований</div>
+            <div class="empty-small">Тестирований пока нет</div>
             {% endif %}
         </aside>
 
-        <section class="session-details card">
+        <section class="card session-details">
             {% if selected_session %}
             <div class="details-header">
                 <div>
-                    <h2>{{ selected_session.variant_name }}</h2>
-                    <div class="details-meta">
-                        <span>📅 {{ selected_session.created_at|local_dt }}</span>
-                        <span>👥 {{ selected_session.finished_count }}/{{ selected_session.students_count }}</span>
-                        <span>📈 Средний балл: {{ selected_session.avg_score }}</span>
+                    <h2>{{ selected_session.title }}</h2>
+                    {% if summary.students %}
+                    <div class="summary-line">
+                        <span>👥 {{ summary.students }}</span>
+                        <span>средний результат {{ summary.average_percent }}%</span>
+                        {% for grade in (5, 4, 3, 2) %}{% if summary.grades[grade] %}<span class="grade g{{ grade }}">«{{ grade }}» × {{ summary.grades[grade] }}</span>{% endif %}{% endfor %}
                     </div>
+                    {% endif %}
                 </div>
-                <div style="display:flex; gap:8px;">
-                    <a href="{{ url_for('result_export', session_id=selected_session.id) }}" class="btn btn-secondary btn-small">📥 CSV</a>
-                    <form action="{{ url_for('result_delete', session_id=selected_session.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить это тестирование и все его результаты? Это действие нельзя отменить.')">
-                        <input type="hidden" name="period" value="{{ filter_period }}">
-                        <input type="hidden" name="q" value="{{ search_query }}">
-                        <button type="submit" class="btn btn-danger btn-small">🗑 Удалить</button>
+                <div class="head-actions">
+                    {% if selected_session.status == 'active' %}
+                    <a href="{{ url_for('session_monitor', session_id=selected_session.id) }}" class="btn btn-primary btn-small">👁 Мониторинг</a>
+                    {% endif %}
+                    <a href="{{ url_for('result_export_xlsx', session_id=selected_session.id) }}" class="btn btn-success btn-small">📥 Excel</a>
+                    {% if selected_session.status != 'active' %}
+                    <form action="{{ url_for('result_delete', session_id=selected_session.id) }}" method="POST" class="inline-form"
+                          onsubmit="return confirm('Удалить это тестирование и все ответы учеников? Отменить нельзя.')">
+                        <button type="submit" class="btn btn-outline btn-small">🗑 Удалить</button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
 
-            <div class="students-table-wrap">
-                <table class="students-table">
+            {% if selected_session.status == 'active' %}
+            <p class="note">Тестирование ещё идёт: ответы меняются, итог — после завершения.</p>
+            {% endif %}
+
+            {% for group in groups %}
+            {% if groups|length > 1 %}<h3 class="group-title">Вариант {{ group.label or '' }} — {{ group.variant_name }}</h3>{% endif %}
+            <div class="matrix-wrap">
+                <table class="matrix">
                     <thead>
                         <tr>
-                            <th>ФИО</th>
-                            <th>Вариант</th>
-                            <th>Статус</th>
-                            <th>Баллы</th>
-                            <th>Оценка</th>
-                            <th></th>
+                            <th class="name-col">Ученик</th>
+                            {% for task in group.tasks %}<th title="{{ format_expected(task) }}">{{ loop.index }}</th>{% endfor %}
+                            <th>Верно</th><th>%</th><th>Оценка</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for st in selected_students %}
+                        {% for row in group.students %}
                         <tr>
-                            <td>{{ st.last_name }} {{ st.first_name }}</td>
-                            <td>{% if st.variant_label %}<span class="grade-badge" style="width:auto;padding:0 10px;border-radius:999px;background:#eef2ff;color:#4338ca;">В{{ st.variant_label }}</span>{% else %}—{% endif %}</td>
-                            <td>{% if st.status == 'finished' %}✅ завершил{% else %}⏳ в процессе{% endif %}</td>
-                            <td>{% if st.status == 'finished' %}{{ st.correct_count }}/{{ st.total_tasks }}{% else %}—{% endif %}</td>
-                            <td>{% if st.status == 'finished' %}<span class="grade-badge grade-{{ st.grade }}">{{ st.grade }}</span>{% else %}—{% endif %}</td>
-                            <td><a href="{{ url_for('result_student', student_id=st.id) }}">Подробнее →</a></td>
+                            <td class="name-col"><a href="{{ url_for('result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a></td>
+                            {% for cell in row.cells %}
+                            <td class="cell {% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}"
+                                title="Ответ: {{ cell.given }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}">
+                                {% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}
+                            </td>
+                            {% endfor %}
+                            <td class="num">{{ row.correct }} / {{ row.total }}</td>
+                            <td class="num">{{ row.percent }}</td>
+                            <td class="num">{% if row.grade %}<span class="grade g{{ row.grade }}">{{ row.grade }}</span>{% endif %}</td>
                         </tr>
                         {% endfor %}
+                        <tr class="solved-row">
+                            <td class="name-col">Решили</td>
+                            {% for n in group.solved %}<td>{{ n }}</td>{% endfor %}
+                            <td colspan="3"></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">📂</div>
-                <h3>Выберите тестирование слева</h3>
-            </div>
+            <p class="muted">В этом тестировании никто не отвечал.</p>
+            {% endfor %}
+            {% if groups %}<p class="muted legend">✓ верно · ✗ неверно · — нет ответа. Наведите на клетку, чтобы увидеть ответ; щёлкните на ученика, чтобы исправить отметку вручную.</p>{% endif %}
+            {% else %}
+            <div class="empty-state"><div class="empty-icon">📂</div><h3>Результатов пока нет</h3></div>
             {% endif %}
         </section>
     </div>
 </div>
 
 <style>
-.results-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
-.filters-bar { margin-bottom: 16px; }
-.filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.filter-row select, .filter-row input { padding: 8px 10px; border: 2px solid var(--border); border-radius: var(--radius); }
-.results-count { margin-top: 8px; color: var(--text-muted); font-size: 14px; }
-.session-tree { padding: 0; overflow: hidden; max-height: calc(100vh - 180px); position: sticky; top: 86px; }
-.tree-title { padding: 14px 16px; border-bottom: 1px solid var(--border-light); font-weight: 700; background: var(--bg-sidebar); }
-.tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
-.tree-check-all { font-size: 13px; color: var(--text-secondary); }
-.tree-list { max-height: calc(100vh - 280px); overflow-y: auto; }
-.tree-item-row { display: grid; grid-template-columns: auto 1fr; align-items: stretch; border-bottom: 1px solid var(--border-light); }
-.tree-item-row:hover { background: var(--primary-bg); }
-.tree-item-row.active { background: var(--primary-bg); border-left: 4px solid var(--primary); }
-.tree-check-item { display: flex; align-items: center; padding: 0 8px 0 10px; }
-.tree-item { display: block; padding: 12px 14px; text-decoration: none; color: inherit; }
+.results-page h1 { margin-bottom: 20px; }
+.results-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+.session-tree { padding: 0; overflow: hidden; position: sticky; top: 86px; }
+.tree-search { padding: 12px; border-bottom: 1px solid var(--border-light); }
+.tree-search input { width: 100%; }
+.tree-list { max-height: calc(100vh - 220px); overflow-y: auto; }
+.tree-item { display: block; padding: 12px 14px; text-decoration: none; color: inherit; border-bottom: 1px solid var(--border-light); }
+.tree-item:hover, .tree-item.active { background: var(--primary-bg); }
+.tree-item.active { border-left: 4px solid var(--primary); }
 .tree-item-title { font-weight: 600; margin-bottom: 4px; }
 .tree-item-meta { font-size: 12px; color: var(--text-muted); }
-.session-details { min-height: 500px; }
-.details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.details-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 13px; flex-wrap: wrap; }
-.students-table-wrap { overflow-x: auto; }
-.students-table { width: 100%; border-collapse: collapse; }
-.students-table th, .students-table td { padding: 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
-.students-table th { font-size: 13px; color: var(--text-muted); }
-.grade-badge { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 700; }
-.grade-badge.grade-5 { background: #d1fae5; color: #065f46; }
-.grade-badge.grade-4 { background: #dbeafe; color: #1e40af; }
-.grade-badge.grade-3 { background: #fef3c7; color: #92400e; }
-.grade-badge.grade-2 { background: #fee2e2; color: #991b1b; }
+.live { color: #059669; font-weight: 700; }
 .empty-small { padding: 16px; color: var(--text-muted); }
-.empty-state { text-align: center; padding: 80px 20px; }
-@media (max-width: 980px) {
-    .results-layout { grid-template-columns: 1fr; }
-    .session-tree { position: static; max-height: 320px; }
-    .tree-list { max-height: 220px; }
-}
+.details-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.summary-line { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); font-size: 14px; margin-top: 6px; align-items: center; }
+.note { background: #fef3c7; color: #92400e; padding: 10px 14px; border-radius: 10px; }
+.group-title { margin: 18px 0 8px; }
+.matrix-wrap { overflow-x: auto; }
+.matrix { border-collapse: collapse; min-width: 100%; }
+.matrix th, .matrix td { border: 1px solid var(--border-light); padding: 8px 10px; text-align: center; white-space: nowrap; }
+.matrix th { font-size: 13px; color: var(--text-muted); background: var(--bg-sidebar, #f8fafc); }
+.matrix .name-col { text-align: left; position: sticky; left: 0; background: #fff; }
+.matrix .cell { font-weight: 700; cursor: default; }
+.matrix .ok { background: #dcfce7; color: #166534; }
+.matrix .bad { background: #fee2e2; color: #991b1b; }
+.matrix .none { background: #f3f4f6; color: #9ca3af; }
+.matrix .num { font-weight: 600; }
+.solved-row td { font-weight: 700; background: #f8fafc; }
+.grade { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.grade.g5 { background: #d1fae5; color: #065f46; }
+.grade.g4 { background: #dbeafe; color: #1e40af; }
+.grade.g3 { background: #fef3c7; color: #92400e; }
+.grade.g2 { background: #fee2e2; color: #991b1b; }
+.muted { color: var(--text-muted); }
+.legend { font-size: 13px; margin-top: 10px; }
+@media (max-width: 980px) { .results-layout { grid-template-columns: 1fr; } .session-tree { position: static; } }
 </style>
-
-<script>
-const checkAll = document.getElementById('checkAllSessions');
-if (checkAll) {
-    checkAll.addEventListener('change', function() {
-        document.querySelectorAll('.session-checkbox').forEach((cb) => {
-            cb.checked = checkAll.checked;
-        });
-    });
-}
-
-function confirmBulkDelete() {
-    const checked = Array.from(document.querySelectorAll('.session-checkbox')).filter((cb) => cb.checked).length;
-    if (checked === 0) {
-        alert('Отметьте хотя бы одно тестирование.');
-        return false;
-    }
-    return confirm(`Удалить отмеченные тестирования: ${checked} шт.? Это действие нельзя отменить.`);
-}
-</script>
 {% endblock %}

@@ -1,79 +1,81 @@
 {% extends "teacher/base.html" %}
 
-{% block title %}Настройки - ЕГЭ Информатика{% endblock %}
+{% block title %}Настройки{% endblock %}
 
 {% block content %}
 <div class="settings-page">
     <h1>⚙️ Настройки</h1>
-    
-    <div class="settings-section card">
-        <h2>📊 Критерии оценки</h2>
-        <p class="section-hint">Настройте пороги для выставления оценок по количеству правильных ответов</p>
-        
-        {% if criteria %}
-        <table class="criteria-table">
-            <thead>
-                <tr>
-                    <th>Название</th>
-                    <th>Всего задач</th>
-                    <th>На «5»</th>
-                    <th>На «4»</th>
-                    <th>На «3»</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in criteria %}
-                <tr>
-                    <td>{{ c.name }}</td>
-                    <td>{{ c.total_tasks }}</td>
-                    <td>≥ {{ c.grade_5_min }}</td>
-                    <td>≥ {{ c.grade_4_min }}</td>
-                    <td>≥ {{ c.grade_3_min }}</td>
-                </tr>
+
+    <form method="POST" action="{{ url_for('settings') }}">
+        <section class="card">
+            <h2>Оценки по умолчанию</h2>
+            <p class="muted">Доля верных ответов. При запуске тестирования пороги сами пересчитываются под число заданий варианта.</p>
+            <div class="grades">
+                {% for grade, percent in [(5, percents[0]), (4, percents[1]), (3, percents[2])] %}
+                <label class="grade-box g{{ grade }}">
+                    <span class="grade-title">«{{ grade }}»</span>
+                    от <input type="number" name="grade_{{ grade }}_percent" value="{{ percent }}" min="1" max="100" required style="width:70px;"> %
+                </label>
                 {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-        
-        <h3>Добавить/изменить критерии</h3>
-        <form action="{{ url_for('update_criteria') }}" method="POST" class="criteria-form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="name">Название</label>
-                    <input type="text" name="name" id="name" placeholder="Например: Полный вариант ЕГЭ" required>
-                </div>
-                <div class="form-group">
-                    <label for="total_tasks">Количество задач</label>
-                    <input type="number" name="total_tasks" id="total_tasks" min="1" max="100" required>
-                </div>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="grade_5_min">Минимум на «5»</label>
-                    <input type="number" name="grade_5_min" id="grade_5_min" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label for="grade_4_min">Минимум на «4»</label>
-                    <input type="number" name="grade_4_min" id="grade_4_min" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label for="grade_3_min">Минимум на «3»</label>
-                    <input type="number" name="grade_3_min" id="grade_3_min" min="1" required>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">💾 Сохранить критерии</button>
+            <p class="muted small">Меньше порога «3» — оценка «2».</p>
+        </section>
+
+        <section class="card">
+            <h2>Скрытые разделы</h2>
+            <label class="check">
+                <input type="checkbox" name="show_ege_banks" value="1" {% if ege_banks_on or ege_banks_forced %}checked{% endif %} {% if ege_banks_forced %}disabled{% endif %}>
+                Банки заданий по номерам ЕГЭ (банк задач, создание вариантов из банка, индивидуальные варианты)
+            </label>
+            <label class="check">
+                <input type="checkbox" name="show_access_code" value="1" {% if access_code_on or access_code_forced %}checked{% endif %} {% if access_code_forced %}disabled{% endif %}>
+                Вход учеников по коду доступа (галочка при запуске тестирования)
+            </label>
+            {% if ege_banks_forced or access_code_forced %}<p class="muted small">Включено в <code>config.py</code> или переменной окружения — здесь не выключается.</p>{% endif %}
+        </section>
+
+        <div class="save-row"><button type="submit" class="btn btn-primary">💾 Сохранить</button></div>
+    </form>
+
+    <section class="card">
+        <h2>Ярлык для учеников</h2>
+        <p><a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать «Тестирование.html»</a></p>
+        <p class="muted small">Скопируйте файл на рабочий стол каждого компьютера ученика. Он ищет этот компьютер по адресам:</p>
+        <ul class="muted small">{% for url in student_urls %}<li><code>{{ url }}</code></li>{% endfor %}</ul>
+        <p class="muted small">Если ученики не подключаются: проверьте, что компьютеры в одной сети, что брандмауэр Windows разрешает порт {{ port }}, и что VPN на этом компьютере выключен или не перехватывает локальную сеть.</p>
+    </section>
+
+    <section class="card">
+        <h2>Копии базы данных</h2>
+        <p class="muted">Копия делается сама при каждом запуске системы; хранятся последние 20. Папка: <code>{{ backups_dir }}</code></p>
+        <form method="POST" action="{{ url_for('settings_backup') }}" class="inline-form">
+            <button type="submit" class="btn btn-secondary">📦 Сделать копию сейчас</button>
         </form>
-    </div>
-    
-    <div class="settings-section card">
-        <h2>📁 Хранение данных</h2>
-        <div class="info-block">
-            <p><strong>База данных:</strong> data/database.db</p>
-            <p><strong>Изображения:</strong> data/images/</p>
-            <p><strong>Прикреплённые файлы:</strong> data/attachments/</p>
-            <p><strong>Экспорт:</strong> exports/</p>
-        </div>
-        <p class="hint">Для резервного копирования скопируйте папку <code>data/</code></p>
-    </div>
+        {% if backups %}
+        <ul class="backups">
+            {% for item in backups %}<li><code>{{ item.name }}</code> <span class="muted">· {{ (item.size / 1024 / 1024)|round(1) }} МБ</span></li>{% endfor %}
+        </ul>
+        <p class="muted small">Чтобы вернуться к копии: закройте систему, замените <code>data\database.db</code> нужной копией (переименовав её в <code>database.db</code>) и запустите систему снова.</p>
+        {% else %}
+        <p class="muted small">Копий пока нет.</p>
+        {% endif %}
+    </section>
 </div>
+
+<style>
+.settings-page { max-width: 820px; margin: 0 auto; }
+.settings-page h1 { margin-bottom: 20px; }
+.settings-page section { margin-bottom: 16px; }
+.settings-page h2 { margin-bottom: 10px; }
+.muted { color: var(--text-muted); }
+.small { font-size: 13px; }
+.grades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+.grade-box { padding: 12px; border-radius: 12px; display: block; }
+.grade-box.g5 { background: #d1fae5; } .grade-box.g4 { background: #dbeafe; } .grade-box.g3 { background: #fef3c7; }
+.grade-title { display: block; font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+.check { display: block; margin: 10px 0; }
+.save-row { text-align: right; margin-bottom: 24px; }
+.backups { margin: 12px 0; padding-left: 20px; }
+@media (max-width: 640px) { .grades { grid-template-columns: 1fr; } }
+</style>
 {% endblock %}

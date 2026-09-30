@@ -109,8 +109,7 @@ class RulesTests(unittest.TestCase):
         conn.close()
         self.assertEqual([a['task_id'] for a in Student.get_answers(self.student['id'])], [self.task])
         page = server.app.test_client().get(f"/results/student/{self.student['id']}").get_data(as_text=True)
-        self.assertIn('<span class="correct">1</span>', page)
-        self.assertIn('из 1', page)
+        self.assertIn('<div class="big">1 <span class="muted">из 1</span></div>', page)
 
     # ---- 6. чужое имя
     def test_cannot_take_over_a_classmate_who_is_working(self):

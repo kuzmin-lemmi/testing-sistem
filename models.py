@@ -1366,3 +1366,107 @@ class Answer:
             raise
         finally:
             conn.close()
+
+
+# ==================== НАСТРОЙКИ, ПЕРЕПРОВЕРКА, КОПИИ БАЗЫ ====================
+
+def get_setting(key, default=None):
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT value FROM settings WHERE key = ?', (key,)).fetchone()
+    finally:
+        conn.close()
+    return row['value'] if row and row['value'] is not None else default
+
+
+def set_setting(key, value):
+    conn = get_db()
+    try:
+        conn.execute('INSERT INTO settings (key, value) VALUES (?, ?) '
+                     'ON CONFLICT(key) DO UPDATE SET value = excluded.value', (key, None if value is None else str(value)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def recheck_task_answers(task_id):
+    """После исправления правильного ответа заново проверяет все сохранённые ответы на это задание.
+    Ручные отметки учителя на заданиях с файлом не трогаются. Возвращает число перепроверенных ответов."""
+    task = Task.get_by_id(task_id)
+    if not task or task.get('answer_kind') == 'file_upload':
+        return 0
+    conn = get_db()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            'SELECT student_id, answer_1, answer_2, answer_text FROM answers WHERE task_id = ?', (task_id,))]
+    finally:
+        conn.close()
+    for row in rows:
+        Answer.save(row['student_id'], task_id, row['answer_1'], row['answer_2'], answer_text=row['answer_text'])
+    return len(rows)
+
+
+def backup_database(folder, keep=20):
+    """Копия базы (безопасно даже во время работы) в folder; хранятся последние keep копий. Возвращает путь."""
+    import os
+    import sqlite3
+    os.makedirs(folder, exist_ok=True)
+    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    path = os.path.join(folder, f'database-{stamp}.db')
+    number = 2
+    while os.path.exists(path):
+        path = os.path.join(folder, f'database-{stamp}-{number}.db')
+        number += 1
+    source = sqlite3.connect(DATABASE_PATH)
+    target = sqlite3.connect(path)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+    copies = sorted(name for name in os.listdir(folder) if name.startswith('database-') and name.endswith('.db'))
+    for name in copies[:-keep] if keep else []:
+        try:
+            os.remove(os.path.join(folder, name))
+        except OSError:
+            pass
+    return path
+
+
+def list_backups(folder):
+    import os
+    if not os.path.isdir(folder):
+        return []
+    items = []
+    for name in sorted(os.listdir(folder), reverse=True):
+        if name.startswith('database-') and name.endswith('.db'):
+            full = os.path.join(folder, name)
+            items.append({'name': name, 'size': os.path.getsize(full), 'mtime': os.path.getmtime(full)})
+    return items
+
+
+def variant_usage_counts():
+    """{variant_id: сколько раз вариант проводился (одним вариантом или среди нескольких)}."""
+    conn = get_db()
+    try:
+        rows = conn.execute('''
+            SELECT variant_id, COUNT(*) AS n FROM (
+                SELECT variant_id FROM test_sessions WHERE variant_id IS NOT NULL
+                UNION ALL
+                SELECT variant_id FROM session_variants
+            ) GROUP BY variant_id''').fetchall()
+    finally:
+        conn.close()
+    return {row['variant_id']: row['n'] for row in rows}
+
+
+def remove_task_from_variant(variant_id, task_id):
+    conn = get_db()
+    try:
+        conn.execute('DELETE FROM variant_tasks WHERE variant_id = ? AND task_id = ?', (variant_id, task_id))
+        rows = conn.execute('SELECT id FROM variant_tasks WHERE variant_id = ? ORDER BY position', (variant_id,)).fetchall()
+        for position, row in enumerate(rows, 1):
+            conn.execute('UPDATE variant_tasks SET position = ? WHERE id = ?', (position, row['id']))
+        conn.commit()
+    finally:
+        conn.close()

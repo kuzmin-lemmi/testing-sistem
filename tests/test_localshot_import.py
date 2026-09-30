@@ -307,7 +307,7 @@ class ImportTests(unittest.TestCase):
         html = self.client.get(f"/variants?variant_id={variant['id']}").get_data(as_text=True)
         self.assertIn('Загрузить из LocalShot', html)
         self.assertIn('importLocalshotForm', html)
-        self.assertIn('<td>42</td>', html)
+        self.assertIn('<span class="answer">42</span>', html)
         self.assertIn('5 10', html)
         self.assertNotIn('№1', html)  # у заданий из общего банка нет номера ЕГЭ
 

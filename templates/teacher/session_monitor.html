@@ -1,376 +1,161 @@
 {% extends "teacher/base.html" %}
 
-{% block title %}Мониторинг - ЕГЭ Информатика{% endblock %}
+{% block title %}Идёт тестирование{% endblock %}
 
 {% block content %}
-<div class="monitor-page">
-    <div class="page-header">
-        <h1>📊 Мониторинг тестирования</h1>
-        <div class="header-actions">
-            {% if session.status == 'active' %}
-            {% if session.paused %}
-            <form action="{{ url_for('session_resume', session_id=session.id) }}" method="POST" class="inline-form">
-                <button type="submit" class="btn btn-primary">▶️ Продолжить</button>
-            </form>
-            {% else %}
-            <form action="{{ url_for('session_pause', session_id=session.id) }}" method="POST" class="inline-form">
-                <button type="submit" class="btn btn-warning">⏸ Пауза</button>
-            </form>
+<div class="monitor">
+    <section class="card monitor-head">
+        <div>
+            <div class="muted">Идёт тестирование</div>
+            <h1 class="monitor-title">{{ title }}</h1>
+            <div class="muted">
+                Начато {{ session.created_at|local_dt }} · на работу {{ session.time_limit }} мин
+                {% if session.extra_seconds %} (+{{ (session.extra_seconds // 60) }} мин){% endif %}
+                {% if session.access_code %} · код: <strong>{{ session.access_code }}</strong>{% endif %}
+            </div>
+            {% if session_variants %}
+            <div class="muted">Варианты: {% for item in session_variants %}№{{ item.label }} «{{ item.name }}»{% if not loop.last %}, {% endif %}{% endfor %}</div>
             {% endif %}
-            <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
-                <input type="hidden" name="minutes" value="5">
-                <button type="submit" class="btn btn-secondary">+5 мин</button>
-            </form>
-            <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
-                <input type="hidden" name="minutes" value="10">
-                <button type="submit" class="btn btn-secondary">+10 мин</button>
-            </form>
-            <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form">
-                <button type="submit" class="btn btn-danger" onclick="return confirm('Завершить тестирование?')">⏹ Завершить</button>
-            </form>
-            {% endif %}
-            <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">← К списку</a>
         </div>
-    </div>
-    
-    <div class="session-info-card card">
-        <div class="info-grid">
-            <div class="info-item">
-                <span class="info-label">Статус</span>
-                <span class="info-value">
-                    {% if session.status == 'active' %}
-                    <span class="status-badge active">🟢 Активно</span>
-                    {% if session.paused %}
-                    <span class="status-badge paused">⏸ Пауза</span>
-                    {% endif %}
-                    {% else %}
-                    <span class="status-badge closed">⚫ Завершено</span>
-                    {% endif %}
-                </span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Время на тест</span>
-                <span class="info-value">{{ session.time_limit }} мин</span>
-            </div>
-            {% if session.access_code %}
-            <div class="info-item">
-                <span class="info-label">Код доступа</span>
-                <span class="info-value code">{{ session.access_code }}</span>
-            </div>
-            {% endif %}
-            <div class="info-item">
-                <span class="info-label">Создано</span>
-                <span class="info-value">{{ session.created_at|local_dt }}</span>
-            </div>
+        <div class="monitor-timer-box">
+            <div class="monitor-timer" id="timer">--:--</div>
+            <div class="muted" id="timerNote">осталось</div>
         </div>
-        
-        {% if session.grade_5_min %}
-        <div class="grade-criteria-info">
-            <span class="criteria-title">📊 Критерии оценки:</span>
-            <div class="criteria-badges">
-                <span class="criteria-badge grade-5">5: ≥{{ session.grade_5_min }}</span>
-                <span class="criteria-badge grade-4">4: ≥{{ session.grade_4_min }}</span>
-                <span class="criteria-badge grade-3">3: ≥{{ session.grade_3_min }}</span>
-                <span class="criteria-badge grade-2">2: &lt;{{ session.grade_3_min }}</span>
-                <span class="criteria-total">из {{ session.total_tasks }} задач</span>
-            </div>
-        </div>
-        {% endif %}
+    </section>
 
-        {% if session_variants %}
-        <div class="grade-criteria-info">
-            <span class="criteria-title">📚 Варианты в этой работе:</span>
-            <div class="criteria-badges">
-                {% for item in session_variants %}
-                <span class="criteria-badge variant-choice-badge">В{{ item.label }}: {{ item.name }} ({{ item.tasks_count }} задач)</span>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-    
-    <div class="students-section">
-        <h2>👥 Ученики ({{ students|length }}) — онлайн: {{ online_count }}</h2>
-        
-        {% if students %}
-        <div class="students-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ФИО</th>
-                        <th>Онлайн</th>
-                        <th>Статус</th>
-                        <th>Начал</th>
-                        <th>Завершил</th>
-                        <th>Активность</th>
-                        <th>Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for student in students %}
-                    <tr>
-                        <td class="student-name">
-                            {{ student.last_name }} {{ student.first_name }}
-                            {% if student.variant_label %}
-                            <span class="badge-variant">Вариант {{ student.variant_label }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if student.is_online %}
-                            <span class="status-pill online">●</span>
-                            {% else %}
-                            <span class="status-pill offline">●</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if student.status == 'finished' %}
-                            <span class="status-pill finished">✅ Завершил</span>
-                            {% else %}
-                            <span class="status-pill in-progress">⏳ В процессе</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ student.started_at[11:16] if student.started_at else '—' }}</td>
-                        <td>{{ student.finished_at[11:16] if student.finished_at else '—' }}</td>
-                        <td>{{ student.last_seen_at[11:16] if student.last_seen_at else '—' }}</td>
-                        <td>
-                            <a href="{{ url_for('result_student', student_id=student.id) }}" class="btn btn-secondary btn-small">📊 Результат</a>
-                            {% if student.get('file_uploads_count', 0) > 0 %}
-                            <span class="badge-uploads" title="Загружено файлов">📁 {{ student.file_uploads_count }}</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <section class="card monitor-controls">
+        {% if session.paused %}
+        <form action="{{ url_for('session_resume', session_id=session.id) }}" method="POST" class="inline-form">
+            <button type="submit" class="btn btn-primary">▶️ Продолжить</button>
+        </form>
         {% else %}
-        <div class="no-students">
-            <p>Пока никто не подключился</p>
-            {% if session.status == 'active' and session.access_code %}
-            <p class="hint">Продиктуйте ученикам код: <strong>{{ session.access_code }}</strong></p>
-            {% endif %}
-        </div>
+        <form action="{{ url_for('session_pause', session_id=session.id) }}" method="POST" class="inline-form">
+            <button type="submit" class="btn btn-warning">⏸ Пауза</button>
+        </form>
         {% endif %}
-    </div>
+        <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+            <input type="hidden" name="minutes" value="5">
+            <button type="submit" class="btn btn-secondary">+5 мин</button>
+        </form>
+        <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+            <input type="hidden" name="minutes" value="10">
+            <button type="submit" class="btn btn-secondary">+10 мин</button>
+        </form>
+        <span class="spacer"></span>
+        <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form"
+              onsubmit="return confirm('Завершить тестирование?\n\nОтветы больше не принимаются, ученики сразу увидят свои оценки и правильные ответы.')">
+            <button type="submit" class="btn btn-danger btn-large">⏹ Завершить тестирование</button>
+        </form>
+    </section>
+
+    <div class="paused-banner" id="pausedBanner" {% if not live.paused %}hidden{% endif %}>⏸ Тестирование на паузе: ученики не могут отвечать, время стоит.</div>
+    <div class="done-banner" id="doneBanner" hidden>⌛ Время у всех вышло. Можно завершать тестирование.</div>
+
+    <section class="card">
+        <h2>Ученики: <span id="countAll">{{ live.students|length }}</span>
+            <span class="muted" style="font-weight:400;">· в сети <span id="countOnline">{{ live.online }}</span></span></h2>
+        <table class="monitor-table">
+            <thead>
+                <tr><th>Ученик</th><th>Ответил</th><th>Осталось</th><th>В сети</th><th>Начал</th><th></th></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+        <p class="muted" id="empty" {% if live.students %}hidden{% endif %}>Пока никто не вошёл. Ученики открывают ярлык «Тестирование» — форма входа появится сама.</p>
+    </section>
 </div>
 
 <style>
-.session-info-card {
-    margin-bottom: 30px;
-}
-
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 24px;
-}
-
-.grade-criteria-info {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-light);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.criteria-title {
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-
-.criteria-badges {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.criteria-badge {
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.criteria-badge.grade-5 { background: #d1fae5; color: #065f46; }
-.criteria-badge.grade-4 { background: #dbeafe; color: #1e40af; }
-.criteria-badge.grade-3 { background: #fef3c7; color: #92400e; }
-.criteria-badge.grade-2 { background: #fee2e2; color: #991b1b; }
-.criteria-badge.variant-choice-badge { background: #eef2ff; color: #3730a3; }
-
-.criteria-total {
-    color: var(--text-muted);
-    font-size: 13px;
-}
-
-.info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.info-label {
-    font-size: 13px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.info-value {
-    font-size: 1.1em;
-    font-weight: 600;
-}
-
-.info-value.code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 1.4em;
-    color: var(--primary);
-    letter-spacing: 2px;
-}
-
-.status-badge {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 14px;
-}
-
-.status-badge.active {
-    background: var(--success-bg);
-    color: #065f46;
-}
-
-.status-badge.closed {
-    background: var(--bg-sidebar);
-    color: var(--text-muted);
-}
-
-.status-badge.paused {
-    background: var(--warning-bg);
-    color: #92400e;
-}
-
-.students-section h2 {
-    margin-bottom: 20px;
-}
-
-.students-table {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
-.students-table table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.students-table th,
-.students-table td {
-    padding: 16px 20px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-light);
-}
-
-.students-table th {
-    background: var(--bg-sidebar);
-    font-weight: 600;
-    font-size: 13px;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-}
-
-.students-table tr:last-child td {
-    border-bottom: none;
-}
-
-.students-table tr:hover td {
-    background: var(--bg-sidebar);
-}
-
-.student-name {
-    font-weight: 600;
-}
-
-.status-pill {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.status-pill.finished {
-    background: var(--success-bg);
-    color: #065f46;
-}
-
-.status-pill.in-progress {
-    background: var(--warning-bg);
-    color: #92400e;
-}
-
-.status-pill.online {
-    color: #16a34a;
-}
-
-.status-pill.offline {
-    color: #94a3b8;
-}
-
-.no-students {
-    text-align: center;
-    padding: 60px 20px;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    color: var(--text-secondary);
-}
-
-.no-students .hint {
-    margin-top: 16px;
-    font-size: 1.1em;
-}
-
-.no-students .hint strong {
-    color: var(--primary);
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 2px;
-}
-
-.badge-uploads {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    margin-left: 6px;
-}
-
-.badge-variant {
-    display: inline-flex;
-    align-items: center;
-    margin-left: 8px;
-    padding: 3px 8px;
-    background: #eef2ff;
-    color: #4338ca;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 700;
-}
+.monitor { max-width: 1100px; margin: 0 auto; }
+.monitor-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.monitor-title { margin: 2px 0 6px; font-size: 26px; }
+.monitor-timer-box { text-align: center; }
+.monitor-timer { font-size: 56px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+.monitor-timer.warning { color: #d97706; }
+.monitor-timer.danger { color: #dc2626; }
+.monitor-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.monitor-controls .spacer { flex: 1; }
+.muted { color: var(--text-muted); }
+.paused-banner, .done-banner { padding: 12px 16px; border-radius: 12px; margin-bottom: 16px; font-weight: 600; }
+.paused-banner { background: #fef3c7; color: #92400e; }
+.done-banner { background: #dbeafe; color: #1e40af; }
+.monitor-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.monitor-table th, .monitor-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: left; }
+.monitor-table th { font-size: 13px; color: var(--text-muted); }
+.progress { display: flex; align-items: center; gap: 10px; }
+.progress-bar { width: 140px; height: 10px; background: #e5e7eb; border-radius: 6px; overflow: hidden; }
+.progress-bar > div { height: 100%; background: #6366f1; }
+.progress-bar.full > div { background: #10b981; }
+.online-yes { color: #059669; font-weight: 600; }
+.online-no { color: #dc2626; font-weight: 700; }
+.variant-tag { margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; }
+tr.offline td { background: #fef2f2; }
 </style>
 
-{% if session.status == 'active' %}
 <script>
-// Автообновление страницы каждые 10 секунд
-setTimeout(function() {
-    location.reload();
-}, 10000);
+(function () {
+    const liveUrl = {{ url_for('session_live', session_id=session.id)|tojson }};
+    const resultBase = {{ url_for('result_student', student_id=0)|tojson }}.replace(/0$/, '');
+    let state = {{ live|tojson }};
+    let remaining = state.remaining;
+    let receivedAt = Date.now();
+
+    function clock(seconds) {
+        seconds = Math.max(0, Math.round(seconds));
+        const m = Math.floor(seconds / 60), s = seconds % 60;
+        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    function esc(text) {
+        return String(text).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    }
+
+    function drawTimer() {
+        const passed = state.paused ? 0 : (Date.now() - receivedAt) / 1000;
+        const left = remaining - passed;
+        const timer = document.getElementById('timer');
+        timer.textContent = clock(left);
+        timer.classList.toggle('warning', left <= 300 && left > 60);
+        timer.classList.toggle('danger', left <= 60);
+        document.getElementById('timerNote').textContent = state.paused ? 'пауза' : (state.students.length > 1 ? 'осталось (у последнего)' : 'осталось');
+    }
+
+    function drawRows() {
+        const rows = state.students.map(s => {
+            const percent = s.total ? Math.round(100 * s.answered / s.total) : 0;
+            const offline = !s.online && s.remaining > 0;
+            return `<tr class="${offline ? 'offline' : ''}">
+                <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}</td>
+                <td><div class="progress"><div class="progress-bar ${s.answered === s.total ? 'full' : ''}"><div style="width:${percent}%"></div></div>
+                    ${s.answered} из ${s.total}${s.uploads ? ` · 📁 ${s.uploads}` : ''}</div></td>
+                <td>${s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
+                <td>${s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
+                <td>${esc(s.started)}</td>
+                <td><a href="${resultBase}${s.id}">ответы →</a></td>
+            </tr>`;
+        });
+        document.getElementById('rows').innerHTML = rows.join('');
+        document.getElementById('countAll').textContent = state.students.length;
+        document.getElementById('countOnline').textContent = state.online;
+        document.getElementById('empty').hidden = state.students.length > 0;
+        document.getElementById('pausedBanner').hidden = !state.paused;
+        document.getElementById('doneBanner').hidden = !state.finished_all;
+    }
+
+    async function refresh() {
+        try {
+            const response = await fetch(liveUrl, { cache: 'no-store' });
+            if (response.ok) {
+                const next = await response.json();
+                if (next.status !== 'active' || next.paused !== state.paused) { location.reload(); return; }
+                state = next; remaining = next.remaining; receivedAt = Date.now();
+                drawRows();
+            }
+        } catch (error) { /* сервер недоступен — пробуем снова */ }
+    }
+
+    drawRows();
+    drawTimer();
+    setInterval(drawTimer, 1000);
+    setInterval(refresh, 3000);
+})();
 </script>
-{% endif %}
 {% endblock %}

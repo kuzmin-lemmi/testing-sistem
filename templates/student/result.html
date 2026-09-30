@@ -139,7 +139,6 @@
                 <thead>
                     <tr>
                         <th>№</th>
-                        <th>Номер ЕГЭ</th>
                         <th>Ваш ответ</th>
                         <th>Правильный</th>
                         <th>Результат</th>
@@ -149,7 +148,6 @@
                     {% for task in tasks %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>
                         <td>
                             {% if task.answer_kind == 'file_upload' %}
                                 {% if answers_dict.get(task.id) and answers_dict[task.id].upload_name %}
@@ -158,7 +156,7 @@
                                     <span style="color: #94a3b8;">файл не загружен</span>
                                 {% endif %}
                             {% elif answers_dict.get(task.id) %}
-                                <span class="answer-value">{{ answers_dict[task.id].answer_1 if answers_dict[task.id].answer_1 is not none else '—' }}{% if task.answer_count == 2 %}, {{ answers_dict[task.id].answer_2 if answers_dict[task.id].answer_2 is not none else '—' }}{% endif %}</span>
+                                <span class="answer-value">{{ format_given(task, answers_dict[task.id]) }}</span>
                             {% else %}
                                 <span style="color: #94a3b8;">не отвечено</span>
                             {% endif %}
@@ -167,7 +165,7 @@
                             {% if task.answer_kind == 'file_upload' %}
                                 <span style="color: #94a3b8;">ручная проверка</span>
                             {% else %}
-                                <span class="answer-value answer-correct">{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</span>
+                                <span class="answer-value answer-correct">{{ format_expected(task) }}</span>
                             {% endif %}
                         </td>
                         <td>
