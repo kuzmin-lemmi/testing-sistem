@@ -257,6 +257,12 @@ class LaunchTests(Base):
         page = self.client.get('/sessions/new').get_data(as_text=True)
         self.assertIn('value="30"', page)
 
+    def test_page_elements_used_by_script_exist_without_ege_banks(self):
+        page = self.client.get('/sessions/new').get_data(as_text=True)
+        for element_id in ('variantSearch', 'noMatch', 'singleBox', 'multiBox', 'multiHint', 'totalTasks',
+                           'g5', 'g4', 'g3', 'p5', 'p4', 'p3', 'chosenName'):
+            self.assertIn(f'id="{element_id}"', page)
+
     def test_default_grades_from_percents(self):
         self.post('/sessions/new', variant_mode='single', variant_id=str(self.variant_id), time_limit='30')
         active = TestSession.get_active()

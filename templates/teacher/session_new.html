@@ -17,7 +17,8 @@
     </section>
     {% else %}
     <form action="{{ url_for('session_new') }}" method="POST" id="launchForm">
-        <section class="card">
+        <div class="launch-grid">
+        <section class="card variants-col">
             <h2>Вариант</h2>
             {% if variants|length > 1 or show_ege_banks %}
             <div class="mode-switch">
@@ -30,6 +31,7 @@
             {% endif %}
 
             <input type="search" id="variantSearch" class="variant-search" placeholder="🔍 Найти вариант по названию" autocomplete="off">
+            <p class="muted" id="noMatch" hidden>Ничего не найдено.</p>
             <div id="singleBox" class="variant-list">
                 {% for variant in variants %}
                 <label class="variant-option" data-name="{{ variant.name|lower }}">
@@ -53,7 +55,6 @@
             </div>
 
             {% if show_ege_banks %}
-            <p class="muted" id="noMatch" hidden>Ничего не найдено.</p>
             <div id="individualBox" hidden>
                 <label><input type="radio" name="individual_type" value="full" checked> Полный ЕГЭ (27 заданий)</label>
                 <label><input type="radio" name="individual_type" value="thematic"> Тематический:</label>
@@ -63,6 +64,7 @@
             {% endif %}
         </section>
 
+        <div class="settings-col">
         <section class="card">
             <h2>Время и инструменты</h2>
             <div class="time-row">
@@ -96,25 +98,31 @@
             <p class="muted small">Проценты по умолчанию меняются в «Настройках». Число заданий пересчитывается само под выбранный вариант; его можно поправить вручную.</p>
         </section>
 
-        <div class="launch-bar">
+        <div class="launch-bar card">
             <div class="launch-choice"><span class="muted">Выбрано:</span> <strong id="chosenName">—</strong></div>
             <button type="submit" class="btn btn-success btn-large">🚀 Запустить тестирование</button>
+        </div>
+        </div>
         </div>
     </form>
     {% endif %}
 </div>
 
 <style>
-.launch-page { max-width: 820px; margin: 0 auto; }
+.launch-page { max-width: 1200px; margin: 0 auto; }
 .launch-page section { margin-bottom: 16px; }
 .launch-page h2 { margin-bottom: 12px; }
 .mode-switch { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
-.variant-list { display: flex; flex-direction: column; gap: 6px; max-height: 290px; overflow-y: auto; padding-right: 4px; }
+.variant-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 4px; }
 .variant-search { width: 100%; margin-bottom: 10px; }
 .variant-option { padding: 8px 12px !important; }
-.launch-page { padding-bottom: 90px; }
-.launch-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff; border-top: 1px solid var(--border-light);
-              box-shadow: 0 -6px 20px rgba(0,0,0,.06); padding: 12px 24px; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.launch-grid { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; align-items: start; }
+.variants-col { position: sticky; top: 86px; margin-bottom: 0; }
+.variants-col .variant-list { max-height: calc(100vh - 330px); min-height: 200px; }
+.variants-col .variant-option { flex-wrap: wrap; row-gap: 2px; }
+.variants-col .variant-option .muted { flex-basis: 100%; padding-left: 26px; font-size: 13px; }
+.launch-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+@media (max-width: 860px) { .launch-grid { grid-template-columns: 1fr; } .variants-col { position: static; } }
 .launch-choice { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .variant-option { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 10px; cursor: pointer; }
 .variant-option:has(input:checked) { border-color: var(--primary); background: var(--primary-bg); }
@@ -124,6 +132,7 @@
 .time-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .check { display: block; margin: 8px 0; }
 .grades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.launch-choice strong { font-size: 18px; }
 .grade-box { padding: 12px; border-radius: 12px; }
 .grade-box.g5 { background: #d1fae5; } .grade-box.g4 { background: #dbeafe; } .grade-box.g3 { background: #fef3c7; }
 .grade-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
