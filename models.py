@@ -287,7 +287,7 @@ def init_db():
     """Инициализация базы данных"""
     conn = get_db()
     cursor = conn.cursor()
-    
+
     # Таблица классов (для обычных работ, не ЕГЭ)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS classes (
@@ -317,7 +317,7 @@ def init_db():
             FOREIGN KEY (class_id) REFERENCES classes(id)
         )
     ''')
-    
+
     # Таблица вариантов
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS variants (
@@ -331,7 +331,7 @@ def init_db():
             FOREIGN KEY (class_id) REFERENCES classes(id)
         )
     ''')
-    
+
     # Таблица связи вариант-задачи
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS variant_tasks (
@@ -343,7 +343,7 @@ def init_db():
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
         )
     ''')
-    
+
     # Таблица тестирований (сессий)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS test_sessions (
@@ -369,7 +369,7 @@ def init_db():
             FOREIGN KEY (variant_id) REFERENCES variants(id)
         )
     ''')
-    
+
     # Таблица учеников на тестировании
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS students (
@@ -397,7 +397,7 @@ def init_db():
             FOREIGN KEY (variant_id) REFERENCES variants(id) ON DELETE CASCADE
         )
     ''')
-    
+
     # Таблица ответов учеников
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS answers (
@@ -417,7 +417,7 @@ def init_db():
             FOREIGN KEY (task_id) REFERENCES tasks(id)
         )
     ''')
-    
+
     # Таблица критериев оценки
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS grade_criteria (
@@ -429,7 +429,7 @@ def init_db():
             grade_3_min INTEGER NOT NULL
         )
     ''')
-    
+
     # Таблица настроек
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -437,7 +437,7 @@ def init_db():
             value TEXT
         )
     ''')
-    
+
     # Добавляем критерии по умолчанию для полного варианта (27 задач)
     cursor.execute('SELECT COUNT(*) FROM grade_criteria WHERE total_tasks = 27')
     if cursor.fetchone()[0] == 0:
@@ -445,7 +445,7 @@ def init_db():
             INSERT INTO grade_criteria (name, total_tasks, grade_5_min, grade_4_min, grade_3_min)
             VALUES ('Полный вариант ЕГЭ', 27, 23, 18, 12)
         ''')
-    
+
     conn.commit()
     conn.close()
 
@@ -467,7 +467,7 @@ class Task:
         conn.commit()
         conn.close()
         return task_id
-    
+
     @staticmethod
     def get_by_id(task_id):
         conn = get_db()
@@ -476,7 +476,7 @@ class Task:
         task = cursor.fetchone()
         conn.close()
         return dict(task) if task else None
-    
+
     @staticmethod
     def get_attachment_name(attachment_path):
         """Настоящее имя файла к заданию (на диске он хранится под случайным именем)."""
@@ -505,7 +505,7 @@ class Task:
         tasks = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return tasks
-    
+
     @staticmethod
     def get_all(scope=None, class_id=None):
         conn = get_db()
@@ -521,7 +521,7 @@ class Task:
         tasks = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return tasks
-    
+
     @staticmethod
     def count_by_ege_number():
         """Возвращает словарь {номер_ЕГЭ: количество_задач}"""
@@ -546,7 +546,7 @@ class Task:
         rows = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return rows
-    
+
     @staticmethod
     def update(task_id, **kwargs):
         conn = get_db()
@@ -563,7 +563,7 @@ class Task:
             cursor.execute(f'UPDATE tasks SET {", ".join(fields)} WHERE id = ?', values)
             conn.commit()
         conn.close()
-    
+
     @staticmethod
     def delete(task_id):
         conn = get_db()
@@ -649,7 +649,7 @@ class Variant:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def add_tasks(variant_id, task_ids):
         """Добавляет задачи в вариант"""
@@ -707,7 +707,7 @@ class Variant:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def get_by_id(variant_id):
         conn = get_db()
@@ -716,7 +716,7 @@ class Variant:
         variant = cursor.fetchone()
         conn.close()
         return dict(variant) if variant else None
-    
+
     @staticmethod
     def get_tasks(variant_id):
         """Получить задачи варианта"""
@@ -731,7 +731,7 @@ class Variant:
         tasks = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return tasks
-    
+
     @staticmethod
     def get_all(scope=None):
         conn = get_db()
@@ -743,7 +743,7 @@ class Variant:
         variants = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return variants
-    
+
     @staticmethod
     def delete(variant_id, cascade=False):
         conn = get_db()
@@ -803,7 +803,7 @@ class GradeCriteria:
         criteria = cursor.fetchone()
         conn.close()
         return dict(criteria) if criteria else None
-    
+
     @staticmethod
     def get_all():
         conn = get_db()
@@ -812,7 +812,7 @@ class GradeCriteria:
         criteria = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return criteria
-    
+
     @staticmethod
     def create_or_update(name, total_tasks, grade_5_min, grade_4_min, grade_3_min):
         conn = get_db()
@@ -821,7 +821,7 @@ class GradeCriteria:
         existing = cursor.fetchone()
         if existing:
             cursor.execute('''
-                UPDATE grade_criteria 
+                UPDATE grade_criteria
                 SET name = ?, grade_5_min = ?, grade_4_min = ?, grade_3_min = ?
                 WHERE total_tasks = ?
             ''', (name, grade_5_min, grade_4_min, grade_3_min, total_tasks))
@@ -832,11 +832,11 @@ class GradeCriteria:
             ''', (name, total_tasks, grade_5_min, grade_4_min, grade_3_min))
         conn.commit()
         conn.close()
-    
+
     @staticmethod
     def calculate_grade(correct_count, total_tasks, session_criteria=None):
         """Вычислить оценку по количеству правильных ответов
-        
+
         session_criteria - словарь с полями grade_5_min, grade_4_min, grade_3_min
                           от конкретной сессии тестирования (если заданы)
         """
@@ -850,7 +850,7 @@ class GradeCriteria:
                 return 3
             else:
                 return 2
-        
+
         # Иначе ищем общие критерии
         criteria = GradeCriteria.get_for_total(total_tasks)
         if not criteria:
@@ -864,7 +864,7 @@ class GradeCriteria:
                 return 3
             else:
                 return 2
-        
+
         if correct_count >= criteria['grade_5_min']:
             return 5
         elif correct_count >= criteria['grade_4_min']:
@@ -887,14 +887,14 @@ class TestSession:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO test_sessions (variant_id, individual_mode, time_limit, 
+            INSERT INTO test_sessions (variant_id, individual_mode, time_limit,
                                        access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled, status,
                                        grade_5_min, grade_4_min, grade_3_min, total_tasks)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
         ''', (variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled,
               grade_5_min, grade_4_min, grade_3_min, total_tasks))
         session_id = cursor.lastrowid
-        
+
         # Сохраняем настройки для индивидуальных вариантов
         if individual_mode and thematic_ege_number is not None:
             cursor.execute('''
@@ -905,11 +905,11 @@ class TestSession:
                 INSERT INTO settings (key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value = ?
             ''', (f'session_{session_id}_count', str(thematic_tasks_count), str(thematic_tasks_count)))
-        
+
         conn.commit()
         conn.close()
         return session_id
-    
+
     @staticmethod
     def get_by_id(session_id):
         conn = get_db()
@@ -972,7 +972,7 @@ class TestSession:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
-    
+
     @staticmethod
     def get_active():
         conn = get_db()
@@ -981,7 +981,7 @@ class TestSession:
         session = cursor.fetchone()
         conn.close()
         return dict(session) if session else None
-    
+
     @staticmethod
     def get_all():
         conn = get_db()
@@ -990,7 +990,7 @@ class TestSession:
         sessions = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return sessions
-    
+
     @staticmethod
     def close(session_id):
         conn = get_db()
@@ -1044,7 +1044,7 @@ class TestSession:
         ''', (extra_seconds, session_id))
         conn.commit()
         conn.close()
-    
+
     @staticmethod
     def get_students(session_id):
         conn = get_db()
@@ -1094,7 +1094,7 @@ class Student:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def get_by_id(student_id):
         conn = get_db()
@@ -1103,13 +1103,13 @@ class Student:
         student = cursor.fetchone()
         conn.close()
         return dict(student) if student else None
-    
+
     @staticmethod
     def get_by_session_and_name(session_id, first_name, last_name):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT * FROM students 
+            SELECT * FROM students
             WHERE session_id = ? AND first_name = ? AND last_name = ?
         ''', (session_id, first_name, last_name))
         student = cursor.fetchone()
@@ -1130,15 +1130,15 @@ class Student:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def finish(student_id):
         conn = get_db()
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE students 
-                SET status = 'finished', finished_at = CURRENT_TIMESTAMP 
+                UPDATE students
+                SET status = 'finished', finished_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (student_id,))
             conn.commit()
@@ -1164,17 +1164,19 @@ class Student:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def get_answers(student_id):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT a.*, t.ege_number, t.answer_1 as correct_1, t.answer_2 as correct_2, 
+            SELECT a.*, t.ege_number, t.answer_1 as correct_1, t.answer_2 as correct_2,
                    t.answer_count, t.image_path
             FROM answers a
             JOIN tasks t ON a.task_id = t.id
+            JOIN students s ON s.id = a.student_id
             WHERE a.student_id = ?
+              AND a.task_id IN (SELECT task_id FROM variant_tasks WHERE variant_id = s.variant_id)
             ORDER BY t.ege_number
         ''', (student_id,))
         answers = [dict(row) for row in cursor.fetchall()]
@@ -1218,12 +1220,12 @@ class Answer:
                     pass
             # Иначе — регистронезависимое сравнение (работает и для кириллицы)
             return a.casefold() == b.casefold()
-        
+
         try:
             # Получаем правильные ответы
             cursor.execute('SELECT answer_1, answer_2, answer_count, answer_text FROM tasks WHERE id = ?', (task_id,))
             task = cursor.fetchone()
-            
+
             # Проверяем правильность
             is_correct = None  # None = не проверено/неприменимо (например, текстовый ответ)
             if task:
@@ -1256,10 +1258,10 @@ class Answer:
                     is_correct = all(_equal(provided[i], expected[i]) for i in range(count))
 
             # Сохраняем или обновляем ответ
-            cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?', 
+            cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
                           (student_id, task_id))
             existing = cursor.fetchone()
-            
+
             if existing:
                 cursor.execute('''
                     UPDATE answers SET answer_1 = ?, answer_2 = ?, answer_text = ?, is_correct = ?,
@@ -1271,7 +1273,7 @@ class Answer:
                     INSERT INTO answers (student_id, task_id, answer_1, answer_2, answer_text, is_correct)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
-            
+
             conn.commit()
             return is_correct
         except Exception:
@@ -1279,7 +1281,7 @@ class Answer:
             raise
         finally:
             conn.close()
-    
+
     @staticmethod
     def get_for_student_task(student_id, task_id):
         conn = get_db()

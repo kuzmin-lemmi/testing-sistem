@@ -8,7 +8,7 @@
         <h1>▶️ Запустить тестирование</h1>
         <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">← Назад</a>
     </div>
-    
+
     <form action="{{ url_for('session_new') }}" method="POST" class="session-form">
         <!-- Шаг 1: Режим вариантов -->
         <div class="step-card card">
@@ -46,7 +46,7 @@
                 </label>
             </div>
         </div>
-        
+
         <!-- Настройки для единого варианта -->
         <div class="step-card card" id="singleSettings">
             <h2>2️⃣ Выберите вариант</h2>
@@ -99,7 +99,7 @@
             </div>
             {% endif %}
         </div>
-        
+
         <!-- Настройки для индивидуальных вариантов -->
         <div class="step-card card" id="individualSettings" style="display: none;">
             <h2>2️⃣ Настройки генерации</h2>
@@ -133,7 +133,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Шаг 3: Параметры -->
         <div class="step-card card">
             <h2>3️⃣ Параметры тестирования</h2>
@@ -154,25 +154,8 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="form-group">
-                <label>📊 После завершения</label>
-                <div class="checkbox-toggle">
-                    <label>
-                        <input type="checkbox" name="show_answers" value="1" checked>
-                        <span>Показывать правильные ответы ученикам</span>
-                    </label>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>🧑‍🏫 Управление завершением</label>
-                <div class="checkbox-toggle">
-                    <label>
-                        <input type="checkbox" name="teacher_finish_only" value="1">
-                        <span>Завершать тест только по команде учителя</span>
-                    </label>
-                </div>
-                <p class="hint">Если включено — ученики не смогут завершить тест сами.</p>
-            </div>
+            <input type="hidden" name="show_answers" value="1">
+            <p class="hint">Ученики не завершают тест сами: до конца времени ответы можно менять. Когда вы завершите тестирование, каждый ученик сразу увидит свою оценку и правильные ответы.</p>
             <div class="form-group">
                 <label>🧮 Калькулятор</label>
                 <div class="checkbox-toggle">
@@ -194,19 +177,19 @@
                 <p class="hint">Откроет встроенный редактор Python с запуском кода.</p>
             </div>
         </div>
-        
+
         <!-- Шаг 4: Критерии оценки -->
         <div class="step-card card">
             <h2>4️⃣ Критерии оценки для этого тестирования</h2>
             <p class="hint-text">Укажите минимальное количество правильных ответов для каждой оценки</p>
-            
+
             {% if saved_criteria %}
             <div class="form-group">
                 <label>📂 Загрузить сохранённые критерии</label>
                 <select id="savedCriteria" onchange="loadSavedCriteria()">
                     <option value="">— Не выбрано (ввести вручную) —</option>
                     {% for crit in saved_criteria %}
-                    <option value="{{ crit.total_tasks }}_{{ crit.grade_5_min }}_{{ crit.grade_4_min }}_{{ crit.grade_3_min }}" 
+                    <option value="{{ crit.total_tasks }}_{{ crit.grade_5_min }}_{{ crit.grade_4_min }}_{{ crit.grade_3_min }}"
                             data-total="{{ crit.total_tasks }}"
                             data-g5="{{ crit.grade_5_min }}"
                             data-g4="{{ crit.grade_4_min }}"
@@ -217,12 +200,12 @@
                 </select>
             </div>
             {% endif %}
-            
+
             <div class="form-group">
                 <label>📝 Всего задач в варианте</label>
                 <input type="number" name="total_tasks" id="totalTasks" value="8" min="1" max="100" onchange="updateGradeHints()">
             </div>
-            
+
             <div class="grades-row">
                 <div class="grade-input">
                     <label class="grade-label grade-5-label">Минимум на 5</label>
@@ -240,7 +223,7 @@
                     <span class="grade-hint" id="hint3"></span>
                 </div>
             </div>
-            
+
             <div class="grade-presets">
                 <span class="presets-label">Быстрая настройка:</span>
                 <button type="button" class="btn btn-small btn-outline" onclick="setPreset(27)">ЕГЭ (27)</button>
@@ -249,7 +232,7 @@
                 <button type="button" class="btn btn-small btn-outline" onclick="setPreset(5)">5 задач</button>
             </div>
         </div>
-        
+
         <div class="form-actions">
             <button type="submit" class="btn btn-success btn-large">🚀 Запустить тестирование</button>
         </div>
@@ -528,7 +511,7 @@ function updateGradeHints() {
     const g5 = parseInt(document.getElementById('grade5').value) || 0;
     const g4 = parseInt(document.getElementById('grade4').value) || 0;
     const g3 = parseInt(document.getElementById('grade3').value) || 0;
-    
+
     document.getElementById('hint5').textContent = `≥${Math.round(g5/total*100)}%`;
     document.getElementById('hint4').textContent = `≥${Math.round(g4/total*100)}%`;
     document.getElementById('hint3').textContent = `≥${Math.round(g3/total*100)}%`;
@@ -573,23 +556,23 @@ function syncTotalTasks() {
 
 function setPreset(total) {
     document.getElementById('totalTasks').value = total;
-    
+
     // Рассчитываем пороги: 5=85%, 4=65%, 3=45%
     document.getElementById('grade5').value = Math.ceil(total * 0.85);
     document.getElementById('grade4').value = Math.ceil(total * 0.65);
     document.getElementById('grade3').value = Math.ceil(total * 0.45);
-    
+
     // Сбрасываем выбор сохранённых критериев
     const savedSelect = document.getElementById('savedCriteria');
     if (savedSelect) savedSelect.value = '';
-    
+
     updateGradeHints();
 }
 
 function loadSavedCriteria() {
     const select = document.getElementById('savedCriteria');
     const option = select.options[select.selectedIndex];
-    
+
     if (option.value) {
         document.getElementById('totalTasks').value = option.dataset.total;
         document.getElementById('grade5').value = option.dataset.g5;

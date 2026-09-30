@@ -377,7 +377,7 @@ def index():
     task_counts = Task.count_by_ege_number()
     total_tasks = sum(task_counts.values())
     variants_count = len(Variant.get_all())
-    
+
     return render_template('teacher/index.html',
                          local_ip=get_local_ip(),
                          port=PORT,
@@ -618,7 +618,7 @@ def task_add():
             ege_number = 1
         else:
             ege_number = int(request.form.get('ege_number'))
-        
+
         # Обработка изображения
         image = request.files.get('image')
         if not image or not image.filename:
@@ -628,11 +628,11 @@ def task_add():
         if not valid_image:
             flash(image_error or 'Необходимо загрузить PNG-изображение', 'error')
             return redirect(url_for('task_add', mode=mode, ege=ege_number, class_id=class_id))
-        
+
         image_filename = generate_unique_filename(image.filename)
         image_path = os.path.join(IMAGES_DIR, image_filename)
         image.save(image_path)
-        
+
         # Обработка прикреплённого файла (опционально)
         attachment_path = None
         attachment_filename = None
@@ -647,7 +647,7 @@ def task_add():
             attachment_filename = generate_unique_filename(attachment.filename)
             attachment_path = os.path.join(ATTACHMENTS_DIR, attachment_filename)
             attachment.save(attachment_path)
-        
+
         answer_kind = request.form.get('answer_kind', 'classic')
         if answer_kind not in ('classic', 'file_upload'):
             answer_kind = 'classic'
@@ -718,7 +718,7 @@ def task_edit(task_id):
     if not task:
         flash('Задача не найдена', 'error')
         return redirect(url_for('tasks_list'))
-    
+
     if request.method == 'POST':
         updates = {}
 
@@ -737,7 +737,7 @@ def task_edit(task_id):
             if ege_number:
                 updates['ege_number'] = int(ege_number)
             updates['class_id'] = None
-        
+
         answer_kind = request.form.get('answer_kind', 'classic')
         if answer_kind not in ('classic', 'file_upload'):
             answer_kind = 'classic'
@@ -759,7 +759,7 @@ def task_edit(task_id):
 
             updates['answer_count'] = answer_count
             updates['answer_1'], updates['answer_2'], updates['answer_text'] = _pack_answers_for_task(answer_values)
-        
+
         # Обновление изображения (если загружено новое)
         image = request.files.get('image')
         if image and image.filename:
@@ -771,11 +771,11 @@ def task_edit(task_id):
             old_image_path = os.path.join(IMAGES_DIR, task['image_path'])
             if os.path.exists(old_image_path):
                 os.remove(old_image_path)
-            
+
             image_filename = generate_unique_filename(image.filename)
             image.save(os.path.join(IMAGES_DIR, image_filename))
             updates['image_path'] = image_filename
-        
+
         # Обработка прикреплённого файла
         if request.form.get('remove_attachment') == '1':
             # Удаление прикреплённого файла
@@ -798,20 +798,20 @@ def task_edit(task_id):
                     old_attachment = os.path.join(ATTACHMENTS_DIR, task['attachment_path'])
                     if os.path.exists(old_attachment):
                         os.remove(old_attachment)
-                
+
                 attachment_name = secure_filename(attachment.filename)
                 attachment_filename = generate_unique_filename(attachment.filename)
                 attachment.save(os.path.join(ATTACHMENTS_DIR, attachment_filename))
                 updates['attachment_path'] = attachment_filename
                 updates['attachment_name'] = attachment_name
-        
+
         Task.update(task_id, **updates)
         flash('Задача успешно обновлена', 'success')
         if updates.get('task_scope') == 'class':
             return redirect(url_for('tasks_list', mode='class', class_id=updates.get('class_id')))
         return redirect(url_for('tasks_list', mode='ege', ege=updates.get('ege_number', task['ege_number'])))
-    
-    return render_template('teacher/task_edit.html', 
+
+    return render_template('teacher/task_edit.html',
                           task=task,
                           classes=ClassGroup.get_all(),
                           existing_answers=_task_answers_list(task),
@@ -834,7 +834,7 @@ def task_delete(task_id):
             attachment_path = os.path.join(ATTACHMENTS_DIR, task['attachment_path'])
             if os.path.exists(attachment_path):
                 os.remove(attachment_path)
-        
+
         Task.delete(task_id)
         flash('Задача удалена', 'success')
 
@@ -863,7 +863,7 @@ def tasks_bulk_upload():
                 return redirect(url_for('tasks_list', mode='ege', ege=0))
         else:
             ege_number = int(request.form.get('ege_number'))
-        
+
         index = 0
         created = 0
         while True:
@@ -896,7 +896,7 @@ def tasks_bulk_upload():
                 attachment_name = secure_filename(attachment.filename)
                 attachment_filename = generate_unique_filename(attachment.filename)
                 attachment.save(os.path.join(ATTACHMENTS_DIR, attachment_filename))
-            
+
             Task.create(
                 ege_number=ege_number,
                 image_path=image_path,
@@ -918,7 +918,7 @@ def tasks_bulk_upload():
 
         flash(f'Добавлено {created} задач для номера {ege_number}', 'success')
         return redirect(url_for('tasks_list', mode='ege', ege=ege_number))
-    
+
     # GET - показываем форму
     ege_number = request.args.get('ege', type=int, default=1)
     return render_template('teacher/tasks_bulk.html',
@@ -934,16 +934,16 @@ def api_upload_image():
     """API для загрузки изображения (AJAX)"""
     if 'image' not in request.files:
         return jsonify({'error': 'Нет файла'}), 400
-    
+
     image = request.files['image']
     valid_image, image_error = _validate_upload(image, MAX_IMAGE_SIZE, ALLOWED_IMAGE_EXTENSIONS, 'png')
     if not valid_image:
         return jsonify({'error': image_error or 'Недопустимый файл'}), 400
-    
+
     image_filename = generate_unique_filename(image.filename)
     image_path = os.path.join(IMAGES_DIR, image_filename)
     image.save(image_path)
-    
+
     return jsonify({
         'success': True,
         'filename': image_filename,
@@ -956,13 +956,13 @@ def api_delete_image():
     """API для удаления загруженного изображения"""
     data = request.get_json()
     filename = data.get('filename')
-    
+
     if filename:
         image_path = os.path.join(IMAGES_DIR, filename)
         if os.path.exists(image_path):
             os.remove(image_path)
             return jsonify({'success': True})
-    
+
     return jsonify({'error': 'Файл не найден'}), 404
 
 # ==================== ФАЙЛЫ ====================
@@ -993,11 +993,9 @@ def student_upload_answer_file():
     if not student:
         return jsonify({'error': 'Ученик не найден'}), 401
 
-    test_session = TestSession.get_by_id(student['session_id'])
-    if not test_session or test_session['status'] != 'active':
-        return jsonify({'error': 'Сессия неактивна'}), 403
-    if test_session.get('paused'):
-        return jsonify({'error': 'Тестирование на паузе'}), 403
+    refusal = _answer_refusal(student)
+    if refusal:
+        return jsonify({'error': refusal}), 403
 
     task_id = request.form.get('task_id', type=int)
     if not task_id:
@@ -1137,13 +1135,13 @@ def variant_create():
     scope = request.args.get('scope', 'ege')
     if scope not in ('ege', 'class'):
         scope = 'ege'
-    
+
     if request.method == 'POST':
         name = request.form.get('name')
         variant_type = request.form.get('variant_type')
         generation_mode = request.form.get('generation_mode')
         variant_scope = request.form.get('variant_scope', scope)
-        
+
         if variant_scope == 'class':
             class_id = request.form.get('class_id', type=int)
             if not class_id:
@@ -1160,21 +1158,21 @@ def variant_create():
             Variant.add_tasks(variant_id, task_ids)
             flash(f'Вариант "{name}" успешно создан', 'success')
             return redirect(url_for('variants_list', scope='class'))
-        
+
         if variant_type == 'thematic':
             ege_number = int(request.form.get('ege_number'))
             tasks_count = int(request.form.get('tasks_count', 10))
-            
+
             # Получаем задачи для этого номера ЕГЭ
             available_tasks = Task.get_by_ege_number(ege_number)
-            
+
             if len(available_tasks) < tasks_count:
                 flash(f'Недостаточно задач для номера {ege_number}. Доступно: {len(available_tasks)}', 'error')
                 return redirect(url_for('variant_create', scope='ege'))
-            
+
             # Создаём вариант
             variant_id = Variant.create(name, 'thematic', ege_number, 'ege', None)
-            
+
             if generation_mode == 'random':
                 # Случайный выбор
                 import random
@@ -1184,41 +1182,41 @@ def variant_create():
                 # Ручной выбор - берём выбранные задачи
                 task_ids = request.form.getlist('selected_tasks')
                 task_ids = [int(tid) for tid in task_ids]
-            
+
             Variant.add_tasks(variant_id, task_ids)
-        
+
         elif variant_type == 'mixed':
             # Смешанный вариант - задачи из разных номеров ЕГЭ
             import random
             variant_id = Variant.create(name, 'mixed', None, 'ege', None)
             task_ids = []
-            
+
             for ege_num in range(1, 28):
                 # Проверяем, отмечен ли этот номер
                 if request.form.get(f'mixed_ege_{ege_num}'):
                     count = int(request.form.get(f'mixed_count_{ege_num}', 1))
                     available_tasks = Task.get_by_ege_number(ege_num)
-                    
+
                     if len(available_tasks) < count:
                         flash(f'Недостаточно задач для номера {ege_num}. Доступно: {len(available_tasks)}, требуется: {count}', 'warning')
                         count = len(available_tasks)
-                    
+
                     if available_tasks and count > 0:
                         selected = random.sample(available_tasks, count)
                         task_ids.extend([t['id'] for t in selected])
-            
+
             if not task_ids:
                 flash('Выберите хотя бы один номер ЕГЭ', 'error')
                 return redirect(url_for('variant_create', scope='ege'))
-            
+
             # Перемешиваем задачи
             random.shuffle(task_ids)
             Variant.add_tasks(variant_id, task_ids)
-            
+
         else:  # full - полный вариант ЕГЭ
             variant_id = Variant.create(name, 'full', None, 'ege', None)
             task_ids = []
-            
+
             if generation_mode == 'random':
                 import random
                 # По одной случайной задаче из каждого номера
@@ -1235,26 +1233,26 @@ def variant_create():
                     task_id = request.form.get(f'task_ege_{ege_num}')
                     if task_id:
                         task_ids.append(int(task_id))
-            
+
             Variant.add_tasks(variant_id, task_ids)
-        
+
         flash(f'Вариант "{name}" успешно создан', 'success')
         return redirect(url_for('variants_list', scope='ege'))
-    
+
     # GET - показываем форму
     task_counts = Task.count_by_ege_number()
     all_tasks = {}
     for ege_num in range(1, 28):
         all_tasks[ege_num] = Task.get_by_ege_number(ege_num)
-    
+
     classes = ClassGroup.get_all()
     class_tasks = {}
     for c in classes:
         class_tasks[c['id']] = Task.get_by_class_id(c['id'])
-    
+
     from config import DEFAULT_ANSWER_COUNT
-    
-    return render_template('teacher/variant_create.html', 
+
+    return render_template('teacher/variant_create.html',
                          task_counts=task_counts,
                          all_tasks=all_tasks,
                          default_answer_count=DEFAULT_ANSWER_COUNT,
@@ -1269,7 +1267,7 @@ def variant_view(variant_id):
     if not variant:
         flash('Вариант не найден', 'error')
         return redirect(url_for('variants_list'))
-    
+
     tasks = Variant.get_tasks(variant_id)
     return render_template('teacher/variant_view.html', variant=variant, tasks=tasks)
 
@@ -1422,28 +1420,28 @@ def variant_delete_bulk():
 def variant_upload():
     """Загрузка готового варианта с созданием задач в банке"""
     import uuid
-    
+
     name = request.form.get('name')
     if not name:
         flash('Укажите название варианта', 'error')
         return redirect(url_for('variant_create'))
-    
+
     images = request.files.getlist('images')
     if not images or len(images) == 0:
         flash('Загрузите хотя бы одно изображение', 'error')
         return redirect(url_for('variant_create'))
-    
+
     # Фильтруем пустые файлы
     images = [img for img in images if img.filename]
-    
+
     if len(images) == 0:
         flash('Загрузите хотя бы одно изображение', 'error')
         return redirect(url_for('variant_create'))
-    
+
     # Создаём вариант
     variant_id = Variant.create(name, 'uploaded')
     task_ids = []
-    
+
     # Обрабатываем каждое изображение
     for i, image in enumerate(images):
         # Получаем данные формы для этой задачи
@@ -1515,15 +1513,15 @@ def variant_upload():
             task_scope=task_scope,
         )
         task_ids.append(task_id)
-    
+
     if not task_ids:
         flash('Не удалось создать ни одной задачи. Проверьте заполнение формы.', 'error')
         Variant.delete(variant_id)
         return redirect(url_for('variant_create'))
-    
+
     # Добавляем задачи в вариант (в порядке загрузки)
     Variant.add_tasks(variant_id, task_ids)
-    
+
     flash(f'Вариант "{name}" создан! Добавлено задач: {len(task_ids)}', 'success')
     return redirect(url_for('variant_view', variant_id=variant_id))
 
@@ -1625,7 +1623,7 @@ def sessions_list():
     active_session = TestSession.get_active()
     if active_session:
         active_session['variant_name'] = _get_session_display_name(active_session)
-    
+
     # Добавляем информацию о студентах
     filtered_sessions = []
     for s in sessions:
@@ -1666,8 +1664,8 @@ def sessions_list():
                 st['correct_count'] = 0
                 st['total_tasks'] = 0
                 st['grade'] = None
-    
-    return render_template('teacher/sessions.html', 
+
+    return render_template('teacher/sessions.html',
                          sessions=filtered_sessions,
                          active_session=active_session,
                          selected_session=selected_session,
@@ -1718,30 +1716,30 @@ def session_new():
         time_limit = int(request.form.get('time_limit', 60))
         use_code = request.form.get('use_code') == '1'
         show_answers = request.form.get('show_answers') == '1'
-        teacher_finish_only = request.form.get('teacher_finish_only') == '1'
+        teacher_finish_only = True  # ученик не завершает сам (иначе его ответы увидит сосед); всё открывается после завершения учителем
         calculator_enabled = request.form.get('calculator_enabled') == '1'
         python_enabled = request.form.get('python_enabled') == '1'
-        
+
         # Критерии оценки
         total_tasks = int(request.form.get('total_tasks', 8))
         grade_5_min = int(request.form.get('grade_5_min', 7))
         grade_4_min = int(request.form.get('grade_4_min', 5))
         grade_3_min = int(request.form.get('grade_3_min', 3))
-        
+
         # Генерация кода доступа
         access_code = None
         if use_code:
             import random
             import string
             access_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        
+
         if variant_mode == 'single':
             # Один вариант на всех
             variant_id_str = request.form.get('variant_id')
             if not variant_id_str:
                 flash('Выберите вариант для тестирования', 'error')
                 return redirect(url_for('session_new'))
-            
+
             variant_id = int(variant_id_str)
             session_id = TestSession.create(
                 variant_id=variant_id,
@@ -1786,7 +1784,7 @@ def session_new():
         else:
             # Индивидуальные варианты
             individual_type = request.form.get('individual_type')
-            
+
             if individual_type == 'full':
                 session_id = TestSession.create(
                     variant_id=None,
@@ -1823,10 +1821,10 @@ def session_new():
                     grade_3_min=grade_3_min,
                     total_tasks=total_tasks
                 )
-        
+
         flash('Тестирование запущено!', 'success')
         return redirect(url_for('sessions_list'))
-    
+
     # GET - показываем форму
     variants = Variant.get_all()
     for v in variants:
@@ -1834,7 +1832,7 @@ def session_new():
     task_counts = Task.count_by_ege_number()
     preselected_variant = request.args.get('variant_id', type=int)
     saved_criteria = GradeCriteria.get_all()
-    
+
     return render_template('teacher/session_new.html',
                          variants=variants,
                          task_counts=task_counts,
@@ -1890,7 +1888,7 @@ def session_monitor(session_id):
     if not session:
         flash('Тестирование не найдено', 'error')
         return redirect(url_for('sessions_list'))
-    
+
     students = TestSession.get_students(session_id)
     session_variants = _get_session_variant_options(session_id, include_task_counts=True)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -1902,7 +1900,7 @@ def session_monitor(session_id):
         if s['is_online']:
             online_count += 1
         s['file_uploads_count'] = Answer.count_uploads_for_student(s['id'])
-    
+
     return render_template('teacher/session_monitor.html',
                           session=session,
                           students=students,
@@ -1932,7 +1930,7 @@ def student_login():
             if test_session and test_session['status'] == 'closed':
                 return redirect(url_for('student_result'))
         _clear_student_session()
-    
+
     need_code = active_session['access_code'] is not None
     app_mode = request.args.get('app') == '1'
     autocomplete_section = secrets.token_hex(8)
@@ -1944,6 +1942,17 @@ def student_login():
                            multi_variant_mode=bool(session_variants),
                            session_variants=session_variants)
 
+RELOGIN_BLOCK_SECONDS = 30  # открытое окно теста отмечается на сервере каждые 5 секунд
+
+
+def _seen_recently(student):
+    last_seen = _parse_dt(student.get('last_seen_at'))
+    if not last_seen:
+        return False
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return (now - last_seen).total_seconds() < RELOGIN_BLOCK_SECONDS
+
+
 @app.route('/test/start', methods=['POST'])
 def student_start():
     """Начало теста учеником"""
@@ -1951,26 +1960,31 @@ def student_start():
     last_name = request.form.get('last_name', '').strip()
     code = request.form.get('code', '').strip().upper()
     app_mode = request.form.get('app_mode') == '1'
-    
+
     if not first_name or not last_name:
         flash('Введите имя и фамилию', 'error')
         return redirect(url_for('student_login'))
-    
+
     active_session = TestSession.get_active()
     if not active_session:
         flash('Нет активного тестирования', 'error')
         return redirect(url_for('student_login'))
-    
+
     # Проверка кода
     if active_session['access_code'] and active_session['access_code'] != code:
         flash('Неверный код доступа', 'error')
         return redirect(url_for('student_login'))
-    
+
     # Проверка на повторный вход
     existing = Student.get_by_session_and_name(active_session['id'], first_name, last_name)
     if existing:
         if existing['status'] == 'in_progress':
             from flask import session
+            if session.get('student_id') != existing['id'] and _seen_recently(existing):
+                flash(f'{last_name} {first_name} уже решает тест на другом компьютере. '
+                      f'Если это вы и вы сменили компьютер, закройте старое окно и подождите '
+                      f'{RELOGIN_BLOCK_SECONDS} секунд или обратитесь к учителю.', 'error')
+                return redirect(url_for('student_login'))
             session['student_id'] = existing['id']
             session['start_time'] = (existing.get('started_at') or datetime.now().isoformat())
             session['time_limit'] = active_session['time_limit']
@@ -1979,31 +1993,31 @@ def student_start():
             return redirect(url_for('student_test'))
         flash('Вы уже завершили этот тест', 'error')
         return redirect(url_for('student_login'))
-    
+
     # Определяем вариант для ученика
     if active_session['individual_mode']:
         # Генерируем индивидуальный вариант
         import random
         from models import get_db
-        
+
         conn = get_db()
         cursor = conn.cursor()
-        
+
         # Получаем настройки сессии
-        cursor.execute("SELECT value FROM settings WHERE key = ?", 
+        cursor.execute("SELECT value FROM settings WHERE key = ?",
                       (f"session_{active_session['id']}_ege",))
         ege_row = cursor.fetchone()
-        cursor.execute("SELECT value FROM settings WHERE key = ?", 
+        cursor.execute("SELECT value FROM settings WHERE key = ?",
                       (f"session_{active_session['id']}_count",))
         count_row = cursor.fetchone()
         conn.close()
-        
+
         ege_number = int(ege_row['value']) if ege_row else 0
         tasks_count = int(count_row['value']) if count_row else 10
-        
+
         # Создаём временный вариант
         variant_name = f"Индивидуальный_{first_name}_{last_name}_{active_session['id']}"
-        
+
         if ege_number == 0:
             # Полный вариант
             variant_id = Variant.create(variant_name, 'full')
@@ -2018,7 +2032,7 @@ def student_start():
             tasks = Task.get_by_ege_number(ege_number)
             selected = random.sample(tasks, min(tasks_count, len(tasks)))
             task_ids = [t['id'] for t in selected]
-        
+
         Variant.add_tasks(variant_id, task_ids)
         variant_label = None
     else:
@@ -2037,29 +2051,29 @@ def student_start():
         else:
             variant_id = active_session['variant_id']
             variant_label = None
-    
+
     # Создаём запись ученика
     student_id = Student.create(active_session['id'], first_name, last_name, variant_id, variant_label=variant_label)
     Student.touch(student_id)
-    
+
     # Сохраняем в сессию
     from flask import session
     session['student_id'] = student_id
     session['start_time'] = datetime.now().isoformat()
     session['time_limit'] = active_session['time_limit']
     session['app_mode'] = app_mode
-    
+
     return redirect(url_for('student_test'))
 
 @app.route('/test/exam')
 def student_test():
     """Страница прохождения теста"""
     from flask import session
-    
+
     student_id = session.get('student_id')
     if not student_id:
         return redirect(url_for('student_login'))
-    
+
     student = Student.get_by_id(student_id)
     if not student or student['status'] == 'finished':
         _clear_student_session()
@@ -2069,22 +2083,22 @@ def student_test():
     if test_session and test_session['status'] == 'closed':
         Student.finish(student_id)
         return redirect(url_for('student_result'))
-    
+
     # Получаем задачи варианта
     tasks = Variant.get_tasks(student['variant_id'])
-    
+
     # Получаем уже сохранённые ответы
     answers = {}
     for task in tasks:
         ans = Answer.get_for_student_task(student_id, task['id'])
         if ans:
             answers[task['id']] = ans
-    
+
     # Вычисляем оставшееся время по данным БД (устойчиво к перезапуску браузера)
     remaining = _calc_remaining_seconds(student, test_session)
-    
+
     current_task = request.args.get('task', 0, type=int)
-    
+
     return render_template('student/test.html',
                           student=student,
                           tasks=tasks,
@@ -2102,13 +2116,28 @@ def student_test():
 def student_save_answer():
     """Сохранение ответа ученика"""
     from flask import session
-    
+
     student_id = session.get('student_id')
     if not student_id:
         return jsonify({'error': 'Не авторизован'}), 401
-    
-    data = request.get_json()
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Неверный запрос'}), 400
     task_id = data.get('task_id')
+
+    student = Student.get_by_id(student_id)
+    if not student:
+        return jsonify({'error': 'Не авторизован'}), 401
+    refusal = _answer_refusal(student)
+    if refusal:
+        return jsonify({'error': refusal, 'locked': True}), 403
+    try:
+        task_id = int(task_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Неверное задание'}), 400
+    if task_id not in {t['id'] for t in Variant.get_tasks(student['variant_id'])}:
+        return jsonify({'error': 'Задание не из вашего варианта'}), 403
     answer_1 = data.get('answer_1')
     answer_2 = data.get('answer_2')
     answer_text = data.get('answer_text')
@@ -2121,18 +2150,46 @@ def student_save_answer():
 
     Answer.save(student_id, task_id, answer_1, answer_2, answer_text=answer_text)
     Student.touch(student_id)
-    
+
     return jsonify({'success': True})
+
+ANSWER_GRACE_SECONDS = 10  # ответы, отправленные в самый момент окончания времени, ещё принимаются
+
+
+def _answer_refusal(student):
+    """Почему ответ сейчас нельзя принять (или None). Проверяется на сервере, а не только в браузере."""
+    if student['status'] != 'in_progress':
+        return 'Тест уже завершён'
+    test_session = TestSession.get_by_id(student['session_id'])
+    if not test_session or test_session['status'] != 'active':
+        return 'Тестирование завершено'
+    if test_session.get('paused'):
+        return 'Тестирование на паузе'
+    if _calc_remaining_seconds(_shifted(student, ANSWER_GRACE_SECONDS), test_session) <= 0:
+        return 'Время вышло'
+    return None
+
+
+def _shifted(student, seconds):
+    """Копия ученика, начавшего на seconds секунд позже (для запаса на последние ответы)."""
+    started = _parse_dt(student.get('started_at'))
+    if not started:
+        return student
+    from datetime import timedelta
+    copy = dict(student)
+    copy['started_at'] = (started + timedelta(seconds=seconds)).isoformat(sep=' ')
+    return copy
+
 
 @app.route('/test/finish', methods=['POST'])
 def student_finish():
     """Завершение теста"""
     from flask import session
-    
+
     student_id = session.get('student_id')
     if not student_id:
         return redirect(url_for('student_login'))
-    
+
     student = Student.get_by_id(student_id)
     if not student:
         return redirect(url_for('student_login'))
@@ -2175,7 +2232,7 @@ def student_ping():
 @app.route('/test/run-python', methods=['POST'])
 def student_run_python():
     """Запуск Python-кода на компьютере учителя.
-    
+
     Код выполняется реальным Python с доступом к файлу задачи.
     Ошибки возвращаются в точном формате IDLE (traceback as-is).
     """
@@ -2434,11 +2491,11 @@ def student_run_python():
 def student_result():
     """Результат ученика"""
     from flask import session as flask_session
-    
+
     student_id = flask_session.get('student_id')
     if not student_id:
         return redirect(url_for('student_login'))
-    
+
     student = Student.get_by_id(student_id)
     if not student:
         _clear_student_session()
@@ -2451,17 +2508,17 @@ def student_result():
 
     if student['status'] != 'finished':
         Student.finish(student_id)
-    
+
     # Получаем все ответы
     answers = Student.get_answers(student_id)
     tasks = Variant.get_tasks(student['variant_id'])
-    
+
     # Создаём словарь ответов по task_id
     answers_dict = {a['task_id']: a for a in answers}
-    
+
     correct_count = len([a for a in answers if a['is_correct']])
     total = len(tasks)
-    
+
     # Рассчитываем оценку с учётом критериев сессии
     session_criteria = {
         'grade_5_min': test_session.get('grade_5_min') if test_session else None,
@@ -2469,10 +2526,10 @@ def student_result():
         'grade_3_min': test_session.get('grade_3_min') if test_session else None,
     }
     grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
-    
+
     # Очищаем сессию
     _clear_student_session()
-    
+
     return render_template('student/result.html',
                           student=student,
                           answers=answers,
@@ -2586,16 +2643,16 @@ def result_session(session_id):
     if not session:
         flash('Тестирование не найдено', 'error')
         return redirect(url_for('results_list'))
-    
+
     students = TestSession.get_students(session_id)
-    
+
     # Критерии оценки для этой сессии
     session_criteria = {
         'grade_5_min': session.get('grade_5_min'),
         'grade_4_min': session.get('grade_4_min'),
         'grade_3_min': session.get('grade_3_min')
     }
-    
+
     # Добавляем результаты каждого ученика
     for st in students:
         answers = Student.get_answers(st['id'])
@@ -2603,7 +2660,7 @@ def result_session(session_id):
         st['correct'] = len([a for a in answers if a['is_correct']])
         st['total'] = len(tasks)
         st['grade'] = GradeCriteria.calculate_grade(st['correct'], st['total'], session_criteria)
-    
+
     return render_template('teacher/result_session.html', session=session, students=students)
 
 @app.route('/results/student/<int:student_id>')
@@ -2613,17 +2670,17 @@ def result_student(student_id):
     if not student:
         flash('Ученик не найден', 'error')
         return redirect(url_for('results_list'))
-    
+
     test_session = TestSession.get_by_id(student['session_id'])
     answers = Student.get_answers(student_id)
     tasks = Variant.get_tasks(student['variant_id'])
-    
+
     # Создаём словарь ответов по task_id
     answers_dict = {a['task_id']: a for a in answers}
-    
+
     correct_count = len([a for a in answers if a['is_correct']])
     total = len(tasks)
-    
+
     # Рассчитываем оценку с учётом критериев сессии
     session_criteria = {
         'grade_5_min': test_session.get('grade_5_min') if test_session else None,
@@ -2631,7 +2688,7 @@ def result_student(student_id):
         'grade_3_min': test_session.get('grade_3_min') if test_session else None,
     }
     grade = GradeCriteria.calculate_grade(correct_count, total, session_criteria)
-    
+
     return render_template('teacher/result_student.html',
                          student=student,
                          answers=answers,
@@ -2647,12 +2704,12 @@ def result_export(session_id):
     import csv
     from io import StringIO
     from flask import Response
-    
+
     session = TestSession.get_by_id(session_id)
     if not session:
         flash('Тестирование не найдено', 'error')
         return redirect(url_for('results_list'))
-    
+
     students = TestSession.get_students(session_id)
     session_criteria = {
         'grade_5_min': session.get('grade_5_min'),
@@ -2710,11 +2767,11 @@ def result_export(session_id):
             'grade': grade,
             'task_cells': task_cells,
         })
-    
+
     # Создаём CSV
     output = StringIO()
     writer = csv.writer(output, delimiter=';')
-    
+
     # Заголовок
     header = ['Фамилия', 'Имя', 'Вариант', 'Начало', 'Завершение', 'Правильных', 'Всего', 'Оценка']
     for i in range(1, max_tasks + 1):
@@ -2744,9 +2801,9 @@ def result_export(session_id):
         writer.writerow([
             *row
         ])
-    
+
     csv_text = '\ufeff' + output.getvalue()
-    
+
     return Response(
         csv_text,
         mimetype='text/csv',
@@ -2813,7 +2870,7 @@ def update_criteria():
     grade_5_min = int(request.form.get('grade_5_min'))
     grade_4_min = int(request.form.get('grade_4_min'))
     grade_3_min = int(request.form.get('grade_3_min'))
-    
+
     GradeCriteria.create_or_update(name, total_tasks, grade_5_min, grade_4_min, grade_3_min)
     flash('Критерии оценки сохранены', 'success')
     return redirect(url_for('settings'))
@@ -2827,20 +2884,20 @@ def tasks_export():
     import zipfile
     import json
     import io
-    
+
     # Получаем все задачи
     all_tasks = []
     for ege_num in range(1, 28):
         tasks = Task.get_by_ege_number(ege_num)
         all_tasks.extend(tasks)
-    
+
     if not all_tasks:
         flash('Нет задач для экспорта', 'error')
         return redirect(url_for('tasks_list'))
-    
+
     # Создаём ZIP в памяти
     zip_buffer = io.BytesIO()
-    
+
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         # Манифест с метаданными
         manifest = {
@@ -2848,7 +2905,7 @@ def tasks_export():
             'exported_at': datetime.now().isoformat(),
             'tasks': []
         }
-        
+
         for task in all_tasks:
             task_data = {
                 'ege_number': task['ege_number'],
@@ -2861,23 +2918,23 @@ def tasks_export():
                 'attachment_path': task.get('attachment_path')
             }
             manifest['tasks'].append(task_data)
-            
+
             # Добавляем изображение
             image_path = os.path.join(DATA_DIR, 'images', task['image_path'])
             if os.path.exists(image_path):
                 zip_file.write(image_path, f"images/{task['image_path']}")
-            
+
             # Добавляем прикреплённый файл
             if task.get('attachment_path'):
                 attach_path = os.path.join(DATA_DIR, 'attachments', task['attachment_path'])
                 if os.path.exists(attach_path):
                     zip_file.write(attach_path, f"attachments/{task['attachment_path']}")
-        
+
         # Записываем манифест
         zip_file.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-    
+
     zip_buffer.seek(0)
-    
+
     filename = f"bank_zadach_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
     return send_file(
         zip_buffer,
@@ -2892,12 +2949,12 @@ def tasks_import():
     """Импорт банка задач из ZIP"""
     import zipfile
     import json
-    
+
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('Файл не выбран', 'error')
             return redirect(url_for('tasks_import'))
-        
+
         file = request.files['file']
         if file.filename == '':
             flash('Файл не выбран', 'error')
@@ -2907,7 +2964,7 @@ def tasks_import():
         if not valid_zip:
             flash(zip_error or 'Файл должен быть ZIP-архивом', 'error')
             return redirect(url_for('tasks_import'))
-        
+
         try:
             with zipfile.ZipFile(file, 'r') as zip_file:
                 infos = zip_file.infolist()
@@ -2924,15 +2981,15 @@ def tasks_import():
                 if 'manifest.json' not in zip_file.namelist():
                     flash('Неверный формат архива (нет manifest.json)', 'error')
                     return redirect(url_for('tasks_import'))
-                
+
                 manifest = json.loads(zip_file.read('manifest.json'))
                 if not isinstance(manifest, dict) or not isinstance(manifest.get('tasks'), list):
                     flash('Неверный формат manifest.json', 'error')
                     return redirect(url_for('tasks_import'))
-                
+
                 imported_count = 0
                 skipped_count = 0
-                
+
                 for task_data in manifest['tasks']:
                     if not isinstance(task_data, dict):
                         skipped_count += 1
@@ -2944,25 +3001,25 @@ def tasks_import():
                         skipped_count += 1
                         continue
                     image_zip_path = f"images/{image_filename}"
-                    
+
                     if image_zip_path not in zip_file.namelist():
                         skipped_count += 1
                         continue
-                    
+
                     # Сохраняем изображение
                     image_content = zip_file.read(image_zip_path)
                     image_save_path = os.path.join(DATA_DIR, 'images', image_filename)
-                    
+
                     # Если файл уже существует, генерируем новое имя
                     if os.path.exists(image_save_path):
                         import uuid
                         new_name = f"{uuid.uuid4().hex}.png"
                         image_save_path = os.path.join(DATA_DIR, 'images', new_name)
                         image_filename = new_name
-                    
+
                     with open(image_save_path, 'wb') as f:
                         f.write(image_content)
-                    
+
                     # Обрабатываем прикреплённый файл
                     attachment_path = None
                     attachment_name = task_data.get('attachment_filename')
@@ -2974,7 +3031,7 @@ def tasks_import():
                         if attach_zip_path in zip_file.namelist():
                             attach_content = zip_file.read(attach_zip_path)
                             attach_save_path = os.path.join(DATA_DIR, 'attachments', source_attachment_path)
-                            
+
                             if os.path.exists(attach_save_path):
                                 import uuid
                                 ext = os.path.splitext(source_attachment_path)[1]
@@ -2983,10 +3040,10 @@ def tasks_import():
                                 attachment_path = new_name
                             else:
                                 attachment_path = source_attachment_path
-                            
+
                             with open(attach_save_path, 'wb') as f:
                                 f.write(attach_content)
-                    
+
                     # Создаём задачу в БД
                     Task.create(
                         ege_number=task_data['ege_number'],
@@ -2999,14 +3056,14 @@ def tasks_import():
                         attachment_name=attachment_name
                     )
                     imported_count += 1
-                
+
                 flash(f'Импортировано задач: {imported_count}. Пропущено: {skipped_count}', 'success')
                 return redirect(url_for('tasks_list'))
-                
+
         except Exception as e:
             flash(f'Ошибка при импорте: {str(e)}', 'error')
             return redirect(url_for('tasks_import'))
-    
+
     return render_template('teacher/tasks_import.html')
 
 
@@ -3021,5 +3078,5 @@ if __name__ == '__main__':
     print('=' * 50)
     print('Для остановки нажмите Ctrl+C')
     print()
-    
+
     app.run(host=HOST, port=PORT, debug=False, threaded=True)

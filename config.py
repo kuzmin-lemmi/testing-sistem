@@ -16,7 +16,6 @@ EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
 # Настройки сервера
 HOST = '0.0.0.0'  # Доступ из локальной сети
 PORT = 8080
-SECRET_KEY = os.environ.get('EGE_SECRET_KEY', 'ege-local-secret-change-me')
 
 # Вход учеников по коду доступа: в интерфейсе скрыт, сама возможность осталась.
 # Чтобы снова показать галочку «Требовать код для входа» при запуске тестирования, задайте EGE_ACCESS_CODE=1.
@@ -68,3 +67,26 @@ SPECIAL_ANSWER_FORMAT = {
 # Создаём директории если не существуют
 for directory in [DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR]:
     os.makedirs(directory, exist_ok=True)
+
+
+def _load_secret_key():
+    """Свой случайный ключ для каждой установки (им подписывается «пропуск» ученика в браузере).
+    Создаётся при первом запуске и хранится в data/secret_key: стандартный ключ позволял подделать пропуск."""
+    if os.environ.get('EGE_SECRET_KEY'):
+        return os.environ['EGE_SECRET_KEY']
+    import secrets
+    path = os.path.join(DATA_DIR, 'secret_key')
+    try:
+        with open(path, encoding='utf-8') as stream:
+            key = stream.read().strip()
+        if len(key) >= 32:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_urlsafe(48)
+    with open(path, 'w', encoding='utf-8') as stream:
+        stream.write(key)
+    return key
+
+
+SECRET_KEY = _load_secret_key()
