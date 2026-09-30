@@ -29,9 +29,10 @@
             <input type="hidden" name="variant_mode" value="single">
             {% endif %}
 
+            <input type="search" id="variantSearch" class="variant-search" placeholder="🔍 Найти вариант по названию" autocomplete="off">
             <div id="singleBox" class="variant-list">
                 {% for variant in variants %}
-                <label class="variant-option">
+                <label class="variant-option" data-name="{{ variant.name|lower }}">
                     <input type="radio" name="variant_id" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}"
                            {% if variant.id == preselected_variant or (loop.first and not preselected_variant) %}checked{% endif %}>
                     <span class="variant-name">{{ variant.name }}</span>
@@ -40,10 +41,10 @@
                 {% endfor %}
             </div>
 
+            <p class="muted" id="multiHint" hidden>Отметьте варианты с одинаковым числом заданий. Ученик при входе выбирает номер: 1, 2, 3…</p>
             <div id="multiBox" class="variant-list" hidden>
-                <p class="muted">Отметьте варианты с одинаковым числом заданий. Ученик при входе выбирает номер: 1, 2, 3…</p>
                 {% for variant in variants %}
-                <label class="variant-option">
+                <label class="variant-option" data-name="{{ variant.name|lower }}">
                     <input type="checkbox" name="variant_ids" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}">
                     <span class="variant-name">{{ variant.name }}</span>
                     <span class="muted">{{ tasks_word(variant.tasks_count) }}</span>
@@ -52,6 +53,7 @@
             </div>
 
             {% if show_ege_banks %}
+            <p class="muted" id="noMatch" hidden>Ничего не найдено.</p>
             <div id="individualBox" hidden>
                 <label><input type="radio" name="individual_type" value="full" checked> Полный ЕГЭ (27 заданий)</label>
                 <label><input type="radio" name="individual_type" value="thematic"> Тематический:</label>
@@ -94,7 +96,8 @@
             <p class="muted small">Проценты по умолчанию меняются в «Настройках». Число заданий пересчитывается само под выбранный вариант; его можно поправить вручную.</p>
         </section>
 
-        <div class="launch-actions">
+        <div class="launch-bar">
+            <div class="launch-choice"><span class="muted">Выбрано:</span> <strong id="chosenName">—</strong></div>
             <button type="submit" class="btn btn-success btn-large">🚀 Запустить тестирование</button>
         </div>
     </form>
@@ -106,7 +109,13 @@
 .launch-page section { margin-bottom: 16px; }
 .launch-page h2 { margin-bottom: 12px; }
 .mode-switch { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
-.variant-list { display: flex; flex-direction: column; gap: 8px; }
+.variant-list { display: flex; flex-direction: column; gap: 6px; max-height: 290px; overflow-y: auto; padding-right: 4px; }
+.variant-search { width: 100%; margin-bottom: 10px; }
+.variant-option { padding: 8px 12px !important; }
+.launch-page { padding-bottom: 90px; }
+.launch-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff; border-top: 1px solid var(--border-light);
+              box-shadow: 0 -6px 20px rgba(0,0,0,.06); padding: 12px 24px; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.launch-choice { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .variant-option { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 10px; cursor: pointer; }
 .variant-option:has(input:checked) { border-color: var(--primary); background: var(--primary-bg); }
 .variant-name { font-weight: 600; flex: 1; }
@@ -119,7 +128,6 @@
 .grade-box.g5 { background: #d1fae5; } .grade-box.g4 { background: #dbeafe; } .grade-box.g3 { background: #fef3c7; }
 .grade-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
 .grade-count { margin-top: 6px; font-size: 14px; }
-.launch-actions { text-align: right; margin: 20px 0 40px; }
 @media (max-width: 640px) { .grades { grid-template-columns: 1fr; } }
 </style>
 
@@ -158,9 +166,36 @@
         }
     }
 
+    function chosenText() {
+        if (mode() === 'multi_choice') {
+            const names = Array.from(form.querySelectorAll('input[name="variant_ids"]:checked'))
+                .map(input => input.closest('label').querySelector('.variant-name').textContent);
+            return names.length ? names.join(', ') : '—';
+        }
+        if (mode() === 'individual') return 'индивидуальные варианты';
+        const chosen = form.querySelector('input[name="variant_id"]:checked');
+        return chosen ? chosen.closest('label').querySelector('.variant-name').textContent : '—';
+    }
+
+    function filter() {
+        const query = document.getElementById('variantSearch').value.trim().toLowerCase();
+        const box = document.getElementById(mode() === 'multi_choice' ? 'multiBox' : 'singleBox');
+        let shown = 0;
+        box.querySelectorAll('.variant-option').forEach(option => {
+            const match = !query || option.dataset.name.includes(query) || option.querySelector('input').checked;
+            option.hidden = !match;
+            if (match) shown++;
+        });
+        document.getElementById('noMatch').hidden = shown > 0 || mode() === 'individual';
+    }
+
     function showBoxes() {
         document.getElementById('singleBox').hidden = mode() !== 'single';
         document.getElementById('multiBox').hidden = mode() !== 'multi_choice';
+        document.getElementById('multiHint').hidden = mode() !== 'multi_choice';
+        document.getElementById('variantSearch').hidden = mode() === 'individual';
+        document.getElementById('chosenName').textContent = chosenText();
+        filter();
         const individual = document.getElementById('individualBox');
         if (individual) individual.hidden = mode() !== 'individual';
         recalc();
@@ -170,8 +205,18 @@
         if (event.target.id && /^g[345]$/.test(event.target.id)) return;  // ручная правка числа заданий
         showBoxes();
     });
-    form.addEventListener('input', event => { if (event.target.id && /^p[345]$/.test(event.target.id)) recalc(); });
+    form.addEventListener('input', event => {
+        if (event.target.id && /^p[345]$/.test(event.target.id)) recalc();
+        if (event.target.id === 'variantSearch') filter();
+    });
+    // Enter в поиске не отправляет форму
+    document.getElementById('variantSearch').addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
     showBoxes();
+    const chosen = form.querySelector('input[name="variant_id"]:checked');
+    if (chosen) {  // выбранный вариант виден в списке, страница при этом не прокручивается
+        const box = document.getElementById('singleBox');
+        box.scrollTop = chosen.closest('label').offsetTop - box.offsetTop - 8;
+    }
 })();
 </script>
 {% endblock %}
