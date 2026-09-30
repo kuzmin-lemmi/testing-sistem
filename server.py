@@ -11,14 +11,15 @@ import secrets
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 
-from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR,
+from config import (MAX_LOCALSHOT_IMAGE_SIZE, MAX_LOCALSHOT_TASKS, HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR,
                     MAX_IMAGE_SIZE, MAX_ATTACHMENT_SIZE, MAX_IMPORT_ZIP_SIZE, MAX_LOCALSHOT_FILE_SIZE,
                     MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
                     SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION, SHOW_EGE_BANKS, BACKUPS_DIR)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
-from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
+from localshot_import import (VariantFileError, parse_variant_file, MODE_FIELDS, MODE_MULTILINE, ImportedTask,
+                              check_attachment, clean_name as clean_variant_name, MAX_ANSWERS as MAX_TASK_ANSWERS)
 from models import get_setting, set_setting, recheck_task_answers, backup_database, list_backups, variant_usage_counts, remove_task_from_variant
 import results_logic
 from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
@@ -1636,6 +1637,152 @@ def _unique_variant_name(name):
     return f'{name} ({number})'
 
 
+def _image_extension(data):
+    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'png'
+    if data.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'webp'
+    return None
+
+
+def _store_variant_tasks(items, name=None, variant_id=None):
+    """Записывает задания (ImportedTask) в «Общий банк» и в вариант: новый (name) или существующий (variant_id).
+    Всё или ничего: при сбое удаляется всё созданное. Возвращает (variant_id, task_ids)."""
+    class_id = ClassGroup.get_default_id()
+    saved_files, task_ids, created_variant = [], [], None
+    try:
+        if variant_id is None:
+            variant_id = created_variant = Variant.create(name, 'uploaded')
+        for item in items:
+            image_name = f'{uuid.uuid4().hex}.{_image_extension(item.image) or "png"}'
+            with open(os.path.join(IMAGES_DIR, image_name), 'wb') as stream:
+                saved_files.append(stream.name)
+                stream.write(item.image)
+
+            attachment_stored = None
+            if item.attachment is not None:
+                extension = item.attachment_name.rsplit('.', 1)[-1].lower()
+                attachment_stored = f'{uuid.uuid4().hex}.{extension}'
+                with open(os.path.join(ATTACHMENTS_DIR, attachment_stored), 'wb') as stream:
+                    saved_files.append(stream.name)
+                    stream.write(item.attachment)
+
+            if item.mode == MODE_MULTILINE:
+                # Ответ из нескольких строк: ученик видит большое поле, сравнение построчно
+                answer_count, answer_1, answer_2, answer_text = 0, None, None, item.answers[0]
+            else:
+                answer_count = len(item.answers)
+                answer_1, answer_2, answer_text = _pack_answers_for_task(item.answers)
+            task_ids.append(Task.create(
+                ege_number=1,  # номера ЕГЭ нет: задания живут в «Общем банке»
+                image_path=image_name,
+                answer_count=answer_count, answer_1=answer_1, answer_2=answer_2, answer_text=answer_text,
+                attachment_path=attachment_stored, attachment_name=item.attachment_name,
+                answer_kind='classic', task_scope='class', class_id=class_id))
+        existing = [t['id'] for t in Variant.get_tasks(variant_id)] if created_variant is None else []
+        Variant.replace_tasks(variant_id, existing + task_ids)
+    except Exception:
+        for task_id in task_ids:
+            Task.delete(task_id)
+        if created_variant is not None:
+            Variant.delete(created_variant)
+        for path in saved_files:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise
+    return variant_id, task_ids
+
+
+def _read_builder_tasks(form, files):
+    """Задания со страницы «Новый вариант». Сначала всё проверяется, потом что-то записывается."""
+    try:
+        count = int(form.get('task_count', '0'))
+    except ValueError:
+        count = 0
+    if count < 1:
+        raise VariantFileError('Добавьте хотя бы одно задание: вставьте скриншот (Ctrl+V) или выберите файл.')
+    if count > MAX_LOCALSHOT_TASKS:
+        raise VariantFileError(f'В варианте не может быть больше {MAX_LOCALSHOT_TASKS} заданий.')
+    items, total = [], 0
+    for index in range(count):
+        number = index + 1
+        image_file = files.get(f'image_{index}')
+        if not image_file:
+            raise VariantFileError(f'Задание {number}: нет картинки.')
+        image = image_file.read(MAX_LOCALSHOT_IMAGE_SIZE + 1)
+        if len(image) > MAX_LOCALSHOT_IMAGE_SIZE:
+            raise VariantFileError(f'Задание {number}: картинка больше 30 МБ.')
+        if not _image_extension(image):
+            raise VariantFileError(f'Задание {number}: картинка должна быть PNG, JPG или WEBP.')
+        mode = form.get(f'mode_{index}', MODE_FIELDS)
+        if mode == MODE_MULTILINE:
+            text = (form.get(f'text_{index}') or '').strip()
+            if not text:
+                raise VariantFileError(f'Задание {number}: введите ответ.')
+            answers = [text]
+        else:
+            mode = MODE_FIELDS
+            answers = [a.strip() for a in form.getlist(f'answer_{index}')]
+            if not answers or any(not a for a in answers):
+                raise VariantFileError(f'Задание {number}: заполните все поля ответа.')
+            if len(answers) > MAX_TASK_ANSWERS:
+                raise VariantFileError(f'Задание {number}: не больше {MAX_TASK_ANSWERS} полей ответа.')
+        attachment = attachment_name = None
+        attachment_file = files.get(f'attachment_{index}')
+        if attachment_file and attachment_file.filename:
+            attachment_name = clean_variant_name(attachment_file.filename.replace('\\', '/').rsplit('/', 1)[-1], 'файл')
+            attachment = attachment_file.read(MAX_ATTACHMENT_SIZE + 1)
+            if len(attachment) > MAX_ATTACHMENT_SIZE:
+                raise VariantFileError(f'Задание {number}: файл к заданию больше 10 МБ.')
+            check_attachment(number, attachment_name, attachment)
+        total += len(image) + len(attachment or b'')
+        if total > MAX_LOCALSHOT_FILE_SIZE:
+            raise VariantFileError('Вариант слишком большой (больше 200 МБ).')
+        items.append(ImportedTask(number, mode, answers, image, attachment_name, attachment))
+    return items
+
+
+@app.route('/variants/builder', methods=['GET', 'POST'])
+def variant_builder():
+    """Новый вариант прямо здесь: скриншот (Ctrl+V, перетаскивание, файл) + ответ.
+    С ?variant_id= — добавить задания в существующий вариант."""
+    variant = None
+    variant_id = request.values.get('variant_id', type=int)
+    if variant_id:
+        variant = Variant.get_by_id(variant_id)
+        if not variant:
+            flash('Вариант не найден', 'error')
+            return redirect(url_for('variants_list'))
+    if request.method == 'GET':
+        return render_template('teacher/variant_builder.html', variant=variant,
+                               existing=len(Variant.get_tasks(variant_id)) if variant else 0,
+                               default_name='Урок ' + datetime.now().strftime('%d.%m'),
+                               allowed_files=', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS)))
+    try:
+        items = _read_builder_tasks(request.form, request.files)
+        if variant is None:
+            name = clean_variant_name(request.form.get('name'), 'Урок ' + datetime.now().strftime('%d.%m'))
+            name = _unique_variant_name(name)
+        else:
+            name = variant['name']
+    except VariantFileError as error:
+        return jsonify({'error': str(error)}), 400
+    try:
+        variant_id, task_ids = _store_variant_tasks(items, name=name, variant_id=variant['id'] if variant else None)
+    except Exception:
+        app.logger.exception('Не удалось сохранить вариант со страницы «Новый вариант»')
+        return jsonify({'error': 'Не удалось сохранить: ошибка записи. Ничего не сохранено, попробуйте ещё раз.'}), 500
+    if variant:
+        flash(f'В вариант «{name}» добавлено: {tasks_word(len(task_ids))}.', 'success')
+    else:
+        flash(f'Вариант «{name}» создан: {tasks_word(len(task_ids))}.', 'success')
+    return jsonify({'redirect': url_for('variant_view', variant_id=variant_id)})
+
+
 @app.route('/variants/import-localshot', methods=['POST'])
 def variant_import_localshot():
     """Загрузка файла .variant, собранного в LocalShot. Всё или ничего: при любой ошибке ничего не создаётся."""
@@ -1658,48 +1805,10 @@ def variant_import_localshot():
         return redirect(url_for('variants_list'))
 
     name = _unique_variant_name(parsed.name)
-    class_id = ClassGroup.get_default_id()  # «Общий банк»
-    saved_files, task_ids, variant_id = [], [], None
     try:
-        variant_id = Variant.create(name, 'uploaded')
-        for item in parsed.tasks:
-            image_name = f'{uuid.uuid4().hex}.png'
-            with open(os.path.join(IMAGES_DIR, image_name), 'wb') as stream:
-                saved_files.append(stream.name)
-                stream.write(item.image)
-
-            attachment_stored = None
-            if item.attachment is not None:
-                extension = item.attachment_name.rsplit('.', 1)[-1].lower()
-                attachment_stored = f'{uuid.uuid4().hex}.{extension}'
-                with open(os.path.join(ATTACHMENTS_DIR, attachment_stored), 'wb') as stream:
-                    saved_files.append(stream.name)
-                    stream.write(item.attachment)
-
-            if item.mode == MODE_MULTILINE:
-                # Ответ из нескольких строк: ученик видит большое поле, сравнение построчно
-                answer_count, answer_1, answer_2, answer_text = 0, None, None, item.answers[0]
-            else:
-                answer_count = len(item.answers)
-                answer_1, answer_2, answer_text = _pack_answers_for_task(item.answers)
-            task_ids.append(Task.create(
-                ege_number=1,  # в LocalShot нет номера ЕГЭ: задания живут в «Общем банке»
-                image_path=image_name,
-                answer_count=answer_count, answer_1=answer_1, answer_2=answer_2, answer_text=answer_text,
-                attachment_path=attachment_stored, attachment_name=item.attachment_name,
-                answer_kind='classic', task_scope='class', class_id=class_id))
-        Variant.add_tasks(variant_id, task_ids)
+        variant_id, task_ids = _store_variant_tasks(parsed.tasks, name=name)
     except Exception:
         app.logger.exception('Не удалось загрузить вариант из LocalShot')
-        for task_id in task_ids:
-            Task.delete(task_id)
-        if variant_id is not None:
-            Variant.delete(variant_id)
-        for path in saved_files:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
         flash('Не удалось загрузить вариант: ошибка записи. Ничего не создано, попробуйте ещё раз.', 'error')
         return redirect(url_for('variants_list'))
 

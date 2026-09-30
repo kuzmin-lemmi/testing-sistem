@@ -7,6 +7,7 @@
     <div class="page-header">
         <h1>📋 Варианты</h1>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="{{ url_for('variant_builder') }}" class="btn btn-primary">📝 Новый вариант</a>
             <button type="button" class="btn btn-secondary" id="importLocalshotBtn"
                     title="Файл .variant, собранный в программе LocalShot">📥 Загрузить из LocalShot</button>
             {% if show_ege_banks %}

@@ -40,6 +40,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="file" name="file" id="homeImportFile" accept=".variant,.zip" onchange="if (this.files.length) this.form.submit()">
                 </form>
+                <a href="{{ url_for('variant_builder') }}" class="btn btn-secondary">📝 Новый вариант</a>
                 <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">Все варианты</a>
             </div>
         </section>

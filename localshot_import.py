@@ -60,7 +60,7 @@ def _extension(filename):
     return filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
 
 
-def _check_attachment(number, name, data):
+def check_attachment(number, name, data):
     ext = _extension(name)
     if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
         allowed = ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
@@ -154,7 +154,7 @@ def parse_variant_file(stream, fallback_name='Вариант'):
                 attachment_name = clean_name(str(item['attachment_name']).replace('\\', '/').rsplit('/', 1)[-1], 'файл')
                 attachment = _read_limited(archive, f'files/{task_id}.bin', MAX_ATTACHMENT_SIZE,
                                            f'файл к заданию {number}')
-                _check_attachment(number, attachment_name, attachment)
+                check_attachment(number, attachment_name, attachment)
 
             total_bytes += len(image) + len(attachment or b'')
             if total_bytes > MAX_LOCALSHOT_FILE_SIZE:

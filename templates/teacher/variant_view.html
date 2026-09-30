@@ -17,6 +17,7 @@
         </div>
         <div class="header-actions">
             <a href="{{ url_for('session_new', variant_id=variant.id) }}" class="btn btn-success">▶️ Запустить с этим вариантом</a>
+            <a href="{{ url_for('variant_builder', variant_id=variant.id) }}" class="btn btn-primary">➕ Добавить задания</a>
             {% if show_ege_banks %}<a href="{{ url_for('variant_edit', variant_id=variant.id) }}" class="btn btn-secondary">Состав из банка</a>{% endif %}
             <a href="{{ url_for('variants_list', variant_id=variant.id) }}" class="btn btn-secondary">← К списку</a>
         </div>

@@ -1,0 +1,298 @@
+{% extends "teacher/base.html" %}
+
+{% block title %}{% if variant %}Добавить задания{% else %}Новый вариант{% endif %}{% endblock %}
+
+{% block content %}
+<div class="builder">
+    <div class="page-header">
+        <div>
+            {% if variant %}
+            <h1>➕ Добавить задания</h1>
+            <div class="muted">в вариант «{{ variant.name }}» (сейчас {{ tasks_word(existing) }})</div>
+            {% else %}
+            <h1>📝 Новый вариант</h1>
+            {% endif %}
+        </div>
+        <a href="{% if variant %}{{ url_for('variant_view', variant_id=variant.id) }}{% else %}{{ url_for('variants_list') }}{% endif %}" class="btn btn-secondary">← Назад</a>
+    </div>
+
+    {% if not variant %}
+    <section class="card name-card">
+        <label for="variantName">Название варианта</label>
+        <input type="text" id="variantName" value="{{ default_name }}" maxlength="80">
+    </section>
+    {% endif %}
+
+    <div id="tasks"></div>
+
+    <section class="card drop-zone" id="dropZone" tabindex="0">
+        <div class="drop-big">📋 Вставьте скриншот задания: <kbd>Ctrl</kbd>+<kbd>V</kbd></div>
+        <div class="muted">Сделайте снимок (например, <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) и вставьте его сюда.
+            Можно перетащить картинки в окно или <a href="#" id="pickFiles">выбрать файлы</a>.</div>
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" multiple hidden>
+    </section>
+
+    <div class="save-bar">
+        <div class="error" id="error" hidden></div>
+        <span class="muted" id="counter">Заданий: 0</span>
+        <button type="button" class="btn btn-success btn-large" id="saveButton" disabled>
+            {% if variant %}💾 Добавить в вариант{% else %}💾 Сохранить вариант{% endif %}
+        </button>
+    </div>
+</div>
+
+<template id="taskTemplate">
+    <section class="card task">
+        <div class="task-head">
+            <div class="task-num"></div>
+            <div class="task-tools">
+                <button type="button" class="btn btn-small btn-outline" data-act="up" title="Выше">↑</button>
+                <button type="button" class="btn btn-small btn-outline" data-act="down" title="Ниже">↓</button>
+                <button type="button" class="btn btn-small btn-outline" data-act="image" title="Заменить картинку">🖼 Заменить</button>
+                <button type="button" class="btn btn-small btn-outline" data-act="remove" title="Убрать задание">🗑</button>
+            </div>
+        </div>
+        <img class="task-img" alt="">
+        <div class="task-answer">
+            <div class="answer-options">
+                <label>Полей ответа: <input type="number" class="count" min="1" max="{{ 20 }}" value="1"></label>
+                <label><input type="checkbox" class="multiline"> Несколько строк (как в №25, 27)</label>
+            </div>
+            <div class="fields"></div>
+            <textarea class="text" rows="4" placeholder="Каждая строка ответа — с новой строки" hidden></textarea>
+            <div class="attach-row">
+                <label class="btn btn-small btn-outline attach-label">📎 Файл к заданию<input type="file" class="attach" hidden></label>
+                <span class="attach-name muted"></span>
+                <button type="button" class="btn btn-small btn-outline attach-clear" hidden>✕</button>
+            </div>
+        </div>
+    </section>
+</template>
+
+<style>
+.builder { max-width: 960px; margin: 0 auto 120px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.muted { color: var(--text-muted); }
+.name-card label { display: block; font-weight: 600; margin-bottom: 6px; }
+.name-card input { width: 100%; font-size: 20px; }
+.drop-zone { text-align: center; border: 3px dashed var(--border); cursor: pointer; outline: none; }
+.drop-zone.over, .drop-zone:focus { border-color: var(--primary); background: var(--primary-bg); }
+.drop-big { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+kbd { background: #f1f5f9; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; font-size: 0.9em; }
+.task { margin-bottom: 16px; }
+.task.bad { border: 2px solid #dc2626; }
+.task-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.task-num { width: 38px; height: 38px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.task-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.task-img { max-width: 100%; max-height: 420px; display: block; border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 12px; }
+.answer-options { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.answer-options .count { width: 70px; }
+.fields { display: flex; gap: 8px; flex-wrap: wrap; }
+.fields input { width: 160px; font-size: 18px; }
+.task-answer textarea { width: 100%; font-family: 'JetBrains Mono', monospace; }
+.attach-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.attach-label { cursor: pointer; }
+.save-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--border-light);
+            padding: 12px 24px; display: flex; gap: 16px; align-items: center; justify-content: flex-end; z-index: 20; box-shadow: 0 -6px 20px rgba(0,0,0,.06); }
+.save-bar .error { color: #dc2626; font-weight: 600; margin-right: auto; }
+</style>
+
+<script>
+(function () {
+    const MAX_ANSWERS = 20;
+    const tasks = [];              // {image: Blob, url, count, multiline, answers: [], text, attachment: File|null}
+    let lastCount = 1;
+    let saving = false;
+    const list = document.getElementById('tasks');
+    const template = document.getElementById('taskTemplate');
+    const fileInput = document.getElementById('fileInput');
+    let replaceIndex = null;
+
+    function isImage(file) { return file && /^image\/(png|jpe?g|webp)$/.test(file.type); }
+
+    function addImages(files) {
+        const images = Array.from(files).filter(isImage);
+        if (!images.length) { showError('Нужна картинка PNG, JPG или WEBP.'); return; }
+        showError('');
+        for (const image of images) {
+            tasks.push({image, url: URL.createObjectURL(image), count: lastCount, multiline: false,
+                        answers: Array(lastCount).fill(''), text: '', attachment: null});
+        }
+        render();
+        const cards = list.querySelectorAll('.task');
+        const firstNew = cards[cards.length - images.length];
+        firstNew.scrollIntoView({behavior: 'smooth', block: 'center'});
+        const field = firstNew.querySelector('.fields input');
+        if (field) setTimeout(() => field.focus(), 200);
+    }
+
+    function render() {
+        list.innerHTML = '';
+        tasks.forEach((task, index) => {
+            const card = template.content.firstElementChild.cloneNode(true);
+            card.dataset.index = index;
+            card.querySelector('.task-num').textContent = {{ existing }} + index + 1;
+            card.querySelector('.task-img').src = task.url;
+            card.querySelector('[data-act="up"]').disabled = index === 0;
+            card.querySelector('[data-act="down"]').disabled = index === tasks.length - 1;
+            const count = card.querySelector('.count');
+            const multiline = card.querySelector('.multiline');
+            const text = card.querySelector('.text');
+            count.value = task.count;
+            count.disabled = task.multiline;
+            multiline.checked = task.multiline;
+            text.hidden = !task.multiline;
+            text.value = task.text;
+            const fields = card.querySelector('.fields');
+            fields.hidden = task.multiline;
+            for (let i = 0; i < task.count; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = task.count > 1 ? 'Ответ ' + (i + 1) : 'Ответ';
+                input.value = task.answers[i] || '';
+                input.dataset.i = i;
+                fields.appendChild(input);
+            }
+            card.querySelector('.attach-name').textContent = task.attachment ? task.attachment.name : 'нет файла';
+            card.querySelector('.attach-clear').hidden = !task.attachment;
+            list.appendChild(card);
+        });
+        document.getElementById('counter').textContent = 'Заданий: ' + tasks.length;
+        document.getElementById('saveButton').disabled = tasks.length === 0;
+    }
+
+    function taskOf(element) { return Number(element.closest('.task').dataset.index); }
+
+    list.addEventListener('input', event => {
+        const index = taskOf(event.target);
+        const task = tasks[index];
+        if (event.target.matches('.fields input')) task.answers[Number(event.target.dataset.i)] = event.target.value;
+        if (event.target.matches('.text')) task.text = event.target.value;
+        event.target.closest('.task').classList.remove('bad');
+    });
+    list.addEventListener('change', event => {
+        const index = taskOf(event.target);
+        const task = tasks[index];
+        if (event.target.matches('.count')) {
+            const count = Math.max(1, Math.min(MAX_ANSWERS, Number(event.target.value) || 1));
+            task.count = count; lastCount = count;
+            task.answers = Array.from({length: count}, (_, i) => task.answers[i] || '');
+            render();
+        } else if (event.target.matches('.multiline')) {
+            task.multiline = event.target.checked;
+            if (task.multiline && !task.text) task.text = task.answers.filter(Boolean).join('\n');
+            render();
+        } else if (event.target.matches('.attach')) {
+            task.attachment = event.target.files[0] || null;
+            render();
+        }
+    });
+    list.addEventListener('keydown', event => {
+        // Enter в поле ответа — к следующему полю, а из последнего — к следующему заданию
+        if (event.key !== 'Enter' || !event.target.matches('.fields input')) return;
+        event.preventDefault();
+        const inputs = Array.from(list.querySelectorAll('.fields input'));
+        const next = inputs[inputs.indexOf(event.target) + 1];
+        if (next) next.focus(); else document.getElementById('dropZone').focus();
+    });
+    list.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const index = taskOf(button);
+        const act = button.dataset.act;
+        if (act === 'up' && index > 0) [tasks[index - 1], tasks[index]] = [tasks[index], tasks[index - 1]];
+        else if (act === 'down' && index < tasks.length - 1) [tasks[index + 1], tasks[index]] = [tasks[index], tasks[index + 1]];
+        else if (act === 'remove') { if (!confirm('Убрать задание ' + ({{ existing }} + index + 1) + '?')) return; tasks.splice(index, 1); }
+        else if (act === 'image') { replaceIndex = index; fileInput.multiple = false; fileInput.click(); return; }
+        else if (button.classList.contains('attach-clear')) tasks[index].attachment = null;
+        else return;
+        render();
+    });
+
+    // вставка из буфера обмена: в любом месте страницы, если в буфере есть картинка
+    document.addEventListener('paste', event => {
+        const files = Array.from(event.clipboardData ? event.clipboardData.files : []).filter(isImage);
+        if (!files.length) return;
+        event.preventDefault();
+        addImages(files);
+    });
+    const zone = document.getElementById('dropZone');
+    document.getElementById('pickFiles').addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); replaceIndex = null; fileInput.multiple = true; fileInput.click(); });
+    zone.addEventListener('click', () => zone.focus());
+    fileInput.addEventListener('change', () => {
+        if (!fileInput.files.length) return;
+        if (replaceIndex !== null) {
+            const file = fileInput.files[0];
+            if (isImage(file)) { tasks[replaceIndex].image = file; tasks[replaceIndex].url = URL.createObjectURL(file); render(); }
+            replaceIndex = null;
+        } else {
+            addImages(fileInput.files);
+        }
+        fileInput.value = '';
+    });
+    window.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('over'); });
+    window.addEventListener('dragleave', event => { if (!event.relatedTarget) zone.classList.remove('over'); });
+    window.addEventListener('drop', event => {
+        event.preventDefault();
+        zone.classList.remove('over');
+        if (event.dataTransfer && event.dataTransfer.files.length) addImages(event.dataTransfer.files);
+    });
+
+    function showError(message, index) {
+        const box = document.getElementById('error');
+        box.textContent = message;
+        box.hidden = !message;
+        if (index !== undefined) {
+            const card = list.querySelectorAll('.task')[index];
+            if (card) { card.classList.add('bad'); card.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+        }
+    }
+
+    function check() {
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            const ok = task.multiline ? task.text.trim() : task.answers.every(a => a.trim());
+            if (!ok) return [i, 'Задание ' + ({{ existing }} + i + 1) + ': введите ответ.'];
+        }
+        return null;
+    }
+
+    document.getElementById('saveButton').addEventListener('click', async () => {
+        if (saving) return;
+        const problem = check();
+        if (problem) { showError(problem[1], problem[0]); return; }
+        const data = new FormData();
+        {% if not variant %}data.append('name', document.getElementById('variantName').value);{% endif %}
+        data.append('task_count', tasks.length);
+        tasks.forEach((task, i) => {
+            data.append('image_' + i, task.image, 'task' + i + '.' + (task.image.type.split('/')[1] || 'png'));
+            data.append('mode_' + i, task.multiline ? 'multiline' : 'fields');
+            if (task.multiline) data.append('text_' + i, task.text);
+            else task.answers.forEach(answer => data.append('answer_' + i, answer));
+            if (task.attachment) data.append('attachment_' + i, task.attachment, task.attachment.name);
+        });
+        saving = true;
+        const button = document.getElementById('saveButton');
+        button.disabled = true;
+        button.textContent = 'Сохраняем…';
+        try {
+            const response = await fetch({{ url_for('variant_builder', variant_id=variant.id if variant else None)|tojson }}, {
+                method: 'POST', body: data, headers: {'X-CSRFToken': window.CSRF_TOKEN}});
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.redirect) { tasks.length = 0; location.href = result.redirect; return; }
+            const match = /Задание (\d+)/.exec(result.error || '');
+            showError(result.error || 'Не удалось сохранить.', match ? Number(match[1]) - 1 : undefined);
+        } catch (error) {
+            showError('Нет связи с сервером. Попробуйте ещё раз.');
+        }
+        saving = false;
+        button.disabled = false;
+        button.textContent = {{ ('💾 Добавить в вариант' if variant else '💾 Сохранить вариант')|tojson }};
+    });
+
+    window.addEventListener('beforeunload', event => { if (tasks.length && !saving) { event.preventDefault(); event.returnValue = ''; } });
+    render();
+    zone.focus();
+})();
+</script>
+{% endblock %}

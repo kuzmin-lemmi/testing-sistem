@@ -11,8 +11,9 @@
 
     {% if not variants and not show_ege_banks %}
     <section class="card">
-        <p>Нет ни одного варианта. Загрузите вариант из LocalShot на странице «Варианты».</p>
-        <a href="{{ url_for('variants_list') }}" class="btn btn-primary">📋 К вариантам</a>
+        <p>Нет ни одного варианта.</p>
+        <a href="{{ url_for('variant_builder') }}" class="btn btn-primary">📝 Новый вариант</a>
+        <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">📥 Загрузить из LocalShot</a>
     </section>
     {% else %}
     <form action="{{ url_for('session_new') }}" method="POST" id="launchForm">
