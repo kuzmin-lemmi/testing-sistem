@@ -15,7 +15,7 @@ from config import (HOST, PORT, DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_U
                     MAX_STUDENT_UPLOAD_SIZE, ALLOWED_STUDENT_UPLOAD_EXTENSIONS,
                     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS,
                     DEFAULT_ANSWER_COUNT, SPECIAL_ANSWER_FORMAT,
-                    SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION)
+                    SECRET_KEY, TEACHER_ALLOWED_IPS, SHOW_ACCESS_CODE_OPTION, SHOW_EGE_BANKS)
 from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSession, Student, Answer, ClassGroup
 from localshot_import import VariantFileError, parse_variant_file, MODE_MULTILINE
 from student_shortcut import local_addresses, student_urls
@@ -354,7 +354,7 @@ def _clear_student_session():
 
 @app.context_processor
 def inject_csrf_token():
-    return {'csrf_token': _get_csrf_token}
+    return {'csrf_token': _get_csrf_token, 'show_ege_banks': SHOW_EGE_BANKS}
 
 @app.before_request
 def protect_teacher_routes():
@@ -374,17 +374,15 @@ def protect_teacher_routes():
 @app.route('/')
 def index():
     """Главная страница учителя"""
-    task_counts = Task.count_by_ege_number()
-    total_tasks = sum(task_counts.values())
-    variants_count = len(Variant.get_all())
-
+    active_session = TestSession.get_active()
     return render_template('teacher/index.html',
                          local_ip=get_local_ip(),
                          port=PORT,
                          student_urls=student_urls(PORT),
-                         total_tasks=total_tasks,
-                         task_counts=task_counts,
-                         variants_count=variants_count)
+                         active_session=active_session,
+                         active_session_name=_get_session_display_name(active_session) if active_session else None,
+                         sessions_count=len(TestSession.get_all()),
+                         variants_count=len(Variant.get_all()))
 
 @app.route('/test/alive')
 def student_alive():

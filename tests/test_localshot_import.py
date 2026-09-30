@@ -14,9 +14,10 @@ import unittest
 import zipfile
 from unittest.mock import patch
 
-_DATA = tempfile.mkdtemp(prefix='ege-test-')
-os.environ['EGE_DATA_DIR'] = _DATA
-atexit.register(shutil.rmtree, _DATA, True)
+if 'EGE_DATA_DIR' not in os.environ:  # одна временная папка на все тесты
+    os.environ['EGE_DATA_DIR'] = tempfile.mkdtemp(prefix='ege-test-')
+    atexit.register(shutil.rmtree, os.environ['EGE_DATA_DIR'], True)
+_DATA = os.environ['EGE_DATA_DIR']
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402

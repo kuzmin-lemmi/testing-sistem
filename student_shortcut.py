@@ -30,7 +30,8 @@ def local_addresses():
             add(info[4][0])
     except OSError:
         pass
-    return found
+    # 192.168.* — почти всегда обычная сеть кабинета; 10.* и 172.* часто дают VPN и виртуальные адаптеры
+    return sorted(found, key=lambda address: 0 if address.startswith('192.168.') else 1)
 
 
 def student_urls(port):

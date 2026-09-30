@@ -24,6 +24,7 @@
                         </div>
                     </div>
                 </label>
+                {% if show_ege_banks %}
                 <label class="mode-option">
                     <input type="radio" name="variant_mode" value="individual" onchange="updateMode()">
                     <div class="mode-content">
@@ -34,6 +35,7 @@
                         </div>
                     </div>
                 </label>
+                {% endif %}
                 <label class="mode-option">
                     <input type="radio" name="variant_mode" value="multi_choice" onchange="updateMode()">
                     <div class="mode-content">

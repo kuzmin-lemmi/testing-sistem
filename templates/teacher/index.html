@@ -3,85 +3,106 @@
 {% block title %}Главная - ЕГЭ Информатика{% endblock %}
 
 {% block content %}
-<div class="dashboard">
-    <h1>🎓 Система тестирования ЕГЭ по информатике</h1>
-    
-    <div class="server-info card">
-        <h2>🌐 Информация о сервере</h2>
-        <div class="server-details">
-            <div class="info-row">
-                <span class="label">Адрес для учеников:</span>
-                <code class="server-url">http://{{ local_ip }}:{{ port }}/test</code>
-                <button class="btn btn-small" onclick="copyUrl()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
-                    📋 Копировать
-                </button>
-            </div>
-            <div class="info-row">
-                <span class="label">Ярлык для учеников:</span>
-                <a href="{{ url_for('student_shortcut_download') }}" class="btn btn-small" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
-                    💾 Скачать «Тестирование.html»
-                </a>
-            </div>
-            <div class="info-row" style="font-size: 0.85em; opacity: 0.85;">
-                Один раз скопируйте файл на рабочий стол каждого компьютера ученика. Ученик открывает его и ждёт: когда вы запустите тестирование, откроется форма входа. Ярлык ищет этот компьютер по адресам: {% for url in student_urls %}<code>{{ url }}</code>{% if not loop.last %}, {% endif %}{% endfor %}. Если имя или адрес компьютера изменятся, скачайте ярлык заново.
-            </div>
-            <div class="info-row">
-                <span class="label">Статус:</span>
-                <span class="status-badge status-active">🟢 Сервер запущен</span>
-            </div>
+<div class="home">
+    <h1 class="home-title">Система тестирования</h1>
+
+    {% if active_session %}
+    <section class="card home-now home-now-active">
+        <div>
+            <div class="home-now-label">Идёт тестирование</div>
+            <div class="home-now-name">{{ active_session_name }}</div>
+            {% if active_session.paused %}<div class="home-now-hint">⏸ На паузе</div>{% endif %}
         </div>
-    </div>
-    
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-number">{{ total_tasks }}</div>
-            <div class="stat-label">Задач в банке</div>
-            <a href="{{ url_for('tasks_list') }}" class="stat-link">Перейти →</a>
+        <div class="home-actions">
+            <a href="{{ url_for('session_monitor', session_id=active_session.id) }}" class="btn btn-primary">👁 Мониторинг</a>
+            <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">Управление</a>
         </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ variants_count }}</div>
-            <div class="stat-label">Сохранённых вариантов</div>
-            <a href="{{ url_for('variants_list') }}" class="stat-link">Перейти →</a>
+    </section>
+    {% else %}
+    <section class="card home-now">
+        <div>
+            <div class="home-now-label">Сейчас</div>
+            <div class="home-now-name">Тестирование не запущено</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-number">{{ task_counts|length }}<span style="font-size: 0.5em; color: var(--text-muted);">/27</span></div>
-            <div class="stat-label">Номеров ЕГЭ заполнено</div>
-            <span class="stat-sublabel">из 27 возможных</span>
-        </div>
-    </div>
-    
-    <div class="quick-actions card">
-        <h2>⚡ Быстрые действия</h2>
-        <div class="action-buttons">
-            <a href="{{ url_for('task_add') }}" class="btn btn-primary">➕ Добавить задачу</a>
-            <a href="{{ url_for('variant_create') }}" class="btn btn-secondary">📋 Создать вариант</a>
+        <div class="home-actions">
             <a href="{{ url_for('session_new') }}" class="btn btn-success">▶️ Запустить тестирование</a>
         </div>
+    </section>
+    {% endif %}
+
+    <div class="home-grid">
+        <section class="card home-block">
+            <h2>📋 Варианты</h2>
+            <p class="home-big">{{ variants_count }}</p>
+            <div class="home-actions">
+                <button type="button" class="btn btn-primary" onclick="document.getElementById('homeImportFile').click()">📥 Загрузить из LocalShot</button>
+                <form action="{{ url_for('variant_import_localshot') }}" method="POST" enctype="multipart/form-data" style="display:none;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="file" name="file" id="homeImportFile" accept=".variant,.zip" onchange="if (this.files.length) this.form.submit()">
+                </form>
+                <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">Все варианты</a>
+            </div>
+        </section>
+
+        <section class="card home-block">
+            <h2>📊 Результаты</h2>
+            <p class="home-big">{{ sessions_count }}</p>
+            <div class="home-actions">
+                <a href="{{ url_for('results_list') }}" class="btn btn-secondary">Открыть результаты</a>
+            </div>
+        </section>
     </div>
-    
-    <div class="tasks-overview card">
-        <h2>📊 Задачи по номерам ЕГЭ</h2>
-        <div class="ege-grid">
-            {% for num in range(1, 28) %}
-            <a href="{{ url_for('tasks_list', ege=num) }}" class="ege-cell {% if task_counts.get(num, 0) == 0 %}empty{% endif %}">
-                <span class="ege-number">{{ num }}</span>
-                <span class="ege-count">{{ task_counts.get(num, 0) }} шт.</span>
-            </a>
-            {% endfor %}
+
+    <section class="card home-block">
+        <h2>🧑‍🎓 Для учеников</h2>
+        <div class="home-row">
+            <span class="home-muted">Адрес:</span>
+            <code class="server-url">http://{{ local_ip }}:{{ port }}/test</code>
+            <button type="button" class="btn btn-small btn-outline" onclick="copyUrl(this)">📋 Копировать</button>
         </div>
-    </div>
+        <div class="home-row">
+            <a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать ярлык для учеников</a>
+            <span class="home-muted">Скопируйте его на рабочие столы учеников — один раз.</span>
+        </div>
+        <details class="home-details">
+            <summary>Подробнее о ярлыке</summary>
+            <p>Ученик открывает ярлык и ждёт: когда вы запустите тестирование, сама откроется форма входа.
+               Ярлык ищет этот компьютер по адресам:</p>
+            <ul>{% for url in student_urls %}<li><code>{{ url }}</code></li>{% endfor %}</ul>
+            <p>Если имя или адрес компьютера изменятся, скачайте ярлык заново.</p>
+        </details>
+    </section>
 </div>
 
+<style>
+.home { max-width: 900px; margin: 0 auto; }
+.home-title { margin-bottom: 20px; }
+.home-now { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.home-now-active { border-left: 5px solid #10b981; }
+.home-now-label { font-size: 14px; color: var(--text-muted); }
+.home-now-name { font-size: 22px; font-weight: 700; margin-top: 2px; }
+.home-now-hint { margin-top: 4px; color: #b45309; font-weight: 600; }
+.home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.home-block h2 { margin-bottom: 8px; }
+.home-big { font-size: 40px; font-weight: 800; color: var(--primary); margin: 0 0 14px; }
+.home-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.home-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.home-row code { font-size: 17px; padding: 6px 10px; background: var(--bg-sidebar, #f1f5f9); border-radius: 8px; }
+.home-muted { color: var(--text-muted); }
+.home-details { color: var(--text-muted); font-size: 14px; }
+.home-details summary { cursor: pointer; }
+.home-details p, .home-details ul { margin: 8px 0; }
+.home-details ul { padding-left: 20px; }
+@media (max-width: 720px) { .home-grid { grid-template-columns: 1fr; } }
+</style>
+
 <script>
-function copyUrl() {
+function copyUrl(button) {
     const url = document.querySelector('.server-url').textContent;
     navigator.clipboard.writeText(url).then(() => {
-        const btn = event.target;
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '✓ Скопировано!';
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-        }, 2000);
+        const original = button.innerHTML;
+        button.innerHTML = '✓ Скопировано';
+        setTimeout(() => { button.innerHTML = original; }, 2000);
     });
 }
 </script>

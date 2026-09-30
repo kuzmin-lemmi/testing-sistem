@@ -9,7 +9,9 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary" id="importLocalshotBtn"
                     title="Файл .variant, собранный в программе LocalShot">📥 Загрузить из LocalShot</button>
+            {% if show_ege_banks %}
             <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-primary">➕ Создать вариант</a>
+            {% endif %}
         </div>
     </div>
 
@@ -22,11 +24,13 @@
         Отпустите файл варианта, чтобы загрузить
     </div>
 
+    {% if show_ege_banks %}
     <div class="mode-tabs" style="display:flex; gap:10px; margin-bottom:12px;">
         <a href="{{ url_for('variants_list', scope='all') }}" class="btn {% if scope == 'all' %}btn-primary{% else %}btn-outline{% endif %}">Все</a>
         <a href="{{ url_for('variants_list', scope='ege') }}" class="btn {% if scope == 'ege' %}btn-primary{% else %}btn-outline{% endif %}">ЕГЭ</a>
         <a href="{{ url_for('variants_list', scope='class') }}" class="btn {% if scope == 'class' %}btn-primary{% else %}btn-outline{% endif %}">Обычные классы</a>
     </div>
+    {% endif %}
 
     <div class="results-layout">
         <aside class="session-tree card">
@@ -47,8 +51,8 @@
                         <a class="tree-item" href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}">
                             <div class="tree-item-title">{{ v.name }}</div>
                             <div class="tree-item-meta">
-                                {% if v.variant_scope == 'class' %}🏫 {{ v.class_name if v.class_name else 'Класс' }}{% else %}🎓 ЕГЭ{% endif %}
-                                · {{ v.tasks_count }} задач
+                                {% if show_ege_banks %}{% if v.variant_scope == 'class' %}🏫 {{ v.class_name if v.class_name else 'Класс' }}{% else %}🎓 ЕГЭ{% endif %}
+                                · {% endif %}{{ v.tasks_count }} задач
                             </div>
                         </a>
                     </div>
@@ -68,10 +72,12 @@
                     <div class="details-meta">
                         <span>📅 {{ selected_variant.created_at|local_dt }}</span>
                         <span>📚 {{ selected_variant.tasks_count }} задач</span>
+                        {% if show_ege_banks %}
                         {% if selected_variant.variant_scope == 'class' %}
                         <span>🏫 {{ selected_variant.class_name if selected_variant.class_name else 'Класс' }}</span>
                         {% else %}
                         <span>🎓 ЕГЭ</span>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -90,7 +96,7 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Номер</th>
+                            {% if show_ege_banks %}<th>Номер</th>{% endif %}
                             <th>Ответ</th>
                             <th></th>
                         </tr>
@@ -99,9 +105,9 @@
                         {% for task in selected_tasks %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>
+                            {% if show_ege_banks %}<td>{% if task.task_scope == 'ege' %}№{{ task.ege_number }}{% else %}—{% endif %}</td>{% endif %}
                             <td>{% if task.answer_count == 0 %}{{ (task.answer_text or 'проверяется вручную')|truncate(40) }}{% else %}{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% elif task.answer_count > 2 %}, …{% endif %}{% endif %}</td>
-                            <td><a href="{{ url_for('task_view', task_id=task.id) }}">Открыть задачу →</a></td>
+                            <td><a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}#task-{{ task.id }}">Открыть →</a></td>
                         </tr>
                         {% endfor %}
                     </tbody>
