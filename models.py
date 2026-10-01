@@ -201,6 +201,11 @@ def migrate_db():
         cur.execute("ALTER TABLE students ADD COLUMN last_seen_at DATETIME")
         cur.execute("UPDATE students SET last_seen_at = COALESCE(last_seen_at, started_at)")
 
+    # 2b) students: сколько секунд паузы уже накопилось у сессии к моменту входа ученика.
+    # Пауза, случившаяся до его входа, не должна прибавлять ему время.
+    if not _table_has_column(conn, 'students', 'pause_base_seconds'):
+        cur.execute("ALTER TABLE students ADD COLUMN pause_base_seconds INTEGER NOT NULL DEFAULT 0")
+
     # 3) answers: answer_text (для задач с текстовым/многострочным ответом)
     if not _table_has_column(conn, 'answers', 'answer_text'):
         cur.execute("ALTER TABLE answers ADD COLUMN answer_text TEXT")
@@ -1082,10 +1087,21 @@ class Student:
         conn = get_db()
         try:
             cursor = conn.cursor()
+            cursor.execute('SELECT paused, paused_at, pause_total_seconds FROM test_sessions WHERE id = ?', (session_id,))
+            row = cursor.fetchone()
+            pause_base = 0
+            if row:
+                pause_base = row['pause_total_seconds'] or 0
+                if row['paused'] and row['paused_at']:
+                    try:
+                        paused_at = datetime.fromisoformat(row['paused_at'])
+                        pause_base += max(0, int((datetime.now(timezone.utc).replace(tzinfo=None) - paused_at).total_seconds()))
+                    except Exception:
+                        pass
             cursor.execute('''
-                INSERT INTO students (session_id, first_name, last_name, variant_id, variant_label, status)
-                VALUES (?, ?, ?, ?, ?, 'in_progress')
-            ''', (session_id, first_name, last_name, variant_id, variant_label))
+                INSERT INTO students (session_id, first_name, last_name, variant_id, variant_label, status, pause_base_seconds)
+                VALUES (?, ?, ?, ?, ?, 'in_progress', ?)
+            ''', (session_id, first_name, last_name, variant_id, variant_label, pause_base))
             student_id = cursor.lastrowid
             conn.commit()
             return student_id

@@ -134,7 +134,9 @@ def _calc_remaining_seconds(student, test_session):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     elapsed = (now - start_time).total_seconds()
     paused_elapsed = (now - paused_at).total_seconds() if paused and paused_at else 0
-    effective_elapsed = max(0, elapsed - pause_total - paused_elapsed)
+    # Считаем только паузу, прошедшую после входа ученика: его время идёт с нажатия «Начать».
+    student_pause = max(0, pause_total + paused_elapsed - (student.get('pause_base_seconds') or 0))
+    effective_elapsed = max(0, elapsed - student_pause)
     remaining = max(0, time_limit * 60 + extra_seconds - effective_elapsed)
     return int(remaining)
 
@@ -2105,6 +2107,8 @@ def _monitor_state(session):
     return {
         'status': session['status'],
         'paused': bool(session.get('paused')),
+        # Пока никто не вошёл, время не идёт: у каждого ученика отсчёт начинается с его входа.
+        'waiting': not in_progress,
         'remaining': max(in_progress) if in_progress else full,
         'students': students,
         'online': sum(1 for s in students if s['online']),

@@ -109,13 +109,13 @@ tr.offline td { background: #fef2f2; }
     }
 
     function drawTimer() {
-        const passed = state.paused ? 0 : (Date.now() - receivedAt) / 1000;
+        const passed = (state.paused || state.waiting) ? 0 : (Date.now() - receivedAt) / 1000;
         const left = remaining - passed;
         const timer = document.getElementById('timer');
         timer.textContent = clock(left);
         timer.classList.toggle('warning', left <= 300 && left > 60);
         timer.classList.toggle('danger', left <= 60);
-        document.getElementById('timerNote').textContent = state.paused ? 'пауза' : (state.students.length > 1 ? 'осталось (у последнего)' : 'осталось');
+        document.getElementById('timerNote').textContent = state.paused ? 'пауза' : state.waiting ? 'ждём учеников — время пойдёт с их входа' : (state.students.length > 1 ? 'осталось (у последнего)' : 'осталось');
     }
 
     function drawRows() {
