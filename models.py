@@ -228,6 +228,10 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'calculator_enabled'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN calculator_enabled BOOLEAN NOT NULL DEFAULT 0")
 
+    # 6b) test_sessions: задания у каждого ученика идут в своём порядке
+    if not _table_has_column(conn, 'test_sessions', 'shuffle_tasks'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN shuffle_tasks BOOLEAN NOT NULL DEFAULT 0")
+
     # 7) test_sessions: python editor
     if not _table_has_column(conn, 'test_sessions', 'python_enabled'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN python_enabled BOOLEAN NOT NULL DEFAULT 0")
@@ -365,6 +369,7 @@ def init_db():
             extra_seconds INTEGER NOT NULL DEFAULT 0,
             calculator_enabled BOOLEAN NOT NULL DEFAULT 0,
             python_enabled BOOLEAN NOT NULL DEFAULT 0,
+            shuffle_tasks BOOLEAN NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed')),
             grade_5_min INTEGER,
             grade_4_min INTEGER,
@@ -888,16 +893,16 @@ class TestSession:
     @staticmethod
     def create(variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled,
                thematic_ege_number=None, thematic_tasks_count=None,
-               grade_5_min=None, grade_4_min=None, grade_3_min=None, total_tasks=None):
+               grade_5_min=None, grade_4_min=None, grade_3_min=None, total_tasks=None, shuffle_tasks=False):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO test_sessions (variant_id, individual_mode, time_limit,
                                        access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled, status,
-                                       grade_5_min, grade_4_min, grade_3_min, total_tasks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+                                       grade_5_min, grade_4_min, grade_3_min, total_tasks, shuffle_tasks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
         ''', (variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled,
-              grade_5_min, grade_4_min, grade_3_min, total_tasks))
+              grade_5_min, grade_4_min, grade_3_min, total_tasks, 1 if shuffle_tasks else 0))
         session_id = cursor.lastrowid
 
         # Сохраняем настройки для индивидуальных вариантов

@@ -141,6 +141,19 @@ def _calc_remaining_seconds(student, test_session):
     return int(remaining)
 
 
+def _tasks_for_student(student, test_session):
+    """Задания варианта в том порядке, в котором их видит ученик.
+
+    Если учитель включил «задания вразброс», у каждого ученика свой порядок. Он зависит только
+    от номера ученика, поэтому при обновлении страницы и повторном входе не меняется.
+    """
+    tasks = Variant.get_tasks(student['variant_id'])
+    if test_session and test_session.get('shuffle_tasks') and len(tasks) > 1:
+        import random
+        random.Random(f"{student['session_id']}:{student['id']}").shuffle(tasks)
+    return tasks
+
+
 def _get_session_variant_options(session_id, include_task_counts=False):
     variants = TestSession.get_variants(session_id)
     for item in variants:
@@ -1882,7 +1895,9 @@ def session_new():
         teacher_finish_only = True  # ученик не завершает сам (иначе его ответы увидит сосед); всё открывается после завершения учителем
         calculator_enabled = request.form.get('calculator_enabled') == '1'
         python_enabled = request.form.get('python_enabled') == '1'
+        shuffle_tasks = request.form.get('shuffle_tasks') == '1'
 
+        set_setting('last_shuffle', '1' if shuffle_tasks else '0')
         set_setting('last_time_limit', time_limit)
         set_setting('last_calculator', '1' if calculator_enabled else '0')
         set_setting('last_python', '1' if python_enabled else '0')
@@ -1926,6 +1941,7 @@ def session_new():
                 teacher_finish_only=teacher_finish_only,
                 calculator_enabled=calculator_enabled,
                 python_enabled=python_enabled,
+                shuffle_tasks=shuffle_tasks,
                 grade_5_min=grade_5_min,
                 grade_4_min=grade_4_min,
                 grade_3_min=grade_3_min,
@@ -1951,6 +1967,7 @@ def session_new():
                 teacher_finish_only=teacher_finish_only,
                 calculator_enabled=calculator_enabled,
                 python_enabled=python_enabled,
+                shuffle_tasks=shuffle_tasks,
                 grade_5_min=grade_5_min,
                 grade_4_min=grade_4_min,
                 grade_3_min=grade_3_min,
@@ -1971,6 +1988,7 @@ def session_new():
                     teacher_finish_only=teacher_finish_only,
                     calculator_enabled=calculator_enabled,
                     python_enabled=python_enabled,
+                    shuffle_tasks=shuffle_tasks,
                     thematic_ege_number=0,  # 0 = полный вариант
                     thematic_tasks_count=27,
                     grade_5_min=grade_5_min,
@@ -1990,6 +2008,7 @@ def session_new():
                     teacher_finish_only=teacher_finish_only,
                     calculator_enabled=calculator_enabled,
                     python_enabled=python_enabled,
+                    shuffle_tasks=shuffle_tasks,
                     thematic_ege_number=ege_number,
                     thematic_tasks_count=tasks_count,
                     grade_5_min=grade_5_min,
@@ -2018,7 +2037,8 @@ def session_new():
                           percents=grade_percents(),
                           last={'time_limit': get_setting('last_time_limit', '45'),
                                 'calculator': get_setting('last_calculator') == '1',
-                                'python': get_setting('last_python') == '1'},
+                                'python': get_setting('last_python') == '1',
+                                'shuffle': get_setting('last_shuffle') == '1'},
                           saved_criteria=saved_criteria)
 
 @app.route('/sessions/<int:session_id>/close', methods=['POST'])
@@ -2299,8 +2319,8 @@ def student_test():
         Student.finish(student_id)
         return redirect(url_for('student_result'))
 
-    # Получаем задачи варианта
-    tasks = Variant.get_tasks(student['variant_id'])
+    # Получаем задачи варианта (при «вразброс» — в порядке этого ученика)
+    tasks = _tasks_for_student(student, test_session)
 
     # Получаем уже сохранённые ответы
     answers = {}
@@ -2726,7 +2746,7 @@ def student_result():
 
     # Получаем все ответы
     answers = Student.get_answers(student_id)
-    tasks = Variant.get_tasks(student['variant_id'])
+    tasks = _tasks_for_student(student, test_session)
 
     # Создаём словарь ответов по task_id
     answers_dict = {a['task_id']: a for a in answers}

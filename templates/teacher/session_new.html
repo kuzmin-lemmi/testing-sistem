@@ -76,6 +76,7 @@
             </div>
             <label class="check"><input type="checkbox" name="calculator_enabled" value="1" {% if last.calculator %}checked{% endif %}> 🧮 Калькулятор для учеников</label>
             <label class="check"><input type="checkbox" name="python_enabled" value="1" {% if last.python %}checked{% endif %}> 🐍 Редактор Python для учеников</label>
+            <label class="check"><input type="checkbox" name="shuffle_tasks" value="1" {% if last.shuffle %}checked{% endif %}> 🔀 Задания вразброс: у каждого ученика свой порядок</label>
             {% if show_access_code_option %}
             <label class="check"><input type="checkbox" name="use_code" value="1"> 🔑 Требовать код для входа</label>
             {% endif %}
