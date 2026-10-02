@@ -27,6 +27,12 @@ def run_sql(sql, params=()):
 
 
 class StudentTimerTests(unittest.TestCase):
+    def tearDown(self):
+        # не оставляем запущенное тестирование соседним тестам
+        for item in TestSession.get_all():
+            if item['status'] == 'active':
+                TestSession.close(item['id'])
+
     def setUp(self):
         for item in TestSession.get_all():
             if item['status'] == 'active':

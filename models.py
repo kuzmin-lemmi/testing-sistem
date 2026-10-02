@@ -206,6 +206,14 @@ def migrate_db():
     if not _table_has_column(conn, 'students', 'pause_base_seconds'):
         cur.execute("ALTER TABLE students ADD COLUMN pause_base_seconds INTEGER NOT NULL DEFAULT 0")
 
+    # 2c) answers: одна запись на пару «ученик — задание».
+    # Раньше два одновременных сохранения могли создать две записи, и верный ответ засчитывался дважды.
+    cur.execute('''
+        DELETE FROM answers
+        WHERE id NOT IN (SELECT MAX(id) FROM answers GROUP BY student_id, task_id)
+    ''')
+    cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_student_task ON answers(student_id, task_id)')
+
     # 3) answers: answer_text (для задач с текстовым/многострочным ответом)
     if not _table_has_column(conn, 'answers', 'answer_text'):
         cur.execute("ALTER TABLE answers ADD COLUMN answer_text TEXT")
@@ -1279,21 +1287,14 @@ class Answer:
                     is_correct = all(_equal(provided[i], expected[i]) for i in range(count))
 
             # Сохраняем или обновляем ответ
-            cursor.execute('SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
-                          (student_id, task_id))
-            existing = cursor.fetchone()
-
-            if existing:
-                cursor.execute('''
-                    UPDATE answers SET answer_1 = ?, answer_2 = ?, answer_text = ?, is_correct = ?,
-                                       answered_at = CURRENT_TIMESTAMP
-                    WHERE student_id = ? AND task_id = ?
-                ''', (answer_1, answer_2, answer_text, is_correct, student_id, task_id))
-            else:
-                cursor.execute('''
-                    INSERT INTO answers (student_id, task_id, answer_1, answer_2, answer_text, is_correct)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
+            cursor.execute('''
+                INSERT INTO answers (student_id, task_id, answer_1, answer_2, answer_text, is_correct)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(student_id, task_id) DO UPDATE SET
+                    answer_1 = excluded.answer_1, answer_2 = excluded.answer_2,
+                    answer_text = excluded.answer_text, is_correct = excluded.is_correct,
+                    answered_at = CURRENT_TIMESTAMP
+            ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
 
             conn.commit()
             return is_correct
@@ -1320,27 +1321,16 @@ class Answer:
         conn = get_db()
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                'SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
-                (student_id, task_id)
-            )
-            existing = cursor.fetchone()
-            if existing:
-                cursor.execute('''
-                    UPDATE answers
-                    SET upload_path = ?, upload_name = ?, upload_size = ?,
-                        upload_uploaded_at = CURRENT_TIMESTAMP,
-                        is_correct = NULL,
-                        answered_at = CURRENT_TIMESTAMP
-                    WHERE student_id = ? AND task_id = ?
-                ''', (upload_path, upload_name, upload_size, student_id, task_id))
-            else:
-                cursor.execute('''
-                    INSERT INTO answers
-                        (student_id, task_id, upload_path, upload_name, upload_size,
-                         upload_uploaded_at, is_correct)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
-                ''', (student_id, task_id, upload_path, upload_name, upload_size))
+            cursor.execute('''
+                INSERT INTO answers
+                    (student_id, task_id, upload_path, upload_name, upload_size,
+                     upload_uploaded_at, is_correct)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
+                ON CONFLICT(student_id, task_id) DO UPDATE SET
+                    upload_path = excluded.upload_path, upload_name = excluded.upload_name,
+                    upload_size = excluded.upload_size, upload_uploaded_at = CURRENT_TIMESTAMP,
+                    is_correct = NULL, answered_at = CURRENT_TIMESTAMP
+            ''', (student_id, task_id, upload_path, upload_name, upload_size))
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1367,20 +1357,11 @@ class Answer:
         conn = get_db()
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                'SELECT id FROM answers WHERE student_id = ? AND task_id = ?',
-                (student_id, task_id)
-            )
-            existing = cursor.fetchone()
-            if existing:
-                cursor.execute('''
-                    UPDATE answers SET is_correct = ? WHERE student_id = ? AND task_id = ?
-                ''', (is_correct, student_id, task_id))
-            else:
-                cursor.execute('''
-                    INSERT INTO answers (student_id, task_id, is_correct)
-                    VALUES (?, ?, ?)
-                ''', (student_id, task_id, is_correct))
+            cursor.execute('''
+                INSERT INTO answers (student_id, task_id, is_correct)
+                VALUES (?, ?, ?)
+                ON CONFLICT(student_id, task_id) DO UPDATE SET is_correct = excluded.is_correct
+            ''', (student_id, task_id, is_correct))
             conn.commit()
         except Exception:
             conn.rollback()
