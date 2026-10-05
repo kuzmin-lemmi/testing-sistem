@@ -54,24 +54,48 @@
         </section>
     </div>
 
-    <section class="card home-block">
+    <section class="card home-block" id="systemBlock">
         <h2>🧑‍🎓 Для учеников</h2>
         <div class="home-row">
-            <span class="home-muted">Адрес:</span>
-            <code class="server-url">http://{{ local_ip }}:{{ port }}/test</code>
+            <span class="home-muted">Ученики вводят в браузере:</span>
+            <code class="server-url" id="studentAddress">{{ status.address }}</code>
             <button type="button" class="btn btn-small btn-outline" onclick="copyUrl(this)">📋 Копировать</button>
+        </div>
+        <div id="firewallWarn" class="home-warn" {% if status.firewall != 'missing' or status.computers %}hidden{% endif %}>
+            <strong>⚠ Ученики могут не подключиться.</strong>
+            Брандмауэр Windows ещё не разрешил доступ к системе. Нажмите кнопку, Windows спросит разрешение — ответьте «Да».
+            <div class="home-actions" style="margin-top:10px;">
+                <button type="button" class="btn btn-primary" id="firewallBtn" onclick="openFirewall(this)">🔓 Открыть доступ ученикам</button>
+            </div>
         </div>
         <div class="home-row">
             <a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать ярлык для учеников</a>
             <span class="home-muted">Скопируйте его на рабочие столы учеников — один раз.</span>
         </div>
         <details class="home-details">
-            <summary>Подробнее о ярлыке</summary>
-            <p>Ученик открывает ярлык и ждёт: когда вы запустите тестирование, сама откроется форма входа.
-               Ярлык ищет этот компьютер по адресам:</p>
-            <ul>{% for url in student_urls %}<li><code>{{ url }}</code></li>{% endfor %}</ul>
+            <summary>Если адрес не открывается</summary>
+            <p>Ярлык ищет этот компьютер по нескольким адресам. Если не получается, попробуйте другой:</p>
+            <ul>{% for url in student_urls %}<li><code>{{ url }}/test</code></li>{% endfor %}</ul>
             <p>Если имя или адрес компьютера изменятся, скачайте ярлык заново.</p>
         </details>
+    </section>
+
+    <section class="card home-block">
+        <h2>📡 Что происходит в системе</h2>
+        <div class="home-row">
+            <span class="status-dot ok" id="statusDot"></span>
+            <strong id="statusText">Система работает</strong>
+            <span class="home-muted" id="statusMore">подключившихся компьютеров: {{ status.computers }}</span>
+        </div>
+        <ul class="events" id="events">
+            {% for e in status.events %}<li class="ev-{{ e.kind }}"><span class="ev-time">{{ e.time }}</span> {{ e.text }}</li>
+            {% else %}<li class="ev-info">Пока ничего не происходило.</li>{% endfor %}
+        </ul>
+        <div class="home-actions" style="margin-top:12px;">
+            <a href="{{ url_for('system_log') }}" class="btn btn-small btn-outline">📄 Скачать журнал для разработчика</a>
+            <button type="button" class="btn btn-small btn-outline" onclick="stopSystem()">⏹ Остановить систему</button>
+        </div>
+        <form id="stopForm" action="{{ url_for('system_stop') }}" method="POST" style="display:none;"></form>
     </section>
 </div>
 
@@ -95,6 +119,13 @@
 .home-details p, .home-details ul { margin: 8px 0; }
 .home-details ul { padding-left: 20px; }
 @media (max-width: 720px) { .home-grid { grid-template-columns: 1fr; } }
+.home-warn { background: #fef3c7; border: 1px solid #f59e0b; color: #78350f; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; background: #10b981; display: inline-block; }
+.status-dot.bad { background: #dc2626; }
+.events { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; font-size: 15px; }
+.events li { padding: 6px 4px; border-bottom: 1px solid var(--border, #e2e8f0); }
+.ev-time { color: var(--text-muted); font-family: monospace; margin-right: 6px; }
+.ev-ok { color: #047857; } .ev-warn { color: #b45309; } .ev-error { color: #b91c1c; font-weight: 600; }
 </style>
 
 <script>
@@ -105,6 +136,41 @@ function copyUrl(button) {
         button.innerHTML = '✓ Скопировано';
         setTimeout(() => { button.innerHTML = original; }, 2000);
     });
+}
+
+const statusUrl = {{ url_for('system_status')|tojson }};
+function esc(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function refreshStatus() {
+    const dot = document.getElementById('statusDot'), text = document.getElementById('statusText');
+    try {
+        const r = await fetch(statusUrl, { cache: 'no-store' });
+        if (!r.ok) throw new Error();
+        const st = await r.json();
+        dot.classList.remove('bad'); text.textContent = 'Система работает';
+        document.getElementById('statusMore').textContent = 'работает ' + st.uptime + ' · подключившихся компьютеров: ' + st.computers;
+        document.getElementById('studentAddress').textContent = st.address;
+        document.getElementById('firewallWarn').hidden = !(st.firewall === 'missing' && !st.computers);
+        document.getElementById('events').innerHTML = st.events.length
+            ? st.events.map(e => `<li class="ev-${esc(e.kind)}"><span class="ev-time">${esc(e.time)}</span> ${esc(e.text)}</li>`).join('')
+            : '<li class="ev-info">Пока ничего не происходило.</li>';
+    } catch (e) {
+        dot.classList.add('bad'); text.textContent = 'Нет связи с системой — возможно, она остановлена';
+    }
+}
+setInterval(refreshStatus, 5000);
+async function openFirewall(button) {
+    button.disabled = true; button.textContent = 'Ждём ответа Windows…';
+    try {
+        const r = await fetch({{ url_for('system_firewall')|tojson }}, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
+        const d = await r.json();
+        if (d.ok) { document.getElementById('firewallWarn').hidden = true; }
+        else { button.textContent = 'Не получилось — попробуйте ещё раз'; button.disabled = false; return; }
+    } catch (e) { button.textContent = 'Не получилось — попробуйте ещё раз'; button.disabled = false; return; }
+    refreshStatus();
+}
+function stopSystem() {
+    const msg = {{ ('Сейчас идёт тестирование! Если остановить систему, у учеников оборвётся тест. Остановить?' if active_session else 'Остановить систему? Ученики не смогут войти, пока вы не запустите её снова.')|tojson }};
+    if (confirm(msg)) document.getElementById('stopForm').submit();
 }
 </script>
 {% endblock %}

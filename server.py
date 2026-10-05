@@ -24,6 +24,8 @@ from models import get_setting, set_setting, recheck_task_answers, backup_databa
 import results_logic
 from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
 from student_shortcut import local_addresses, student_urls
+import activity
+from activity import log_event
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -37,7 +39,8 @@ def add_no_store_headers(response):
         response.headers['Expires'] = '0'
     return response
 
-PYODIDE_DIR = os.path.join('static', 'pyodide')
+from config import BASE_DIR, APP_DIR, FROZEN, LOG_DIR
+PYODIDE_DIR = os.path.join(APP_DIR, 'pyodide') if FROZEN else os.path.join(BASE_DIR, 'static', 'pyodide')
 
 @app.errorhandler(Exception)
 def handle_exception(error):
@@ -45,6 +48,7 @@ def handle_exception(error):
     if isinstance(error, HTTPException):
         return error
     app.logger.exception('Unhandled exception')
+    log_event('В системе произошла ошибка. Подробности записаны в файл журнала (Настройки → Журнал).', 'error', request.remote_addr)
     if request.path.startswith('/test'):
         return (
             "<!DOCTYPE html><html lang='ru'><head><meta charset='UTF-8'>"
@@ -407,6 +411,12 @@ def inject_csrf_token():
             'plural': plural, 'tasks_word': tasks_word}
 
 @app.before_request
+def track_student_computers():
+    if request.path.startswith('/test') and not _request_from_teacher_machine():
+        activity.note_student_contact(_normalize_ip(request.remote_addr))
+    return None
+
+@app.before_request
 def protect_teacher_routes():
     if not _is_teacher_request_path(request.path):
         return None
@@ -429,10 +439,69 @@ def index():
                          local_ip=get_local_ip(),
                          port=PORT,
                          student_urls=student_urls(PORT),
+                         status=_system_status(),
                          active_session=active_session,
                          active_session_name=_get_session_display_name(active_session) if active_session else None,
                          sessions_count=len(TestSession.get_all()),
                          variants_count=len(Variant.get_all()))
+
+def primary_student_url():
+    """Один адрес, который ученики вводят в браузере (остальные — в подробностях)."""
+    return f'http://{get_local_ip()}:{PORT}/test'
+
+
+def _system_status():
+    active = TestSession.get_active()
+    return {
+        'address': primary_student_url(),
+        'other_addresses': [u for u in student_urls(PORT) if u != primary_student_url().rsplit('/test', 1)[0]],
+        'firewall': activity.firewall_status(),
+        'computers': activity.students_seen_count(),
+        'uptime': activity.uptime_text(),
+        'active': bool(active),
+        'events': activity.recent_events(40),
+    }
+
+
+@app.route('/system/status')
+def system_status():
+    """Данные для блока «Состояние системы» на главной странице (страница обновляет их сама)."""
+    return jsonify(_system_status())
+
+
+@app.route('/system/firewall', methods=['POST'])
+def system_firewall():
+    """Открыть доступ ученикам в брандмауэре Windows. Windows покажет учителю окно «Разрешить?»."""
+    if activity.open_firewall():
+        log_event('Доступ для учеников в брандмауэре Windows открыт.', 'ok')
+        return jsonify({'ok': True})
+    log_event('Не удалось открыть доступ в брандмауэре Windows (возможно, вы нажали «Нет»).', 'warn')
+    return jsonify({'ok': False}), 200
+
+
+@app.route('/system/log')
+def system_log():
+    """Файл технического журнала: его можно отправить разработчику, если что-то не работает."""
+    if not os.path.exists(activity.LOG_FILE):
+        flash('Журнал пока пуст', 'info')
+        return redirect(url_for('index'))
+    return send_file(activity.LOG_FILE, mimetype='text/plain', as_attachment=True, download_name='журнал-системы.txt')
+
+
+@app.route('/system/stop', methods=['POST'])
+def system_stop():
+    """Остановить систему. Без неё тест у учеников прервётся, поэтому страница спрашивает подтверждение."""
+    log_event('Система остановлена учителем.', 'warn')
+    import threading
+    threading.Timer(0.6, lambda: os._exit(0)).start()
+    return render_template('teacher/stopped.html')
+
+
+@app.route('/static/pyodide/<path:filename>')
+def pyodide_file(filename):
+    """Python-редактор для учеников. Лежит отдельной папкой (она большая), в программу не вшивается."""
+    return send_from_directory(PYODIDE_DIR, filename)
+
 
 @app.route('/test/alive')
 def student_alive():
@@ -2017,6 +2086,8 @@ def session_new():
                     total_tasks=total_tasks
                 )
 
+        started = TestSession.get_by_id(session_id)
+        log_event(f"Запущено тестирование «{_get_session_display_name(started)}» на {time_limit} мин.", 'ok')
         flash('Тестирование запущено. Ученики увидят форму входа через несколько секунд.', 'success')
         return redirect(url_for('session_monitor', session_id=session_id))
 
@@ -2046,6 +2117,11 @@ def session_close(session_id):
     """Завершить тестирование: ученики сразу видят оценки, учитель — результаты."""
     Student.finish_all(session_id)
     TestSession.close(session_id)
+    log_event('Тестирование завершено, результаты сохранены.', 'ok')
+    try:
+        backup_database(BACKUPS_DIR)  # копия базы после каждого проведённого теста
+    except Exception:
+        app.logger.exception('Не удалось сделать копию базы после теста')
     flash('Тестирование завершено. Ученики видят свои оценки и правильные ответы.', 'success')
     return redirect(url_for('results_list', session_id=session_id))
 
@@ -2055,6 +2131,7 @@ def session_pause(session_id):
     session = TestSession.get_by_id(session_id)
     if session and session['status'] == 'active':
         TestSession.pause(session_id)
+        log_event('Тестирование поставлено на паузу.', 'warn')
         flash('Тестирование поставлено на паузу', 'success')
     return redirect(url_for('session_monitor', session_id=session_id))
 
@@ -2064,6 +2141,7 @@ def session_resume(session_id):
     session = TestSession.get_by_id(session_id)
     if session and session['status'] == 'active':
         TestSession.resume(session_id)
+        log_event('Тестирование продолжено.', 'info')
         flash('Тестирование продолжено', 'success')
     return redirect(url_for('session_monitor', session_id=session_id))
 
@@ -2079,6 +2157,7 @@ def session_extend(session_id):
             minutes_int = 5
         if minutes_int > 0:
             TestSession.extend_time(session_id, minutes_int * 60)
+            log_event(f'Время тестирования продлено на {minutes_int} мин.', 'info')
             flash(f'Время продлено на {minutes_int} мин', 'success')
     return redirect(url_for('session_monitor', session_id=session_id))
 
@@ -2207,6 +2286,7 @@ def student_start():
 
     # Проверка кода
     if active_session['access_code'] and active_session['access_code'] != code:
+        log_event(f'{last_name} {first_name} ввёл неверный код доступа ({{pc}}).', 'warn', request.remote_addr)
         flash('Неверный код доступа', 'error')
         return redirect(url_for('student_login'))
 
@@ -2216,6 +2296,7 @@ def student_start():
         if existing['status'] == 'in_progress':
             from flask import session
             if session.get('student_id') != existing['id'] and _seen_recently(existing):
+                log_event(f'{last_name} {first_name} пытался войти, но уже решает тест на другом компьютере ({{pc}}).', 'warn', request.remote_addr)
                 flash(f'{last_name} {first_name} уже решает тест на другом компьютере. '
                       f'Если это вы и вы сменили компьютер, закройте старое окно и подождите '
                       f'{RELOGIN_BLOCK_SECONDS} секунд или обратитесь к учителю.', 'error')
@@ -2225,6 +2306,7 @@ def student_start():
             session['time_limit'] = active_session['time_limit']
             session['app_mode'] = app_mode
             Student.touch(existing['id'])
+            log_event(f'{last_name} {first_name} снова вошёл в тест — {{pc}}. Время продолжает идти.', 'info', request.remote_addr)
             return redirect(url_for('student_test'))
         flash('Вы уже завершили этот тест', 'error')
         return redirect(url_for('student_login'))
@@ -2290,6 +2372,7 @@ def student_start():
     # Создаём запись ученика
     student_id = Student.create(active_session['id'], first_name, last_name, variant_id, variant_label=variant_label)
     Student.touch(student_id)
+    log_event(f'{last_name} {first_name} вошёл в тест — {{pc}}. Время пошло.', 'ok', request.remote_addr)
 
     # Сохраняем в сессию
     from flask import session
@@ -3244,18 +3327,19 @@ def tasks_import():
 
 # ==================== ЗАПУСК ====================
 
-if __name__ == '__main__':
+def prepare_startup():
+    """Копия базы и первая запись в журнал. Вызывается и из launcher.py, и при запуске `python server.py`."""
     try:
         backup_database(BACKUPS_DIR)  # копия базы при каждом запуске, хранятся последние 20
-    except Exception as error:
-        print(f'Не удалось сделать копию базы: {error}')
-    print('=' * 50)
-    print('Система тестирования ЕГЭ по информатике')
-    print('=' * 50)
-    print(f'Сервер запущен: http://{get_local_ip()}:{PORT}')
-    print(f'Локальный адрес: http://127.0.0.1:{PORT}')
-    print('=' * 50)
-    print('Для остановки нажмите Ctrl+C')
-    print()
+    except Exception:
+        app.logger.exception('Не удалось сделать копию базы')
+        log_event('Не удалось сделать копию базы данных. Подробности — в журнале.', 'warn')
+    log_event(f'Система запущена. Ученики заходят по адресу {primary_student_url()}', 'ok')
 
+
+if __name__ == '__main__':
+    activity.setup_logging()
+    prepare_startup()
+    print(f'Система запущена: http://127.0.0.1:{PORT}  (ученикам: {primary_student_url()})')
+    print('Для остановки нажмите Ctrl+C. Подробности работы — в файле', activity.LOG_FILE)
     app.run(host=HOST, port=PORT, debug=False, threaded=True)

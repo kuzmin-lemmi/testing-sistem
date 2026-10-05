@@ -18,3 +18,7 @@ venv/
 
 # pyodide offline runtime (large)
 static/pyodide/
+
+# сборка программы
+build/
+dist/

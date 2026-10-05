@@ -2,16 +2,23 @@
 Конфигурация системы тестирования ЕГЭ
 """
 import os
+import sys
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # здесь лежат шаблоны и стили
+
+# В собранной программе (.exe) данные хранятся рядом с ней, а не внутри: при обновлении программы
+# папку «Данные» не трогают, и ничего не теряется.
+FROZEN = bool(getattr(sys, 'frozen', False))
+APP_DIR = os.path.dirname(sys.executable) if FROZEN else BASE_DIR
 
 # Пути к данным
-DATA_DIR = os.environ.get('EGE_DATA_DIR') or os.path.join(BASE_DIR, 'data')  # EGE_DATA_DIR — для автоматических тестов
+DATA_DIR = os.environ.get('EGE_DATA_DIR') or os.path.join(APP_DIR, 'Данные' if FROZEN else 'data')  # EGE_DATA_DIR — для автоматических тестов
+LOG_DIR = os.path.join(DATA_DIR, 'logs')
 DATABASE_PATH = os.path.join(DATA_DIR, 'database.db')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 ATTACHMENTS_DIR = os.path.join(DATA_DIR, 'attachments')
 STUDENT_UPLOADS_DIR = os.path.join(DATA_DIR, 'student_uploads')
-EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
+EXPORTS_DIR = os.path.join(APP_DIR, 'exports')
 
 # Настройки сервера
 HOST = '0.0.0.0'  # Доступ из локальной сети
@@ -69,7 +76,7 @@ SPECIAL_ANSWER_FORMAT = {
 }
 
 # Создаём директории если не существуют
-for directory in [DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR]:
+for directory in [DATA_DIR, IMAGES_DIR, ATTACHMENTS_DIR, STUDENT_UPLOADS_DIR, EXPORTS_DIR, LOG_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 
