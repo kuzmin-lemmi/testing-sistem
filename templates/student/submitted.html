@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Работа сдана</title>
+    <style>
+        body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
+        .card { background: #fff; border-radius: 22px; padding: 44px 52px; max-width: 520px; text-align: center;
+                box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+        .icon { font-size: 64px; line-height: 1; margin-bottom: 14px; }
+        h1 { margin: 0 0 8px; font-size: 30px; }
+        .name { color: #64748b; margin-bottom: 18px; }
+        p { margin: 8px 0; font-size: 18px; color: #334155; }
+        .wait { margin-top: 22px; color: #94a3b8; font-size: 15px; }
+        .dots::after { content: ''; animation: dots 1.5s steps(4) infinite; }
+        @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">✅</div>
+        <h1>Работа сдана</h1>
+        <div class="name">{{ student.last_name }} {{ student.first_name }}</div>
+        <p>Ответы сохранены и больше не меняются.</p>
+        <p>Оценка появится на этом экране, когда учитель завершит тестирование.</p>
+        <div class="wait">Ожидайте<span class="dots"></span></div>
+    </div>
+<script>
+// Ждём, пока учитель завершит тестирование (покажем оценку) или вернёт к решению.
+(function () {
+    async function check() {
+        try {
+            const response = await fetch('{{ url_for("student_ping") }}', { method: 'POST', cache: 'no-store' });
+            if (response.status === 401 || response.status === 404) { location.href = '{{ url_for("student_login") }}'; return; }
+            const data = await response.json();
+            if (data.redirect) { location.href = data.redirect; return; }
+            if (data.active && !data.submitted) { location.href = '{{ url_for("student_test") }}'; return; }
+        } catch (error) { /* сервер учителя временно недоступен */ }
+        setTimeout(check, 4000);
+    }
+    setTimeout(check, 4000);
+})();
+</script>
+</body>
+</html>

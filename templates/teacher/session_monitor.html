@@ -49,14 +49,19 @@
     </section>
 
     <div class="paused-banner" id="pausedBanner" {% if not live.paused %}hidden{% endif %}>⏸ Тестирование на паузе: ученики не могут отвечать, время стоит.</div>
-    <div class="done-banner" id="doneBanner" hidden>⌛ Время у всех вышло. Можно завершать тестирование.</div>
+    <div class="done-banner" id="doneBanner" hidden>✅ Все сдали работу или у всех вышло время. Можно завершать тестирование.</div>
 
     <section class="card">
         <h2>Ученики: <span id="countAll">{{ live.students|length }}</span>
-            <span class="muted" style="font-weight:400;">· в сети <span id="countOnline">{{ live.online }}</span></span></h2>
+            <span class="muted" style="font-weight:400;">· в сети <span id="countOnline">{{ live.online }}</span>
+            · сдали <span id="countSubmitted">{{ live.submitted_count }}</span></span></h2>
+        <div class="ready-row" id="readyRow" {% if not live.ready_count %}hidden{% endif %}>
+            <span>Ответили на все задания, но ещё не сдали: <strong id="countReady">{{ live.ready_count }}</strong></span>
+            <button type="button" class="btn btn-primary btn-small" onclick="acceptReady()">🔒 Принять у всех, кто ответил на всё</button>
+        </div>
         <table class="monitor-table">
             <thead>
-                <tr><th>Ученик</th><th>Ответил</th><th>Осталось</th><th>В сети</th><th>Начал</th><th></th></tr>
+                <tr><th>Ученик</th><th>Ответил</th><th>Осталось</th><th>Работа</th><th>В сети</th><th>Начал</th><th></th></tr>
             </thead>
             <tbody id="rows"></tbody>
         </table>
@@ -65,7 +70,14 @@
 </div>
 
 <style>
-.monitor { max-width: 1100px; margin: 0 auto; }
+.monitor { max-width: 1180px; margin: 0 auto; }
+.ready-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #ecfdf5; border: 1px solid #10b981; border-radius: 10px; padding: 10px 14px; margin: 6px 0 12px; }
+.work-state { white-space: nowrap; }
+.work-done { color: #047857; font-weight: 600; }
+.work-ready { color: #b45309; font-weight: 600; }
+.btn-tiny { padding: 3px 8px; font-size: 13px; border-radius: 6px; margin-left: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
+.btn-tiny:hover { background: #f1f5f9; }
+tr.submitted td { background: #f0fdf4; }
 .monitor-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .monitor-title { margin: 2px 0 6px; font-size: 26px; }
 .monitor-timer-box { text-align: center; }
@@ -121,12 +133,16 @@ tr.offline td { background: #fef2f2; }
     function drawRows() {
         const rows = state.students.map(s => {
             const percent = s.total ? Math.round(100 * s.answered / s.total) : 0;
-            const offline = !s.online && s.remaining > 0;
-            return `<tr class="${offline ? 'offline' : ''}">
+            const offline = !s.online && s.remaining > 0 && !s.submitted;
+            const work = s.submitted
+                ? `<span class="work-done">🔒 сдал в ${esc(s.submitted)}</span><button class="btn-tiny" onclick="studentAction(${s.id}, 'return')" title="Вернуть к решению">🔓 вернуть</button>`
+                : `${s.all_answered ? '<span class="work-ready">ответил на всё</span>' : '<span class="muted">решает</span>'}<button class="btn-tiny" onclick="studentAction(${s.id}, 'accept')" title="Принять работу: у ученика заставка, ответы не меняются">🔒 принять</button>`;
+            return `<tr class="${offline ? 'offline' : ''}${s.submitted ? ' submitted' : ''}">
                 <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}</td>
                 <td><div class="progress"><div class="progress-bar ${s.answered === s.total ? 'full' : ''}"><div style="width:${percent}%"></div></div>
                     ${s.answered} из ${s.total}${s.uploads ? ` · 📁 ${s.uploads}` : ''}</div></td>
-                <td>${s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
+                <td>${s.submitted ? '<span class="muted">—</span>' : s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
+                <td class="work-state">${work}</td>
                 <td>${s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
                 <td>${esc(s.started)}</td>
                 <td><a href="${resultBase}${s.id}">ответы →</a></td>
@@ -138,7 +154,27 @@ tr.offline td { background: #fef2f2; }
         document.getElementById('empty').hidden = state.students.length > 0;
         document.getElementById('pausedBanner').hidden = !state.paused;
         document.getElementById('doneBanner').hidden = !state.finished_all;
+        document.getElementById('countSubmitted').textContent = state.submitted_count;
+        document.getElementById('countReady').textContent = state.ready_count;
+        document.getElementById('readyRow').hidden = !state.ready_count;
     }
+
+    const actionBase = {{ url_for('session_accept_work', session_id=session.id, student_id=0)|tojson }}.replace(/0\/accept$/, '');
+    async function post(url) {
+        try {
+            await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
+        } catch (error) { /* сервер недоступен */ }
+        refresh();
+    }
+    window.studentAction = function (id, action) {
+        if (action === 'return' && !confirm('Вернуть ученика к решению? Он снова увидит задания и сможет менять ответы.')) return;
+        post(actionBase + id + '/' + action);
+    };
+    window.acceptReady = function () {
+        if (confirm('Принять работы у всех, кто ответил на все задания? У них на экране появится заставка «Работа сдана».')) {
+            post({{ url_for('session_accept_ready', session_id=session.id)|tojson }});
+        }
+    };
 
     async function refresh() {
         try {

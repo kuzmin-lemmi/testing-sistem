@@ -236,6 +236,13 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'calculator_enabled'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN calculator_enabled BOOLEAN NOT NULL DEFAULT 0")
 
+    # 6c) students: «работа сдана» — ответы скрыты и не меняются, оценка появится после завершения тестирования
+    if not _table_has_column(conn, 'students', 'submitted_at'):
+        cur.execute("ALTER TABLE students ADD COLUMN submitted_at DATETIME")
+    # 6d) test_sessions: введённые ответы скрыты точками, пока ученик не нажмёт на поле
+    if not _table_has_column(conn, 'test_sessions', 'mask_answers'):
+        cur.execute("ALTER TABLE test_sessions ADD COLUMN mask_answers BOOLEAN NOT NULL DEFAULT 0")
+
     # 6b) test_sessions: задания у каждого ученика идут в своём порядке
     if not _table_has_column(conn, 'test_sessions', 'shuffle_tasks'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN shuffle_tasks BOOLEAN NOT NULL DEFAULT 0")
@@ -901,16 +908,16 @@ class TestSession:
     @staticmethod
     def create(variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled,
                thematic_ege_number=None, thematic_tasks_count=None,
-               grade_5_min=None, grade_4_min=None, grade_3_min=None, total_tasks=None, shuffle_tasks=False):
+               grade_5_min=None, grade_4_min=None, grade_3_min=None, total_tasks=None, shuffle_tasks=False, mask_answers=False):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO test_sessions (variant_id, individual_mode, time_limit,
                                        access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled, status,
-                                       grade_5_min, grade_4_min, grade_3_min, total_tasks, shuffle_tasks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+                                       grade_5_min, grade_4_min, grade_3_min, total_tasks, shuffle_tasks, mask_answers)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         ''', (variant_id, individual_mode, time_limit, access_code, show_answers, teacher_finish_only, calculator_enabled, python_enabled,
-              grade_5_min, grade_4_min, grade_3_min, total_tasks, 1 if shuffle_tasks else 0))
+              grade_5_min, grade_4_min, grade_3_min, total_tasks, 1 if shuffle_tasks else 0, 1 if mask_answers else 0))
         session_id = cursor.lastrowid
 
         # Сохраняем настройки для индивидуальных вариантов
@@ -1157,6 +1164,20 @@ class Student:
         except Exception:
             conn.rollback()
             raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def set_submitted(student_id, submitted):
+        """«Работа сдана» (True) или «вернуть к решению» (False). Тест при этом не завершается."""
+        conn = get_db()
+        try:
+            if submitted:
+                conn.execute('''UPDATE students SET submitted_at = COALESCE(submitted_at, CURRENT_TIMESTAMP)
+                                WHERE id = ? AND status = 'in_progress' ''', (student_id,))
+            else:
+                conn.execute('UPDATE students SET submitted_at = NULL WHERE id = ?', (student_id,))
+            conn.commit()
         finally:
             conn.close()
 

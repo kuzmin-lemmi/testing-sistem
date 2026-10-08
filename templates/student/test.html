@@ -85,6 +85,14 @@
             opacity: 0.7;
             cursor: not-allowed;
         }
+        /* Введённые ответы скрыты от соседей, пока ученик не нажмёт на поле */
+        body.mask-answers .answer-input:not(:focus) {
+            -webkit-text-security: disc;
+            text-security: disc;
+        }
+        @supports not (-webkit-text-security: disc) {
+            body.mask-answers .answer-input:not(:focus) { color: transparent; text-shadow: 0 0 9px rgba(0,0,0,.55); }
+        }
         .calc-toggle {
             background: rgba(255,255,255,0.2);
             border: 1px solid rgba(255,255,255,0.35);
@@ -889,7 +897,7 @@
         }
     </style>
 </head>
-<body>
+<body{% if mask_answers %} class="mask-answers"{% endif %}>
     <header class="header">
         <div class="student-meta">
             <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>
@@ -910,13 +918,14 @@
         <div class="header-finish">
             {% if teacher_finish_only %}
             <div class="finish-note">
-                Завершение теста — только по команде учителя
+                Оценка появится, когда учитель завершит тестирование
             </div>
-            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
-                <button type="submit" class="btn-finish" disabled>
-                    Ожидайте учителя
+            <form action="{{ url_for('student_submit') }}" method="POST" id="submitForm">
+                <button type="button" class="btn-finish" onclick="submitWork()">
+                    ✅ Сдать работу
                 </button>
             </form>
+            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm" style="display:none;"></form>
             {% else %}
             <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
                 <button type="submit" class="btn-finish" onclick="return confirm('Завершить тест? Это действие нельзя отменить.')">
@@ -2843,11 +2852,31 @@
                     window.location.href = data.redirect;
                     return;
                 }
+                if (data && data.submitted) {
+                    // учитель принял работу — показываем заставку
+                    window.location.href = '{{ url_for("student_test") }}';
+                    return;
+                }
                 if (data && Object.prototype.hasOwnProperty.call(data, 'paused')) {
                     setPausedState(data.paused, data.remaining_seconds);
                 }
             } catch (e) {
                 // игнорируем сетевые сбои
+            }
+        }
+
+        async function submitWork() {
+            await flushAll();
+            const cards = Array.from(document.querySelectorAll('.task-card'));
+            const empty = cards.filter(card => {
+                const fields = Array.from(card.querySelectorAll('input.answer-input, textarea.answer-input'));
+                return fields.length && fields.every(el => !el.value.trim());
+            }).length;
+            const warning = empty
+                ? 'Не отвечено заданий: ' + empty + '.\n\n'
+                : 'Ответы даны на все задания.\n\n';
+            if (confirm(warning + 'Сдать работу? После сдачи изменить ответы будет нельзя. Оценка появится, когда учитель завершит тестирование.')) {
+                document.getElementById('submitForm').submit();
             }
         }
 

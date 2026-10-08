@@ -1972,6 +1972,8 @@ def session_new():
         calculator_enabled = request.form.get('calculator_enabled') == '1'
         python_enabled = request.form.get('python_enabled') == '1'
         shuffle_tasks = request.form.get('shuffle_tasks') == '1'
+        mask_answers = request.form.get('mask_answers') == '1'
+        set_setting('last_mask', '1' if mask_answers else '0')
 
         set_setting('last_shuffle', '1' if shuffle_tasks else '0')
         set_setting('last_time_limit', time_limit)
@@ -2018,6 +2020,7 @@ def session_new():
                 calculator_enabled=calculator_enabled,
                 python_enabled=python_enabled,
                 shuffle_tasks=shuffle_tasks,
+                mask_answers=mask_answers,
                 grade_5_min=grade_5_min,
                 grade_4_min=grade_4_min,
                 grade_3_min=grade_3_min,
@@ -2044,6 +2047,7 @@ def session_new():
                 calculator_enabled=calculator_enabled,
                 python_enabled=python_enabled,
                 shuffle_tasks=shuffle_tasks,
+                mask_answers=mask_answers,
                 grade_5_min=grade_5_min,
                 grade_4_min=grade_4_min,
                 grade_3_min=grade_3_min,
@@ -2065,6 +2069,7 @@ def session_new():
                     calculator_enabled=calculator_enabled,
                     python_enabled=python_enabled,
                     shuffle_tasks=shuffle_tasks,
+                    mask_answers=mask_answers,
                     thematic_ege_number=0,  # 0 = полный вариант
                     thematic_tasks_count=27,
                     grade_5_min=grade_5_min,
@@ -2085,6 +2090,7 @@ def session_new():
                     calculator_enabled=calculator_enabled,
                     python_enabled=python_enabled,
                     shuffle_tasks=shuffle_tasks,
+                    mask_answers=mask_answers,
                     thematic_ege_number=ege_number,
                     thematic_tasks_count=tasks_count,
                     grade_5_min=grade_5_min,
@@ -2116,7 +2122,8 @@ def session_new():
                           last={'time_limit': get_setting('last_time_limit', '45'),
                                 'calculator': get_setting('last_calculator') == '1',
                                 'python': get_setting('last_python') == '1',
-                                'shuffle': get_setting('last_shuffle') == '1'},
+                                'shuffle': get_setting('last_shuffle') == '1',
+                                'mask': get_setting('last_mask') == '1'},
                           saved_criteria=saved_criteria)
 
 @app.route('/sessions/<int:session_id>/close', methods=['POST'])
@@ -2206,6 +2213,8 @@ def _monitor_state(session):
             'started': to_local_dt(st.get('started_at'))[11:16],
             'last_seen': to_local_dt(st.get('last_seen_at'))[11:16] if st.get('last_seen_at') else '',
             'uploads': Answer.count_uploads_for_student(st['id']),
+            'all_answered': bool(score['total']) and score['answered'] >= score['total'],
+            'submitted': to_local_dt(st.get('submitted_at'))[11:16] if st.get('submitted_at') else '',
         })
     students.sort(key=lambda s: s['name'].casefold())
     in_progress = [s['remaining'] for s in students]
@@ -2218,8 +2227,55 @@ def _monitor_state(session):
         'remaining': max(in_progress) if in_progress else full,
         'students': students,
         'online': sum(1 for s in students if s['online']),
-        'finished_all': bool(students) and all(s['remaining'] <= 0 for s in students),
+        'finished_all': bool(students) and all(s['remaining'] <= 0 or s['submitted'] for s in students),
+        'submitted_count': sum(1 for s in students if s['submitted']),
+        'ready_count': sum(1 for s in students if s['all_answered'] and not s['submitted']),
     }
+
+
+def _session_student(session_id, student_id):
+    student = Student.get_by_id(student_id)
+    if not student or student['session_id'] != session_id or student['status'] != 'in_progress':
+        return None
+    return student
+
+
+@app.route('/sessions/<int:session_id>/students/<int:student_id>/accept', methods=['POST'])
+def session_accept_work(session_id, student_id):
+    """Учитель принимает работу: у ученика заставка, ответы больше не меняются."""
+    student = _session_student(session_id, student_id)
+    if student and not student.get('submitted_at'):
+        Student.set_submitted(student_id, True)
+        log_event(f"Учитель принял работу: {student['last_name']} {student['first_name']}.", 'info')
+    return jsonify({'ok': bool(student)})
+
+
+@app.route('/sessions/<int:session_id>/students/<int:student_id>/return', methods=['POST'])
+def session_return_work(session_id, student_id):
+    """Вернуть ученика к решению (если сдал случайно)."""
+    student = _session_student(session_id, student_id)
+    if student and student.get('submitted_at'):
+        Student.set_submitted(student_id, False)
+        log_event(f"{student['last_name']} {student['first_name']} возвращён к решению.", 'warn')
+    return jsonify({'ok': bool(student)})
+
+
+@app.route('/sessions/<int:session_id>/accept-ready', methods=['POST'])
+def session_accept_ready(session_id):
+    """Принять работы у всех, кто ответил на все задания."""
+    session_data = TestSession.get_by_id(session_id)
+    if not session_data:
+        return jsonify({'ok': False}), 404
+    accepted = 0
+    for item in _monitor_state(session_data)['students']:
+        if item['all_answered'] and not item['submitted']:
+            student = _session_student(session_id, item['id'])
+            if student:
+                Student.set_submitted(item['id'], True)
+                accepted += 1
+    if accepted:
+        log_event(f'Учитель принял работы у всех, кто ответил на всё: {accepted}.', 'info')
+    return jsonify({'ok': True, 'accepted': accepted})
 
 
 @app.route('/sessions/<int:session_id>/live')
@@ -2409,6 +2465,10 @@ def student_test():
         Student.finish(student_id)
         return redirect(url_for('student_result'))
 
+    if student.get('submitted_at'):
+        # Работа сдана: только заставка, без заданий и ответов. Оценка — после завершения тестирования.
+        return render_template('student/submitted.html', student=student)
+
     # Получаем задачи варианта (при «вразброс» — в порядке этого ученика)
     tasks = _tasks_for_student(student, test_session)
 
@@ -2435,6 +2495,7 @@ def student_test():
                           paused=bool(test_session and test_session.get('paused')),
                           calculator_enabled=bool(test_session and test_session.get('calculator_enabled')),
                           python_enabled=bool(test_session and test_session.get('python_enabled')),
+                          mask_answers=bool(test_session and test_session.get('mask_answers')),
                           variant_label=student.get('variant_label'))
 
 @app.route('/test/save', methods=['POST'])
@@ -2485,6 +2546,8 @@ def _answer_refusal(student):
     """Почему ответ сейчас нельзя принять (или None). Проверяется на сервере, а не только в браузере."""
     if student['status'] != 'in_progress':
         return 'Тест уже завершён'
+    if student.get('submitted_at'):
+        return 'Работа уже сдана'
     test_session = TestSession.get_by_id(student['session_id'])
     if not test_session or test_session['status'] != 'active':
         return 'Тестирование завершено'
@@ -2552,7 +2615,22 @@ def student_ping():
             Student.finish(student_id)
         return jsonify({'active': False, 'finished': True, 'redirect': url_for('student_result')})
 
-    return jsonify({'active': True, 'paused': bool(test_session.get('paused')), 'remaining_seconds': remaining})
+    return jsonify({'active': True, 'paused': bool(test_session.get('paused')), 'remaining_seconds': remaining,
+                    'submitted': bool(student.get('submitted_at'))})
+
+
+@app.route('/test/submit', methods=['POST'])
+def student_submit():
+    """Ученик сдаёт работу: ответы больше не меняются, на экране заставка до завершения тестирования."""
+    from flask import session
+    student = Student.get_by_id(session.get('student_id') or 0)
+    if not student:
+        return redirect(url_for('student_login'))
+    test_session = TestSession.get_by_id(student['session_id'])
+    if student['status'] == 'in_progress' and test_session and test_session['status'] == 'active' and not student.get('submitted_at'):
+        Student.set_submitted(student['id'], True)
+        log_event(f"{student['last_name']} {student['first_name']} сдал работу — {{pc}}.", 'ok', request.remote_addr)
+    return redirect(url_for('student_test'))
 
 @app.route('/test/run-python', methods=['POST'])
 def student_run_python():
