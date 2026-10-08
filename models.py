@@ -243,6 +243,11 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'mask_answers'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN mask_answers BOOLEAN NOT NULL DEFAULT 0")
 
+    # 6e) variants: место в каталоге «Класс → Тема → Комплект» и время на работу
+    for column, kind in (('grade', 'TEXT'), ('topic', 'TEXT'), ('kit', 'TEXT'), ('minutes', 'INTEGER')):
+        if not _table_has_column(conn, 'variants', column):
+            cur.execute(f"ALTER TABLE variants ADD COLUMN {column} {kind}")
+
     # 6b) test_sessions: задания у каждого ученика идут в своём порядке
     if not _table_has_column(conn, 'test_sessions', 'shuffle_tasks'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN shuffle_tasks BOOLEAN NOT NULL DEFAULT 0")
@@ -674,6 +679,53 @@ class Variant:
             raise
         finally:
             conn.close()
+
+    @staticmethod
+    def set_catalog(variant_id, grade=None, topic=None, kit=None, minutes=None):
+        """Место варианта в каталоге. None — поле не менять; '' — очистить."""
+        import catalog
+        fields = {}
+        if grade is not None:
+            fields['grade'] = catalog.grade_label(grade) or None
+        if topic is not None:
+            fields['topic'] = catalog.clean_field(topic) or None
+        if kit is not None:
+            fields['kit'] = catalog.clean_field(kit) or None
+        if minutes is not None:
+            fields['minutes'] = catalog.clean_minutes(minutes)
+        if not fields:
+            return
+        conn = get_db()
+        try:
+            conn.execute(f"UPDATE variants SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?",
+                         (*fields.values(), variant_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+    @staticmethod
+    def results_stats():
+        """{variant_id: {'runs': сколько учеников писали, 'percent': средний процент верных}} по завершённым тестированиям."""
+        conn = get_db()
+        try:
+            rows = conn.execute('''
+                SELECT s.variant_id,
+                       (SELECT COUNT(*) FROM answers a
+                         WHERE a.student_id = s.id AND a.is_correct = 1
+                           AND a.task_id IN (SELECT task_id FROM variant_tasks vt WHERE vt.variant_id = s.variant_id)) AS ok,
+                       (SELECT COUNT(*) FROM variant_tasks vt WHERE vt.variant_id = s.variant_id) AS total
+                FROM students s JOIN test_sessions t ON t.id = s.session_id
+                WHERE t.status = 'closed' ''').fetchall()
+        finally:
+            conn.close()
+        stats = {}
+        for row in rows:
+            if not row['total']:
+                continue
+            item = stats.setdefault(row['variant_id'], {'runs': 0, 'sum': 0.0})
+            item['runs'] += 1
+            item['sum'] += row['ok'] / row['total']
+        return {vid: {'runs': s['runs'], 'percent': round(100 * s['sum'] / s['runs'])} for vid, s in stats.items()}
 
     @staticmethod
     def add_tasks(variant_id, task_ids):
@@ -1440,6 +1492,26 @@ def recheck_task_answers(task_id):
         conn.close()
     for row in rows:
         Answer.save(row['student_id'], task_id, row['answer_1'], row['answer_2'], answer_text=row['answer_text'])
+    return len(rows)
+
+
+def autofill_catalog_once():
+    """Один раз после обновления: раскладывает старые варианты по каталогу по их названиям.
+    Учитель потом поправит, что не так. Возвращает число разложенных."""
+    import catalog
+    if get_setting('catalog_autofill_done') == '1':
+        return 0
+    conn = get_db()
+    try:
+        rows = [dict(r) for r in conn.execute('SELECT id, name FROM variants WHERE grade IS NULL AND topic IS NULL AND kit IS NULL')]
+    finally:
+        conn.close()
+    for row in rows:
+        row.update(catalog.guess(row['name']))
+    catalog.join_kits(rows)
+    for row in rows:
+        Variant.set_catalog(row['id'], row['grade'], row['topic'], row['kit'], row['minutes'] or '')
+    set_setting('catalog_autofill_done', '1')
     return len(rows)
 
 

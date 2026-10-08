@@ -1,0 +1,15 @@
+<div class="tree-item-row {% if selected_variant_id == v.id %}active{% endif %}" draggable="true" data-variant-id="{{ v.id }}"
+     data-search="{{ (v.name ~ ' ' ~ (v.grade or '') ~ ' ' ~ (v.topic or '') ~ ' ' ~ (v.kit or ''))|lower }}">
+    <label class="tree-check-item">
+        <input type="checkbox" name="variant_ids" value="{{ v.id }}" class="variant-checkbox">
+    </label>
+    <a class="tree-item" href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}" draggable="false">
+        <div class="tree-item-title">{{ v.name }}</div>
+        <div class="tree-item-meta">
+            {{ tasks_word(v.tasks_count) }}{% if v.minutes %} · {{ v.minutes }} мин{% endif %}
+            {% if v.used_count %} · ▶ {{ v.used_count }}{% endif %}
+            {% if v.stats %} · <span class="score {% if v.stats.percent >= 75 %}good{% elif v.stats.percent >= 50 %}mid{% else %}low{% endif %}"
+                title="Средний результат учеников по завершённым тестированиям ({{ v.stats.runs }} {{ plural(v.stats.runs, 'работа', 'работы', 'работ') }})">{{ v.stats.percent }}%</span>{% endif %}
+        </div>
+    </a>
+</div>

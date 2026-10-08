@@ -65,7 +65,7 @@ class PageScriptTests(unittest.TestCase):
 
     def test_teacher_pages(self):
         teacher = server.app.test_client()
-        for url in ('/', f'/sessions/{self.session_id}/monitor'):
+        for url in ('/', f'/sessions/{self.session_id}/monitor', '/variants'):
             self.check(teacher.get(url).get_data(as_text=True), url)
 
 

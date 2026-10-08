@@ -22,6 +22,7 @@ from localshot_import import (VariantFileError, parse_variant_file, MODE_FIELDS,
                               check_attachment, clean_name as clean_variant_name, MAX_ANSWERS as MAX_TASK_ANSWERS)
 from models import get_setting, set_setting, recheck_task_answers, backup_database, list_backups, variant_usage_counts, remove_task_from_variant
 import results_logic
+import catalog
 from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
 from student_shortcut import local_addresses, student_urls
 import activity
@@ -75,6 +76,11 @@ try:
         app.logger.info('Перепроверка ответов: исправлено %s', _fixed)
 except Exception:
     app.logger.exception('Не удалось перепроверить старые ответы')
+try:
+    from models import autofill_catalog_once
+    autofill_catalog_once()  # старые варианты раскладываются по каталогу по названиям (один раз)
+except Exception:
+    app.logger.exception('Не удалось разложить варианты по каталогу')
 
 
 def to_local_dt(value, with_seconds=False):
@@ -1241,6 +1247,10 @@ def variants_list():
             group = classes_by_id.get(v['class_id'])
             v['class_name'] = group['name'] if group else f"#{v['class_id']}"
 
+    stats = Variant.results_stats()
+    for v in variants:
+        v['stats'] = stats.get(v['id'])
+
     selected_variant = None
     selected_tasks = []
     if variants:
@@ -1251,12 +1261,38 @@ def variants_list():
         if selected_variant:
             selected_tasks = Variant.get_tasks(selected_variant_id)
 
+    def known(field):
+        return sorted({v.get(field) for v in variants if v.get(field)}, key=str.casefold)
+
     return render_template('teacher/variants.html',
                           variants=variants,
+                          tree=catalog.build_tree(variants),
+                          known_grades=sorted(set(known('grade')) | {f'{n} класс' for n in range(5, 12)},
+                                              key=lambda g: (not g[:2].strip().isdigit(), int(g.split()[0]) if g.split()[0].isdigit() else 0, g)),
+                          known_topics=known('topic'),
+                          known_kits=known('kit'),
                           scope=scope,
                           selected_variant=selected_variant,
                           selected_variant_id=selected_variant_id,
                           selected_tasks=selected_tasks)
+
+
+@app.route('/variants/<int:variant_id>/catalog', methods=['POST'])
+def variant_set_catalog(variant_id):
+    """Место варианта в каталоге: из карточки варианта (форма) или перетаскиванием (JSON)."""
+    if not Variant.get_by_id(variant_id):
+        return _error_response('Вариант не найден', 404)
+    data = request.get_json(silent=True) if request.is_json else request.form
+    data = data or {}
+    Variant.set_catalog(variant_id,
+                        grade=data.get('grade') if 'grade' in data else None,
+                        topic=data.get('topic') if 'topic' in data else None,
+                        kit=data.get('kit') if 'kit' in data else None,
+                        minutes=(data.get('minutes') or '') if 'minutes' in data else None)
+    if request.is_json:
+        return jsonify({'ok': True})
+    flash('Место в каталоге сохранено', 'success')
+    return redirect(url_for('variants_list', variant_id=variant_id))
 
 @app.route('/variants/create', methods=['GET', 'POST'])
 def variant_create():
@@ -1746,6 +1782,8 @@ def _store_variant_tasks(items, name=None, variant_id=None):
     try:
         if variant_id is None:
             variant_id = created_variant = Variant.create(name, 'uploaded')
+            place = catalog.guess(name)  # сразу в каталог по названию; учитель может поправить
+            Variant.set_catalog(variant_id, place['grade'], place['topic'], place['kit'], place['minutes'] or '')
         for item in items:
             image_name = f'{uuid.uuid4().hex}.{_image_extension(item.image) or "png"}'
             with open(os.path.join(IMAGES_DIR, image_name), 'wb') as stream:
@@ -1876,38 +1914,69 @@ def variant_builder():
 
 @app.route('/variants/import-localshot', methods=['POST'])
 def variant_import_localshot():
-    """Загрузка файла .variant, собранного в LocalShot. Всё или ничего: при любой ошибке ничего не создаётся."""
-    file = request.files.get('file')
-    if not file or not file.filename:
+    """Загрузка файлов .variant из LocalShot — одного, нескольких или целой папки.
+    Каждый файл — всё или ничего: испорченный файл пропускается, остальные загружаются.
+    Вариант сразу встаёт в каталог: по «паспорту» из файла, а если его нет — по названию."""
+    files = [f for f in request.files.getlist('file') if f and f.filename]
+    files = [f for f in files if f.filename.lower().rsplit('.', 1)[-1] in ('variant', 'zip')] or files
+    if not files:
         flash('Выберите файл варианта (.variant)', 'error')
         return redirect(url_for('variants_list'))
-    valid, error = _validate_upload(file, MAX_LOCALSHOT_FILE_SIZE, {'variant', 'zip'}, None)
-    if not valid:
-        flash(f'Не удалось загрузить вариант: {error}. Нужен файл .variant, собранный в LocalShot.', 'error')
-        return redirect(url_for('variants_list'))
-    try:
-        parsed = parse_variant_file(file.stream, fallback_name=os.path.splitext(file.filename)[0])
-    except VariantFileError as error:
-        flash(str(error), 'error')
-        return redirect(url_for('variants_list'))
-    except Exception:
-        app.logger.exception('Не удалось прочитать файл варианта')
-        flash('Не удалось прочитать файл: он повреждён или это не вариант LocalShot.', 'error')
-        return redirect(url_for('variants_list'))
 
-    name = _unique_variant_name(parsed.name)
-    try:
-        variant_id, task_ids = _store_variant_tasks(parsed.tasks, name=name)
-    except Exception:
-        app.logger.exception('Не удалось загрузить вариант из LocalShot')
-        flash('Не удалось загрузить вариант: ошибка записи. Ничего не создано, попробуйте ещё раз.', 'error')
-        return redirect(url_for('variants_list'))
+    loaded, failed, last_id = [], [], None
+    for file in files:
+        title = os.path.basename(file.filename.replace('\\', '/'))
+        valid, error = _validate_upload(file, MAX_LOCALSHOT_FILE_SIZE, {'variant', 'zip'}, None)
+        if not valid:
+            failed.append(f'«{title}»: {error}')
+            continue
+        try:
+            parsed = parse_variant_file(file.stream, fallback_name=os.path.splitext(title)[0])
+        except VariantFileError as error:
+            failed.append(f'«{title}»: {error}')
+            continue
+        except Exception:
+            app.logger.exception('Не удалось прочитать файл варианта')
+            failed.append(f'«{title}»: файл повреждён или это не вариант LocalShot')
+            continue
+        name = _unique_variant_name(parsed.name)
+        try:
+            last_id, task_ids = _store_variant_tasks(parsed.tasks, name=name)
+        except Exception:
+            app.logger.exception('Не удалось загрузить вариант из LocalShot')
+            failed.append(f'«{title}»: ошибка записи. Ничего не создано, попробуйте ещё раз')
+            continue
+        place = catalog.from_manifest(parsed.catalog, parsed.name)
+        if not place['kit']:
+            # «Тема» загружают после «Тема - вариант 2»: первый вариант тоже входит в комплект
+            existing = {(v.get('kit') or '') for v in Variant.get_all()}
+            if catalog.clean_field(parsed.name) in existing:
+                place['kit'] = catalog.clean_field(parsed.name)
+        Variant.set_catalog(last_id, place['grade'], place['topic'], place['kit'], place['minutes'] or '')
+        if place['kit']:
+            _join_kit_base(place['kit'], place)
+        message = f'Вариант «{name}» загружен из LocalShot. Заданий: {len(task_ids)}.'
+        if name != parsed.name:
+            message += f' Такой вариант уже был, поэтому этот назван «{name}».'
+        where = ' → '.join(x for x in (place['grade'], place['topic'], place['kit']) if x)
+        message += f' Место в каталоге: {where}.' if where else ' Класс и тему можно указать в карточке варианта.'
+        loaded.append(message)
 
-    message = f'Вариант «{name}» загружен из LocalShot. Заданий: {len(task_ids)}.'
-    if name != parsed.name:
-        message += f' Такой вариант уже был, поэтому этот назван «{name}».'
-    flash(message, 'success')
-    return redirect(url_for('variants_list', variant_id=variant_id))
+    if len(loaded) == 1:
+        flash(loaded[0], 'success')
+    elif loaded:
+        flash(f'Загружено вариантов: {len(loaded)}. Они разложены по каталогу — проверьте классы и темы.', 'success')
+    for problem in failed:
+        flash(f'Не загружен {problem}', 'error')
+    return redirect(url_for('variants_list', variant_id=last_id) if loaded and len(loaded) == 1 else url_for('variants_list'))
+
+
+def _join_kit_base(kit, place):
+    """Если первый вариант комплекта загружен раньше («Тема» без «вариант N»), добавить его в комплект."""
+    for v in Variant.get_all():
+        if not v.get('kit') and catalog.clean_field(v.get('name')) == kit:
+            Variant.set_catalog(v['id'], v.get('grade') or place['grade'], v.get('topic') or place['topic'], kit,
+                                v.get('minutes') or place['minutes'] or '')
 
 # ==================== ТЕСТИРОВАНИЯ ====================
 
@@ -2113,13 +2182,34 @@ def session_new():
     preselected_variant = request.args.get('variant_id', type=int)
     saved_criteria = GradeCriteria.get_all()
 
+    # «Запустить комплект» из каталога: все варианты комплекта отмечены, время подставлено
+    preset_kit, preset_ids, preset_minutes = request.args.get('kit', ''), [], None
+    if preset_kit:
+        grade, topic = request.args.get('kit_grade', ''), request.args.get('kit_topic', '')
+        kit_variants = [v for v in variants if (v.get('kit') or '') == preset_kit
+                        and (v.get('grade') or '') == grade and (v.get('topic') or '') == topic]
+        kit_variants.sort(key=lambda v: (len(v['name'] or ''), (v['name'] or '').casefold()))
+        preset_ids = [v['id'] for v in kit_variants]
+        preset_minutes = next((v['minutes'] for v in kit_variants if v.get('minutes')), None)
+        if len(preset_ids) == 1:
+            preselected_variant = preset_ids[0]
+    elif preselected_variant:
+        chosen = next((v for v in variants if v['id'] == preselected_variant), None)
+        preset_minutes = chosen.get('minutes') if chosen else None
+    if len(preset_ids) > 1:
+        # варианты комплекта — первыми, в порядке номеров: ученик видит «Вариант 1, 2, 3…»
+        order = {vid: i for i, vid in enumerate(preset_ids)}
+        variants.sort(key=lambda v: order.get(v['id'], len(order)))
+
     return render_template('teacher/session_new.html',
                          variants=variants,
                          task_counts=task_counts,
                          preselected_variant=preselected_variant,
+                          preset_kit=preset_kit if len(preset_ids) > 1 else '',
+                          preset_ids=preset_ids if len(preset_ids) > 1 else [],
                           show_access_code_option=show_access_code_option(),
                           percents=grade_percents(),
-                          last={'time_limit': get_setting('last_time_limit', '45'),
+                          last={'time_limit': preset_minutes or get_setting('last_time_limit', '45'),
                                 'calculator': get_setting('last_calculator') == '1',
                                 'python': get_setting('last_python') == '1',
                                 'shuffle': get_setting('last_shuffle') == '1',

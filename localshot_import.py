@@ -48,6 +48,7 @@ class ImportedTask:
 class ImportedVariant:
     name: str
     tasks: list = field(default_factory=list)
+    catalog: dict = None  # «паспорт»: класс, тема, комплект, время (если файл его содержит)
 
 
 def clean_name(name, default):
@@ -121,7 +122,8 @@ def parse_variant_file(stream, fallback_name='Вариант'):
         if len(items) > MAX_LOCALSHOT_TASKS:
             raise VariantFileError(f'В варианте больше {MAX_LOCALSHOT_TASKS} заданий.')
 
-        result = ImportedVariant(name=clean_name(manifest.get('name'), clean_name(fallback_name, 'Вариант')))
+        result = ImportedVariant(name=clean_name(manifest.get('name'), clean_name(fallback_name, 'Вариант')),
+                                 catalog=manifest.get('catalog') if isinstance(manifest.get('catalog'), dict) else None)
         seen_ids = set()
         total_bytes = 0
         for number, item in enumerate(items, 1):

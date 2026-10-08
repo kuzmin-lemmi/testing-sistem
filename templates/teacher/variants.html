@@ -9,7 +9,9 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <a href="{{ url_for('variant_builder') }}" class="btn btn-primary">📝 Новый вариант</a>
             <button type="button" class="btn btn-secondary" id="importLocalshotBtn"
-                    title="Файл .variant, собранный в программе LocalShot">📥 Загрузить из LocalShot</button>
+                    title="Один или несколько файлов .variant из LocalShot (можно выделить сразу несколько)">📥 Загрузить из LocalShot</button>
+            <button type="button" class="btn btn-secondary" id="importFolderBtn"
+                    title="Все файлы .variant из выбранной папки (например, Документы\LocalShot\Варианты)">📁 Загрузить папку</button>
             {% if show_ege_banks %}
             <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-primary">➕ Создать вариант</a>
             {% endif %}
@@ -18,8 +20,9 @@
 
     <form action="{{ url_for('variant_import_localshot') }}" method="POST" enctype="multipart/form-data" id="importLocalshotForm" style="display:none;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="file" name="file" id="importLocalshotFile" accept=".variant,.zip">
+        <input type="file" name="file" id="importLocalshotFile" accept=".variant,.zip" multiple>
     </form>
+    <input type="file" id="importFolderInput" webkitdirectory multiple style="display:none;">
     <div id="importDropHint" style="display:none; position:fixed; inset:0; z-index:50; background:rgba(79,70,229,.15);
          border:4px dashed var(--primary); align-items:center; justify-content:center; font-size:26px; font-weight:700; pointer-events:none;">
         Отпустите файл варианта, чтобы загрузить
@@ -35,31 +38,50 @@
 
     <div class="results-layout">
         <aside class="session-tree card">
-            <div class="tree-title">Список вариантов</div>
+            <div class="tree-title">Каталог вариантов</div>
             {% if variants %}
+            <div class="catalog-search">
+                <input type="search" id="catalogSearch" placeholder="🔍 Поиск: тема, класс, название" autocomplete="off">
+            </div>
             <form action="{{ url_for('variant_delete_bulk') }}" method="POST" onsubmit="return confirmVariantBulkDelete()">
                 <input type="hidden" name="scope" value="{{ scope }}">
                 <div class="tree-bulk-actions">
                     <label class="tree-check-all"><input type="checkbox" id="checkAllVariants"> Все</label>
                     <button type="submit" class="btn btn-danger btn-small">🗑 Удалить отмеченные</button>
                 </div>
-                <div class="tree-list">
-                    {% for v in variants %}
-                    <div class="tree-item-row {% if selected_variant_id == v.id %}active{% endif %}">
-                        <label class="tree-check-item">
-                            <input type="checkbox" name="variant_ids" value="{{ v.id }}" class="variant-checkbox">
-                        </label>
-                        <a class="tree-item" href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}">
-                            <div class="tree-item-title">{{ v.name }}</div>
-                            <div class="tree-item-meta">
-                                {% if show_ege_banks %}{% if v.variant_scope == 'class' %}🏫 {{ v.class_name if v.class_name else 'Класс' }}{% else %}🎓 ЕГЭ{% endif %}
-                                · {% endif %}{{ tasks_word(v.tasks_count) }} · {{ v.created_at|local_date }}{% if v.used_count %} · ▶ {{ v.used_count }}{% endif %}
+                <div class="tree-list" id="catalogTree">
+                    {% for g in tree %}
+                    <details class="cat-node cat-grade" data-drop='{{ {"grade": g.grade}|tojson }}' open>
+                        <summary><span class="cat-title">🏫 {{ g.title }}</span><span class="cat-count">{{ g.count }}</span></summary>
+                        {% for t in g.topics %}
+                        <details class="cat-node cat-topic" data-drop='{{ {"grade": g.grade, "topic": t.topic}|tojson }}'
+                                 {% if selected_variant and selected_variant.grade == (g.grade or None) and (selected_variant.topic or '') == t.topic %}open{% endif %}>
+                            <summary><span class="cat-title">📚 {{ t.title }}</span><span class="cat-count">{{ t.count }}</span></summary>
+                            {% for k in t.kits %}
+                            {% if k.is_kit %}
+                            <div class="cat-kit" data-drop='{{ {"grade": g.grade, "topic": t.topic, "kit": k.kit}|tojson }}'>
+                                <div class="cat-kit-head">
+                                    <span class="cat-title">🗂 {{ k.title }}</span>
+                                    <span class="cat-kit-meta">{{ k.variants|length }} {{ plural(k.variants|length, 'вариант', 'варианта', 'вариантов') }}{% if k.minutes %} · {{ k.minutes }} мин{% endif %}</span>
+                                    {% if k.launchable %}
+                                    <a class="btn btn-success btn-tiny" title="Запустить тестирование со всеми вариантами комплекта: ученик выбирает номер варианта"
+                                       href="{{ url_for('session_new', kit=k.kit, kit_grade=g.grade, kit_topic=t.topic) }}">▶ Запустить комплект</a>
+                                    {% endif %}
+                                </div>
+                                {% for v in k.variants %}{% include 'teacher/_variant_row.html' %}{% endfor %}
                             </div>
-                        </a>
-                    </div>
+                            {% else %}
+                            {% for v in k.variants %}{% include 'teacher/_variant_row.html' %}{% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </details>
+                        {% endfor %}
+                    </details>
                     {% endfor %}
                 </div>
+                <p class="empty-small" id="catalogNoMatch" hidden>Ничего не найдено</p>
             </form>
+            <div class="catalog-hint">Перетащите вариант на класс, тему или комплект, чтобы переложить его.</div>
             {% else %}
             <div class="empty-small">Нет вариантов</div>
             {% endif %}
@@ -74,6 +96,7 @@
                         <span>📅 {{ selected_variant.created_at|local_dt }}</span>
                         <span>📚 {{ tasks_word(selected_variant.tasks_count) }}</span>
                         <span>{% if selected_variant.used_count %}проводился {{ selected_variant.used_count }} {{ plural(selected_variant.used_count, 'раз', 'раза', 'раз') }}{% else %}ещё не проводился{% endif %}</span>
+                        {% if selected_variant.stats %}<span>средний результат <strong>{{ selected_variant.stats.percent }}%</strong> ({{ selected_variant.stats.runs }} {{ plural(selected_variant.stats.runs, 'работа', 'работы', 'работ') }})</span>{% endif %}
                         {% if show_ege_banks %}
                         {% if selected_variant.variant_scope == 'class' %}
                         <span>🏫 {{ selected_variant.class_name if selected_variant.class_name else 'Класс' }}</span>
@@ -92,6 +115,18 @@
                     </form>
                 </div>
             </div>
+
+            <form class="catalog-form" action="{{ url_for('variant_set_catalog', variant_id=selected_variant.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Класс<input name="grade" list="gradeList" value="{{ selected_variant.grade or '' }}" placeholder="например, 7 класс"></label>
+                <label>Тема<input name="topic" list="topicList" value="{{ selected_variant.topic or '' }}" placeholder="например, Системы счисления"></label>
+                <label>Комплект<input name="kit" list="kitList" value="{{ selected_variant.kit or '' }}" placeholder="пусто — вариант сам по себе"></label>
+                <label class="narrow">Время, мин<input name="minutes" type="number" min="1" max="300" value="{{ selected_variant.minutes or '' }}"></label>
+                <button type="submit" class="btn btn-primary btn-small">💾 Сохранить</button>
+            </form>
+            <datalist id="gradeList">{% for x in known_grades %}<option value="{{ x }}">{% endfor %}</datalist>
+            <datalist id="topicList">{% for x in known_topics %}<option value="{{ x }}">{% endfor %}</datalist>
+            <datalist id="kitList">{% for x in known_kits %}<option value="{{ x }}">{% endfor %}</datalist>
 
             <div class="students-table-wrap">
                 <table class="students-table">
@@ -123,7 +158,31 @@
 </div>
 
 <style>
-.results-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.results-layout { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+.catalog-search { padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
+.catalog-search input { width: 100%; padding: 8px 10px; border: 1px solid var(--border-light); border-radius: 8px; font-size: 14px; }
+.cat-node > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cat-node > summary::-webkit-details-marker { display: none; }
+.cat-grade > summary { padding: 10px 12px; font-weight: 800; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-light); }
+.cat-topic > summary { padding: 8px 12px 8px 22px; font-weight: 700; border-bottom: 1px solid var(--border-light); }
+.cat-node > summary::before { content: '▸'; color: var(--text-muted); width: 12px; flex: none; }
+.cat-node[open] > summary::before { content: '▾'; }
+.cat-title { flex: 1; }
+.cat-count { font-size: 12px; color: var(--text-muted); background: var(--border-light); border-radius: 10px; padding: 1px 8px; }
+.cat-topic .tree-item-row { padding-left: 22px; }
+.cat-kit { margin: 6px 8px 8px 30px; border: 1px solid var(--border-light); border-radius: 10px; overflow: hidden; }
+.cat-kit .tree-item-row { padding-left: 0; }
+.cat-kit-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 8px 10px; background: #f8fafc; font-weight: 600; font-size: 14px; }
+.cat-kit-meta { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.btn-tiny { padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+.score { font-weight: 700; } .score.good { color: #047857; } .score.mid { color: #b45309; } .score.low { color: #b91c1c; }
+.drop-target { outline: 3px dashed var(--primary); outline-offset: -3px; background: var(--primary-bg) !important; }
+.tree-item-row[draggable="true"] { cursor: grab; }
+.catalog-hint { padding: 8px 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-light); }
+.catalog-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 12px; margin-bottom: 14px; background: var(--bg-sidebar); border-radius: 10px; }
+.catalog-form label { display: flex; flex-direction: column; font-size: 12px; color: var(--text-muted); gap: 3px; flex: 1 1 170px; }
+.catalog-form label.narrow { flex: 0 0 100px; }
+.catalog-form input { padding: 7px 9px; border: 1px solid var(--border-light); border-radius: 8px; font-size: 14px; color: var(--text-primary, #111); }
 .session-tree { padding: 0; overflow: hidden; max-height: calc(100vh - 180px); position: sticky; top: 86px; }
 .tree-title { padding: 14px 16px; border-bottom: 1px solid var(--border-light); font-weight: 700; background: var(--bg-sidebar); }
 .tree-bulk-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
@@ -162,21 +221,25 @@
     const hint = document.getElementById('importDropHint');
     let busy = false;
 
-    function submitWith(file) {
-        if (busy || !file) return;
-        if (!/\.(variant|zip)$/i.test(file.name)) {
-            alert('Нужен файл варианта LocalShot (.variant).');
+    function submitWith(fileList) {
+        if (busy) return;
+        const files = Array.from(fileList || []).filter(f => /\.(variant|zip)$/i.test(f.name));
+        if (!files.length) {
+            alert('Нужны файлы вариантов LocalShot (.variant).');
             return;
         }
         busy = true;
         const transfer = new DataTransfer();
-        transfer.items.add(file);
+        files.forEach(f => transfer.items.add(f));
         input.files = transfer.files;
         form.submit();
     }
 
     document.getElementById('importLocalshotBtn').addEventListener('click', () => input.click());
     input.addEventListener('change', () => { if (input.files.length) { busy = true; form.submit(); } });
+    const folderInput = document.getElementById('importFolderInput');
+    document.getElementById('importFolderBtn').addEventListener('click', () => folderInput.click());
+    folderInput.addEventListener('change', () => submitWith(folderInput.files));
 
     let depth = 0;
     const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
@@ -188,7 +251,84 @@
         e.preventDefault();
         depth = 0;
         hint.style.display = 'none';
-        submitWith(e.dataTransfer.files[0]);
+        submitWith(e.dataTransfer.files);
+    });
+})();
+
+// Поиск по каталогу и перетаскивание вариантов между классами, темами и комплектами
+(function () {
+    const tree = document.getElementById('catalogTree');
+    if (!tree) return;
+    const search = document.getElementById('catalogSearch');
+    const noMatch = document.getElementById('catalogNoMatch');
+    const saved = new Map();
+
+    search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        let any = false;
+        tree.querySelectorAll('.tree-item-row').forEach(row => {
+            const hit = !q || row.dataset.search.includes(q);
+            row.hidden = !hit;
+            any = any || hit;
+        });
+        tree.querySelectorAll('.cat-kit').forEach(kit => {
+            kit.hidden = !!q && !kit.querySelector('.tree-item-row:not([hidden])');
+        });
+        tree.querySelectorAll('details.cat-node').forEach(node => {
+            if (!saved.has(node)) saved.set(node, node.open);
+            const has = !!node.querySelector('.tree-item-row:not([hidden])');
+            node.hidden = !!q && !has;
+            node.open = q ? has : saved.get(node);
+        });
+        if (!q) saved.clear();
+        noMatch.hidden = any;
+    });
+
+    let dragged = null;
+    tree.addEventListener('dragstart', e => {
+        const row = e.target.closest('.tree-item-row');
+        if (!row) return;
+        dragged = row.dataset.variantId;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', dragged);
+    });
+    const targetOf = e => {
+        const node = e.target.closest('[data-drop]');
+        return node && tree.contains(node) ? node : null;
+    };
+    tree.addEventListener('dragover', e => {
+        if (!dragged) return;
+        const node = targetOf(e);
+        if (!node) return;
+        e.preventDefault();
+        tree.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+        (node.matches('details') ? node.querySelector(':scope > summary') : node).classList.add('drop-target');
+    });
+    tree.addEventListener('dragleave', e => {
+        if (!tree.contains(e.relatedTarget)) tree.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+    });
+    tree.addEventListener('dragend', () => {
+        dragged = null;
+        tree.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+    });
+    tree.addEventListener('drop', async e => {
+        const node = targetOf(e);
+        if (!dragged || !node) return;
+        e.preventDefault();
+        // на класс — меняется только класс; на тему — класс и тема; на комплект — всё сразу
+        const body = JSON.parse(node.dataset.drop);
+        const id = dragged;
+        dragged = null;
+        try {
+            const r = await fetch({{ url_for('variant_set_catalog', variant_id=0)|tojson }}.replace('/0/', '/' + id + '/'), {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN },
+                body: JSON.stringify(body),
+            });
+            if (!r.ok) throw new Error();
+            location.href = {{ url_for('variants_list', scope=scope)|tojson }} + '&variant_id=' + id;
+        } catch (err) {
+            alert('Не удалось переложить вариант. Попробуйте ещё раз.');
+        }
     });
 })();
 </script>

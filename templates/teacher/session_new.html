@@ -20,10 +20,14 @@
         <div class="launch-grid">
         <section class="card variants-col">
             <h2>Вариант</h2>
+            {% if preset_kit %}
+            <div class="kit-banner">🗂 Комплект «{{ preset_kit }}»: отмечено {{ preset_ids|length }} {{ plural(preset_ids|length, 'вариант', 'варианта', 'вариантов') }}, время подставлено. Проверьте настройки справа и нажмите «Запустить».</div>
+            <style>.kit-banner { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }</style>
+            {% endif %}
             {% if variants|length > 1 or show_ege_banks %}
             <div class="mode-switch">
-                <label><input type="radio" name="variant_mode" value="single" checked> Один вариант для всех</label>
-                {% if variants|length > 1 %}<label><input type="radio" name="variant_mode" value="multi_choice"> Несколько вариантов (ученик выбирает номер)</label>{% endif %}
+                <label><input type="radio" name="variant_mode" value="single" {% if not preset_ids %}checked{% endif %}> Один вариант для всех</label>
+                {% if variants|length > 1 %}<label><input type="radio" name="variant_mode" value="multi_choice" {% if preset_ids %}checked{% endif %}> Несколько вариантов (ученик выбирает номер)</label>{% endif %}
                 {% if show_ege_banks %}<label><input type="radio" name="variant_mode" value="individual"> Индивидуальные из банка ЕГЭ</label>{% endif %}
             </div>
             {% else %}
@@ -47,7 +51,7 @@
             <div id="multiBox" class="variant-list" hidden>
                 {% for variant in variants %}
                 <label class="variant-option" data-name="{{ variant.name|lower }}">
-                    <input type="checkbox" name="variant_ids" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}">
+                    <input type="checkbox" name="variant_ids" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}" {% if variant.id in preset_ids %}checked{% endif %}>
                     <span class="variant-name">{{ variant.name }}</span>
                     <span class="muted">{{ tasks_word(variant.tasks_count) }}</span>
                 </label>
