@@ -1213,9 +1213,23 @@ class Student:
         return answers
 
 
+# Русские буквы, которые выглядят как латинские. Ученик пишет «3В8» с русской «В», а в ответе латинская «B»:
+# при проверке такие буквы считаются одинаковыми. Замена делается с обеих сторон, поэтому ответы
+# русскими словами по-прежнему сравниваются верно.
+_LOOKALIKES = str.maketrans({
+    'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'Н': 'H', 'К': 'K', 'М': 'M', 'О': 'O', 'Р': 'P', 'Т': 'T', 'Х': 'X', 'У': 'Y',
+    'а': 'a', 'в': 'b', 'с': 'c', 'е': 'e', 'н': 'h', 'к': 'k', 'м': 'm', 'о': 'o', 'р': 'p', 'т': 't', 'х': 'x', 'у': 'y',
+})
+
+
+def unify_letters(text):
+    return text.translate(_LOOKALIKES)
+
+
 class Answer:
     @staticmethod
-    def save(student_id, task_id, answer_1=None, answer_2=None, answer_text=None):
+    def save(student_id, task_id, answer_1=None, answer_2=None, answer_text=None, touch=True):
+        """touch=False — только перепроверить, не меняя время ответа."""
         conn = get_db()
         cursor = conn.cursor()
 
@@ -1227,7 +1241,7 @@ class Answer:
                 return None
             # Сжимаем пробелы внутри (часто вводят случайные пробелы)
             s = ' '.join(s.split())
-            return s
+            return unify_letters(s)
 
         def _is_int_like(s: str) -> bool:
             if s is None:
@@ -1264,7 +1278,7 @@ class Answer:
                     correct_text = task['answer_text']
                     if correct_text is not None and str(correct_text).strip() != '':
                         def norm(s: str) -> str:
-                            return '\n'.join(' '.join(line.strip().split()) for line in str(s).strip().splitlines() if line.strip() != '')
+                            return unify_letters('\n'.join(' '.join(line.strip().split()) for line in str(s).strip().splitlines() if line.strip() != ''))
                         is_correct = (norm(answer_text or '') == norm(correct_text))
                     else:
                         is_correct = None
@@ -1293,8 +1307,8 @@ class Answer:
                 ON CONFLICT(student_id, task_id) DO UPDATE SET
                     answer_1 = excluded.answer_1, answer_2 = excluded.answer_2,
                     answer_text = excluded.answer_text, is_correct = excluded.is_correct,
-                    answered_at = CURRENT_TIMESTAMP
-            ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct))
+                    answered_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE answers.answered_at END
+            ''', (student_id, task_id, answer_1, answer_2, answer_text, is_correct, 1 if touch else 0))
 
             conn.commit()
             return is_correct
@@ -1406,6 +1420,25 @@ def recheck_task_answers(task_id):
     for row in rows:
         Answer.save(row['student_id'], task_id, row['answer_1'], row['answer_2'], answer_text=row['answer_text'])
     return len(rows)
+
+
+def recheck_wrong_answers_once():
+    """Один раз после обновления: перепроверяет ответы, засчитанные неверными (например, «3В8» с русской «В»).
+    Время ответа и ручные отметки учителя на заданиях с файлом не трогаются. Возвращает число исправленных."""
+    if get_setting('lookalike_recheck_done') == '1':
+        return 0
+    conn = get_db()
+    try:
+        rows = [dict(r) for r in conn.execute('''
+            SELECT a.student_id, a.task_id, a.answer_1, a.answer_2, a.answer_text
+            FROM answers a JOIN tasks t ON t.id = a.task_id
+            WHERE a.is_correct = 0 AND COALESCE(t.answer_kind, '') != 'file_upload' ''')]
+    finally:
+        conn.close()
+    fixed = sum(1 for row in rows if Answer.save(row['student_id'], row['task_id'], row['answer_1'], row['answer_2'],
+                                                 answer_text=row['answer_text'], touch=False))
+    set_setting('lookalike_recheck_done', '1')
+    return fixed
 
 
 def backup_database(folder, keep=20):

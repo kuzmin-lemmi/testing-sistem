@@ -68,6 +68,13 @@ def handle_exception(error):
 # Инициализация БД при запуске
 init_db()
 migrate_db()
+try:
+    from models import recheck_wrong_answers_once
+    _fixed = recheck_wrong_answers_once()  # «3В8» с русской «В» теперь засчитывается — исправляем старые результаты
+    if _fixed:
+        app.logger.info('Перепроверка ответов: исправлено %s', _fixed)
+except Exception:
+    app.logger.exception('Не удалось перепроверить старые ответы')
 
 
 def to_local_dt(value, with_seconds=False):
