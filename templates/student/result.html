@@ -153,17 +153,17 @@
                                 {% if answers_dict.get(task.id) and answers_dict[task.id].upload_name %}
                                     <span class="answer-value">📁 {{ answers_dict[task.id].upload_name }}</span>
                                 {% else %}
-                                    <span style="color: #94a3b8;">файл не загружен</span>
+                                    <span style="color: #64748b;">файл не загружен</span>
                                 {% endif %}
                             {% elif answers_dict.get(task.id) %}
                                 <span class="answer-value">{{ format_given(task, answers_dict[task.id]) }}</span>
                             {% else %}
-                                <span style="color: #94a3b8;">не отвечено</span>
+                                <span style="color: #64748b;">не отвечено</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if task.answer_kind == 'file_upload' %}
-                                <span style="color: #94a3b8;">ручная проверка</span>
+                                <span style="color: #64748b;">ручная проверка</span>
                             {% else %}
                                 <span class="answer-value answer-correct">{{ format_expected(task) }}</span>
                             {% endif %}

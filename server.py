@@ -3,6 +3,8 @@
 Главный файл сервера
 """
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory, send_file, flash, session
+import hashlib
+import io
 import os
 import re
 import uuid
@@ -21,6 +23,8 @@ from models import init_db, migrate_db, Task, Variant, GradeCriteria, TestSessio
 from localshot_import import (VariantFileError, parse_variant_file, MODE_FIELDS, MODE_MULTILINE, ImportedTask,
                               check_attachment, clean_name as clean_variant_name, MAX_ANSWERS as MAX_TASK_ANSWERS)
 from models import get_setting, set_setting, recheck_task_answers, backup_database, list_backups, variant_usage_counts, remove_task_from_variant
+from models import remember_variant_file, known_variant_files
+import variant_folder
 import results_logic
 import catalog
 from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
@@ -1251,12 +1255,15 @@ def variants_list():
     for v in variants:
         v['stats'] = stats.get(v['id'])
 
+    works = catalog.build_works(variants)
     selected_variant = None
+    selected_work = None
     selected_tasks = []
     if variants:
         ids = {v['id'] for v in variants}
         if not selected_variant_id or selected_variant_id not in ids:
-            selected_variant_id = variants[0]['id']
+            selected_variant_id = works[0]['variants'][0]['id']
+        selected_work = next(w for w in works if any(v['id'] == selected_variant_id for v in w['variants']))
         selected_variant = next((v for v in variants if v['id'] == selected_variant_id), None)
         if selected_variant:
             selected_tasks = Variant.get_tasks(selected_variant_id)
@@ -1264,9 +1271,19 @@ def variants_list():
     def known(field):
         return sorted({v.get(field) for v in variants if v.get(field)}, key=str.casefold)
 
+    grades = sorted({w['grade'] for w in works}, key=catalog._grade_order)
+    bank_dir = variant_folder.folder(get_setting)
+    bank_new = (variant_folder.new_files(bank_dir, known_variant_files(), {v['name'] for v in Variant.get_all()})
+                if bank_dir and os.path.isdir(bank_dir) else [])
     return render_template('teacher/variants.html',
                           variants=variants,
-                          tree=catalog.build_tree(variants),
+                          works=works,
+                          filter_grades=grades,
+                          filter_topics=sorted({w['topic'] for w in works if w['topic']}, key=str.casefold),
+                          grade_short=catalog.grade_short,
+                          bank_dir=bank_dir, bank_exists=bool(bank_dir) and os.path.isdir(bank_dir),
+                          bank_new=[name for _, _, name in bank_new[:8]], bank_new_count=len(bank_new),
+                          selected_work=selected_work,
                           known_grades=sorted(set(known('grade')) | {f'{n} класс' for n in range(5, 12)},
                                               key=lambda g: (not g[:2].strip().isdigit(), int(g.split()[0]) if g.split()[0].isdigit() else 0, g)),
                           known_topics=known('topic'),
@@ -1930,38 +1947,85 @@ def variant_import_localshot():
         if not valid:
             failed.append(f'«{title}»: {error}')
             continue
+        data = file.stream.read()
         try:
-            parsed = parse_variant_file(file.stream, fallback_name=os.path.splitext(title)[0])
-        except VariantFileError as error:
+            last_id, message = _import_variant_bytes(data, title)
+        except ValueError as error:
             failed.append(f'«{title}»: {error}')
             continue
-        except Exception:
-            app.logger.exception('Не удалось прочитать файл варианта')
-            failed.append(f'«{title}»: файл повреждён или это не вариант LocalShot')
-            continue
-        name = _unique_variant_name(parsed.name)
-        try:
-            last_id, task_ids = _store_variant_tasks(parsed.tasks, name=name)
-        except Exception:
-            app.logger.exception('Не удалось загрузить вариант из LocalShot')
-            failed.append(f'«{title}»: ошибка записи. Ничего не создано, попробуйте ещё раз')
-            continue
-        place = catalog.from_manifest(parsed.catalog, parsed.name)
-        if not place['kit']:
-            # «Тема» загружают после «Тема - вариант 2»: первый вариант тоже входит в комплект
-            existing = {(v.get('kit') or '') for v in Variant.get_all()}
-            if catalog.clean_field(parsed.name) in existing:
-                place['kit'] = catalog.clean_field(parsed.name)
-        Variant.set_catalog(last_id, place['grade'], place['topic'], place['kit'], place['minutes'] or '')
-        if place['kit']:
-            _join_kit_base(place['kit'], place)
-        message = f'Вариант «{name}» загружен из LocalShot. Заданий: {len(task_ids)}.'
-        if name != parsed.name:
-            message += f' Такой вариант уже был, поэтому этот назван «{name}».'
-        where = ' → '.join(x for x in (place['grade'], place['topic'], place['kit']) if x)
-        message += f' Место в каталоге: {where}.' if where else ' Класс и тему можно указать в карточке варианта.'
+        remember_variant_file(hashlib.sha1(data).hexdigest(), title, last_id)
         loaded.append(message)
+    return _finish_variant_import(loaded, failed, last_id)
 
+
+def _import_variant_bytes(data, title):
+    """Загружает один файл .variant: (id варианта, сообщение). ValueError с понятной причиной, если не вышло."""
+    try:
+        parsed = parse_variant_file(io.BytesIO(data), fallback_name=os.path.splitext(title)[0])
+    except VariantFileError as error:
+        raise ValueError(str(error)) from error
+    except Exception as error:
+        app.logger.exception('Не удалось прочитать файл варианта')
+        raise ValueError('файл повреждён или это не вариант LocalShot') from error
+    name = _unique_variant_name(parsed.name)
+    try:
+        variant_id, task_ids = _store_variant_tasks(parsed.tasks, name=name)
+    except Exception as error:
+        app.logger.exception('Не удалось загрузить вариант из LocalShot')
+        raise ValueError('ошибка записи. Ничего не создано, попробуйте ещё раз') from error
+    place = catalog.from_manifest(parsed.catalog, parsed.name)
+    if not place['kit']:
+        # «Тема» загружают после «Тема - вариант 2»: первый вариант тоже входит в комплект
+        existing = {(v.get('kit') or '') for v in Variant.get_all()}
+        if catalog.clean_field(parsed.name) in existing:
+            place['kit'] = catalog.clean_field(parsed.name)
+    Variant.set_catalog(variant_id, place['grade'], place['topic'], place['kit'], place['minutes'] or '')
+    if place['kit']:
+        _join_kit_base(place['kit'], place)
+    message = f'Вариант «{name}» загружен из LocalShot. Заданий: {len(task_ids)}.'
+    if name != parsed.name:
+        message += f' Такой вариант уже был, поэтому этот назван «{name}».'
+    where = ' → '.join(x for x in (place['grade'], place['topic'], place['kit']) if x)
+    message += f' Место в каталоге: {where}.' if where else ' Класс и тему можно указать в карточке варианта.'
+    return variant_id, message
+
+
+@app.route('/variants/import-folder', methods=['POST'])
+def variant_import_folder():
+    """Загружает из папки вариантов (Настройки) все файлы .variant, которых ещё нет в системе."""
+    root = variant_folder.folder(get_setting)
+    if not root or not os.path.isdir(root):
+        flash('Папка с вариантами не найдена. Укажите её в «Настройках».', 'error')
+        return redirect(url_for('variants_list'))
+    names = {v['name'] for v in Variant.get_all()}
+    loaded, failed, last_id = [], [], None
+    for path, digest, _name in variant_folder.new_files(root, known_variant_files(), names):
+        title = os.path.relpath(path, root)
+        try:
+            with open(path, 'rb') as stream:
+                data = stream.read(MAX_LOCALSHOT_FILE_SIZE + 1)
+            if len(data) > MAX_LOCALSHOT_FILE_SIZE:
+                raise ValueError('файл слишком большой')
+            last_id, message = _import_variant_bytes(data, os.path.basename(path))
+        except (OSError, ValueError) as error:
+            failed.append(f'«{title}»: {error}')
+            continue
+        remember_variant_file(digest, path, last_id)
+        loaded.append(message)
+    if not loaded and not failed:
+        flash('Новых вариантов в папке нет — всё уже загружено.', 'success')
+        return redirect(url_for('variants_list'))
+    return _finish_variant_import(loaded, failed, last_id)
+
+
+@app.route('/variants/open-folder', methods=['POST'])
+def variant_open_folder():
+    if not variant_folder.open_in_explorer(variant_folder.folder(get_setting)):
+        flash('Папку не удалось открыть. Проверьте путь в «Настройках».', 'error')
+    return redirect(request.referrer or url_for('variants_list'))
+
+
+def _finish_variant_import(loaded, failed, last_id):
     if len(loaded) == 1:
         flash(loaded[0], 'success')
     elif loaded:
@@ -3281,7 +3345,37 @@ def settings():
                            backups_dir=BACKUPS_DIR, student_urls=student_urls(PORT), port=PORT,
                            ege_banks_forced=bool(SHOW_EGE_BANKS), access_code_forced=bool(SHOW_ACCESS_CODE_OPTION),
                            ege_banks_on=get_setting('show_ege_banks') == '1',
-                           access_code_on=get_setting('show_access_code') == '1')
+                           access_code_on=get_setting('show_access_code') == '1',
+                           variants_dir=variant_folder.folder(get_setting),
+                           variants_dir_info=_variants_dir_info())
+
+
+def _variants_dir_info():
+    root = variant_folder.folder(get_setting)
+    if not root or not os.path.isdir(root):
+        return {'exists': False}
+    names = {v['name'] for v in Variant.get_all()}
+    return {'exists': True, 'files': len(variant_folder.variant_files(root)),
+            'new': len(variant_folder.new_files(root, known_variant_files(), names))}
+
+
+@app.route('/settings/variants-dir', methods=['POST'])
+def settings_variants_dir():
+    path = (request.form.get('variants_dir') or '').strip().strip('"')
+    if path and not os.path.isdir(path):
+        flash(f'Папка не найдена: {path}', 'error')
+        return redirect(url_for('settings') + '#variants-dir')
+    set_setting(variant_folder.SETTING, path)
+    flash('Папка с вариантами сохранена' if path else 'Папка с вариантами сброшена — будет использоваться D:\\Варианты', 'success')
+    return redirect(url_for('settings') + '#variants-dir')
+
+
+@app.route('/settings/pick-folder', methods=['POST'])
+def settings_pick_folder():
+    """Открывает на компьютере учителя окно Windows «Выбор папки» и возвращает выбранный путь."""
+    start = ((request.get_json(silent=True) or {}).get('start') or '').strip()
+    path = variant_folder.pick_folder(start if os.path.isdir(start) else '')
+    return jsonify({'path': path} if path else {'path': '', 'error': ''})
 
 
 @app.route('/settings/backup', methods=['POST'])

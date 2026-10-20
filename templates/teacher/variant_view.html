@@ -51,7 +51,7 @@
                 {% endif %}
                 <form action="{{ url_for('variant_task_remove', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form"
                       onsubmit="return confirm('Убрать задание {{ loop.index }} из варианта?')">
-                    <button type="submit" class="btn btn-small btn-outline">🗑</button>
+                    <button type="submit" class="btn btn-small btn-outline" aria-label="Убрать задание из варианта" title="Убрать задание из варианта">🗑</button>
                 </form>
             </div>
         </div>
@@ -102,6 +102,7 @@ function toggleEdit(taskId) {
 .rename-form input { font-size: 24px; font-weight: 700; border: 1px solid transparent; background: transparent; padding: 4px 8px; border-radius: 8px; min-width: 320px; }
 .rename-form input:hover, .rename-form input:focus { border-color: var(--border-light); background: #fff; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 600px) { .rename-form { flex-wrap: wrap; } .rename-form input { min-width: 0; width: 100%; font-size: 20px; } }
 .muted { color: var(--text-muted); }
 .note { background: #fef3c7; color: #92400e; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; }
 .vv-task { margin-bottom: 16px; }

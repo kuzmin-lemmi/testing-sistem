@@ -19,8 +19,8 @@
     --danger-bg: #fee2e2;
     
     --text: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
+    --text-secondary: #475569;   /* 7.6:1 на белом */
+    --text-muted: #64748b;       /* 4.8:1 на белом — подписи читаемы (было #94a3b8, 2.6:1) */
     
     --bg: #f8fafc;
     --bg-card: #ffffff;
@@ -1258,3 +1258,58 @@ main input[type="text"]:focus, main input[type="number"]:focus, main select:focu
 
 /* Атрибут hidden всегда скрывает элемент, даже если у класса задан display */
 [hidden] { display: none !important; }
+
+/* ==================== АДАПТИВНОСТЬ И ДОСТУПНОСТЬ (все страницы) ==================== */
+
+/* Ячейки сеток не сжимались уже содержимого — широкие таблицы раздвигали страницу */
+main [class*="layout"] > *, main [class*="workspace"] > *, main [class*="grid"] > *, .card { min-width: 0; }
+main img { max-width: 100%; height: auto; }
+table { font-variant-numeric: tabular-nums; }
+code, .answer { overflow-wrap: anywhere; }
+
+/* Видимый фокус для клавиатуры (мышью — без рамки) */
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible,
+input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.navbar a:focus-visible { outline-color: #fff; }
+
+/* Меню: на узком экране — вторая строка с прокруткой (раньше на телефоне оно пропадало совсем) */
+@media (max-width: 880px) {
+    .navbar { height: auto; flex-wrap: wrap; padding: 8px 16px 6px; gap: 4px 12px; }
+    .nav-brand a { font-size: 1.15em; }
+    .nav-links { display: flex; width: 100%; overflow-x: auto; gap: 4px; padding-bottom: 4px;
+                 scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-links { mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+    .nav-links a { white-space: nowrap; padding: 8px 12px; flex: none; }
+    .nav-links a:hover { transform: none; }
+    .container { padding: 18px 16px; }
+}
+@media (max-width: 600px) {
+    .nav-links { display: flex; }
+    .container { padding: 14px 12px; }
+    h1 { font-size: 1.5em; }
+    .card { padding: 16px; }
+    .details-header, .page-header { flex-direction: column; align-items: stretch; }
+}
+
+/* Широкие таблицы на узком экране прокручиваются внутри себя, а не всей страницей */
+@media (max-width: 900px) {
+    main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* Сенсорный экран: элементы не меньше 40px по высоте */
+@media (pointer: coarse) {
+    .btn, .nav-links a, select, main input[type="text"], main input[type="number"], main input[type="search"] { min-height: 40px; }
+    .vp-chip { min-height: 32px; min-width: 40px; }
+}
+
+/* Пользователь просил меньше анимации: убираем движение, оставляем смену состояний */
+@media (prefers-reduced-motion: reduce) {
+    .container { animation: none; }
+    *, *::before, *::after { transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    .btn:hover, .nav-links a:hover, .card:hover { transform: none !important; }
+}

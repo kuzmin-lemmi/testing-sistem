@@ -107,7 +107,7 @@
                         <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-small">✏️</a>
                         <form action="{{ url_for('task_delete', task_id=task.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить задачу #{{ task.id }}?')">
                             <input type="hidden" name="return_ege" value="{{ selected_ege if selected_ege is not none else 1 }}">
-                            <button type="submit" class="btn btn-small btn-danger">🗑</button>
+                            <button type="submit" class="btn btn-small btn-danger" aria-label="Удалить задачу" title="Удалить задачу">🗑</button>
                         </form>
                     </div>
                 </div>

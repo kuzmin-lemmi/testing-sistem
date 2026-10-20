@@ -104,6 +104,72 @@ def from_manifest(raw, name):
     }
 
 
+_SHORT_NO = re.compile(r'(?:^|[\s·(—–-])(?:В|вариант|вар\.?)\s*№?\s*(\d+)\b', re.I)
+
+
+def variant_no(name):
+    """Номер варианта из названия: «… · В2», «… — вариант 3» → 2, 3; нет номера → None."""
+    found = _SHORT_NO.findall(name or '')
+    return int(found[-1]) if found else None
+
+
+def kit_title(v):
+    """Заголовок комплекта: название варианта без «· В2 (простой)» / «— вариант 2»; если не вышло — сам комплект."""
+    name = v.get('name') or ''
+    base = re.sub(r'\s*·\s*В\d+\b.*$', '', name)
+    base = clean_field(_VARIANT_NO.sub('', base))
+    return base if base and base != name else (v.get('kit') or name)
+
+
+def build_works(variants):
+    """Список «работ» для страницы вариантов: комплект (несколько вариантов) или одиночный вариант.
+    Новые — сверху. [{key, title, grade, topic, kit, date, variants, minutes, tasks, runs, percent, launchable}]"""
+    groups = {}
+    for v in variants:
+        kit = v.get('kit') or ''
+        key = ('kit', v.get('grade') or '', v.get('topic') or '', kit) if kit else ('one', v.get('id'))
+        groups.setdefault(key, []).append(v)
+    works = []
+    for key, items in groups.items():
+        items.sort(key=lambda v: (variant_no(v.get('name')) or 999, (v.get('name') or '').casefold()))
+        for i, v in enumerate(items, 1):
+            v['short'] = f"В{variant_no(v.get('name')) or i}"
+        first = items[0]
+        stats = [v['stats'] for v in items if v.get('stats')]
+        runs = sum(s['runs'] for s in stats)
+        counts = {v.get('tasks_count') for v in items}
+        is_kit = key[0] == 'kit'
+        works.append({
+            'key': f"kit-{first.get('id')}" if is_kit else f"one-{first.get('id')}",
+            'title': (kit_title(first) if is_kit and len(items) > 1 else first.get('name')) or '',
+            'is_kit': is_kit and len(items) > 1,
+            'grade': first.get('grade') or '', 'topic': first.get('topic') or '', 'kit': first.get('kit') or '',
+            'date': max(str(v.get('created_at') or '') for v in items),
+            'variants': items,
+            'minutes': next((v.get('minutes') for v in items if v.get('minutes')), None),
+            'tasks': next(iter(counts)) if len(counts) == 1 else None,
+            'used': sum(v.get('used_count') or 0 for v in items),
+            'runs': runs,
+            'percent': round(sum(s['percent'] * s['runs'] for s in stats) / runs) if runs else None,
+            'launchable': is_kit and len(items) > 1 and len(counts) == 1,
+        })
+    for w in works:
+        # в списке класс уже виден на значке, а тема — в начале названия: не повторяем
+        w['list_title'] = _CLASS_PREFIX.sub('', w['title']) or w['title']
+        w['topic_in_title'] = bool(w['topic']) and w['list_title'].startswith(w['topic'])
+    works.sort(key=lambda w: w['date'], reverse=True)
+    return works
+
+
+_CLASS_PREFIX = re.compile(r'^\s*(?:1[01]|[1-9])\s*кл\.?\s*·\s*', re.I)
+
+
+def grade_short(label):
+    """«7 класс» → «7»; «ЕГЭ» → «ЕГЭ»; '' → '—'."""
+    match = re.match(r'(\d+)', label or '')
+    return match.group(1) if match else (label or '—')
+
+
 def _grade_order(label):
     match = re.match(r'(\d+)', label or '')
     if match:

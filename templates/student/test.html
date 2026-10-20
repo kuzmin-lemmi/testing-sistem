@@ -895,6 +895,33 @@
             .sidebar { width: 70px; padding: 10px 6px; }
             .content { padding: 16px; }
         }
+
+        /* Телефон и узкое окно: шапка в несколько строк (таймер и «Сдать» всегда видны),
+           номера заданий — лента сверху вместо колонки слева */
+        @media (max-width: 640px) {
+            .header { flex-wrap: wrap; gap: 8px 10px; padding: 10px 12px; }
+            .student-meta { width: 100%; justify-content: space-between; }
+            .student-name { font-size: 1em; }
+            .variant-badge { padding: 4px 10px; font-size: 0.9em; }
+            .header-actions { flex: 1 1 auto; flex-wrap: wrap; gap: 6px; }
+            .header-actions .calc-toggle { padding: 8px 10px; font-size: 0.85em; }
+            .timer { padding: 6px 12px; font-size: 1.1em; margin-left: auto; }
+            .header-finish { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; }
+            .finish-note { font-size: 0.8em; flex: 1 1 160px; }
+            .btn-finish { padding: 10px 16px; }
+            .main { flex-direction: column; }
+            .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px 10px; gap: 6px;
+                       border-right: 0; border-bottom: 1px solid var(--border); }
+            .task-btn { width: auto; min-width: 44px; flex: none; padding: 10px 8px; position: relative; }
+            .main-content-wrapper, .main-content-wrapper.py-open { grid-template-columns: 1fr; }
+            .content { padding: 12px; }
+            .nav-buttons { gap: 8px; margin-top: 20px; }
+            .nav-btn { flex: 1 1 0; min-width: 0; padding: 12px 8px; font-size: 14px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .timer.danger { animation: none; }
+            .main-content-wrapper { transition: none; }
+        }
     </style>
 </head>
 <body{% if mask_answers %} class="mask-answers"{% endif %}>
@@ -958,7 +985,7 @@
     <div class="calc-panel" id="calcPanel">
         <div class="calc-header">
             <span>🧮 Калькулятор</span>
-            <button type="button" class="calc-close" onclick="toggleCalculator()">✕</button>
+            <button type="button" class="calc-close" aria-label="Закрыть калькулятор" onclick="toggleCalculator()">✕</button>
         </div>
         <div class="calc-body">
             <input type="text" id="calcInput" class="calc-input" placeholder="Введите выражение">
@@ -971,7 +998,7 @@
                 <button class="calc-btn" onclick="calcInsert('4')">4</button>
                 <button class="calc-btn" onclick="calcInsert('5')">5</button>
                 <button class="calc-btn" onclick="calcInsert('6')">6</button>
-                <button class="calc-btn op" onclick="calcInsert('*')">×</button>
+                <button class="calc-btn op" onclick="calcInsert('*')" aria-label="Умножить">×</button>
 
                 <button class="calc-btn" onclick="calcInsert('1')">1</button>
                 <button class="calc-btn" onclick="calcInsert('2')">2</button>
@@ -1029,7 +1056,7 @@
                 <button type="button" id="sketchUndoBtn" onclick="sketchUndo()" title="Отменить (Ctrl+Z)">↩</button>
                 <button type="button" id="sketchRedoBtn" onclick="sketchRedo()" title="Повторить (Ctrl+Y)">↪</button>
                 <button type="button" onclick="clearSketch()">Очистить</button>
-                <button type="button" class="calc-close" onclick="toggleSketchPanel()">✕</button>
+                <button type="button" class="calc-close" aria-label="Закрыть черновик" onclick="toggleSketchPanel()">✕</button>
             </div>
         </div>
         <div class="sketch-body">
@@ -1175,7 +1202,7 @@
                  <span>🐍 Python</span>
                  <div class="py-header-actions">
                      <button type="button" class="calc-close" onclick="togglePythonFullscreen()">⤢ Развернуть/Свернуть</button>
-                     <button type="button" class="calc-close" onclick="togglePython()">✕</button>
+                     <button type="button" class="calc-close" aria-label="Закрыть Python" onclick="togglePython()">✕</button>
                  </div>
              </div>
              <div class="py-body">

@@ -37,6 +37,23 @@
         <div class="save-row"><button type="submit" class="btn btn-primary">💾 Сохранить</button></div>
     </form>
 
+    <section class="card" id="variants-dir">
+        <h2>Папка с вариантами</h2>
+        <p class="muted">Где хранятся файлы <code>.variant</code> (банк вариантов). На странице «Варианты» кнопка
+            «Загрузить новые» берёт отсюда всё, чего ещё нет в системе, включая подпапки.</p>
+        <form method="POST" action="{{ url_for('settings_variants_dir') }}" class="dir-form">
+            <input type="text" name="variants_dir" id="variantsDirInput" value="{{ variants_dir }}" placeholder="D:\Варианты"
+                   aria-label="Папка с вариантами" spellcheck="false">
+            <button type="button" class="btn btn-secondary" id="pickVariantsDir">Выбрать…</button>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        </form>
+        {% if variants_dir_info.exists %}
+        <p class="muted small">Найдено файлов .variant: <strong>{{ variants_dir_info.files }}</strong>{% if variants_dir_info.new %}, из них ещё не загружено: <strong>{{ variants_dir_info.new }}</strong>{% endif %}.</p>
+        {% elif variants_dir %}
+        <p class="dir-error small">Папка не найдена: проверьте путь или выберите её кнопкой «Выбрать…».</p>
+        {% endif %}
+    </section>
+
     <section class="card">
         <h2>Ярлык для учеников</h2>
         <p><a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать «Тестирование.html»</a></p>
@@ -76,6 +93,31 @@
 .check { display: block; margin: 10px 0; }
 .save-row { text-align: right; margin-bottom: 24px; }
 .backups { margin: 12px 0; padding-left: 20px; }
+.dir-form { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 8px; }
+.dir-form input { flex: 1 1 260px; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+.dir-error { color: #b91c1c; }
 @media (max-width: 640px) { .grades { grid-template-columns: 1fr; } }
 </style>
+<script>
+document.getElementById('pickVariantsDir').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const input = document.getElementById('variantsDirInput');
+    button.disabled = true;
+    button.textContent = 'Окно выбора открыто…';
+    try {
+        const r = await fetch({{ url_for('settings_pick_folder')|tojson }}, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN },
+            body: JSON.stringify({ start: input.value }),
+        });
+        const data = await r.json();
+        if (data.path) input.value = data.path;
+        else if (data.error) alert(data.error);
+    } catch (e) {
+        alert('Окно выбора папки не открылось. Впишите путь вручную.');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Выбрать…';
+    }
+});
+</script>
 {% endblock %}

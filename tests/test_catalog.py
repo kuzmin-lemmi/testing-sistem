@@ -89,6 +89,29 @@ class GuessTests(unittest.TestCase):
         self.assertFalse(tree[0]['topics'][0]['kits'][0]['is_kit'])
 
 
+class WorksListTests(unittest.TestCase):
+    """Список «работ» на странице вариантов: комплект — одна строка с переключателями В1…Вn."""
+
+    def test_variant_numbers(self):
+        self.assertEqual(catalog.variant_no('11 кл · ЕГЭ сборный · №1, 2, 4 · средний · В3'), 3)
+        self.assertEqual(catalog.variant_no('8 кл · Системы счисления · сложение · В2 (простой)'), 2)
+        self.assertEqual(catalog.variant_no('Алфавитный подход (7 класс) - вариант 4'), 4)
+        self.assertIsNone(catalog.variant_no('11 кл · ЕГЭ №17 · пары и тройки'))
+
+    def test_kit_is_one_work_newest_first(self):
+        common = {'grade': '11 класс', 'topic': 'ЕГЭ сборный', 'kit': 'ЕГЭ сборный · №1, 2 (20.10)', 'tasks_count': 5}
+        works = catalog.build_works([
+            dict(common, id=2, name='11 кл · ЕГЭ сборный · №1, 2 · В2', created_at='2026-10-20 05:00:00'),
+            dict(common, id=1, name='11 кл · ЕГЭ сборный · №1, 2 · В1', created_at='2026-10-20 05:00:00'),
+            {'id': 3, 'name': '7 кл · 7Г · урок 06.02', 'grade': '7 класс', 'created_at': '2026-02-06 05:00:00', 'tasks_count': 7},
+        ])
+        self.assertEqual([w['list_title'] for w in works], ['ЕГЭ сборный · №1, 2', '7Г · урок 06.02'])
+        kit = works[0]
+        self.assertTrue(kit['is_kit'] and kit['launchable'] and kit['topic_in_title'])
+        self.assertEqual([v['short'] for v in kit['variants']], ['В1', 'В2'])
+        self.assertEqual(catalog.grade_short('11 класс'), '11')
+
+
 class CatalogPageTests(unittest.TestCase):
     def setUp(self):
         for item in TestSession.get_all():

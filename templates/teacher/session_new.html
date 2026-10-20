@@ -129,7 +129,7 @@
 .variants-col .variant-option .muted { flex-basis: 100%; padding-left: 26px; font-size: 13px; }
 .launch-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 @media (max-width: 860px) { .launch-grid { grid-template-columns: 1fr; } .variants-col { position: static; } }
-.launch-choice { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launch-choice { max-width: min(520px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .variant-option { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 10px; cursor: pointer; }
 .variant-option:has(input:checked) { border-color: var(--primary); background: var(--primary-bg); }
 .variant-name { font-weight: 600; flex: 1; }

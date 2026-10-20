@@ -45,6 +45,14 @@
     <script>
         window.CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+        // Узкий экран: меню листается — показываем активный раздел
+        (function () {
+            const active = document.querySelector('.nav-links a.active');
+            if (active && active.parentElement.scrollWidth > active.parentElement.clientWidth) {
+                active.parentElement.scrollLeft = active.offsetLeft - 16;
+            }
+        })();
+
         document.addEventListener('DOMContentLoaded', function() {
             const forms = document.querySelectorAll('form[method="POST"], form[method="post"]');
             forms.forEach(function(form) {

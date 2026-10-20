@@ -468,6 +468,16 @@ def init_db():
         )
     ''')
 
+    # Файлы .variant, которые уже загружены (по содержимому): «Загрузить новые из папки» их пропускает
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS variant_files (
+            sha1 TEXT PRIMARY KEY,
+            path TEXT,
+            variant_id INTEGER,
+            imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Добавляем критерии по умолчанию для полного варианта (27 задач)
     cursor.execute('SELECT COUNT(*) FROM grade_criteria WHERE total_tasks = 27')
     if cursor.fetchone()[0] == 0:
@@ -1474,6 +1484,24 @@ def set_setting(key, value):
         conn.execute('INSERT INTO settings (key, value) VALUES (?, ?) '
                      'ON CONFLICT(key) DO UPDATE SET value = excluded.value', (key, None if value is None else str(value)))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def remember_variant_file(sha1, path, variant_id):
+    conn = get_db()
+    try:
+        conn.execute('INSERT OR REPLACE INTO variant_files (sha1, path, variant_id) VALUES (?, ?, ?)', (sha1, path, variant_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def known_variant_files():
+    """sha1 уже загруженных файлов .variant."""
+    conn = get_db()
+    try:
+        return {row['sha1'] for row in conn.execute('SELECT sha1 FROM variant_files')}
     finally:
         conn.close()
 

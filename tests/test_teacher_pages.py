@@ -239,7 +239,7 @@ class VariantEditingTests(Base):
         self.assertIn('проводился 1 раз', page)
         self.assertIn('5 10 / 7 3', page)
         listing = self.client.get(f'/variants?variant_id={self.variant_id}').get_data(as_text=True)
-        self.assertIn('class="thumb"', listing)
+        self.assertIn('class="vp-task-img"', listing)   # миниатюры заданий в сетке
         self.assertIn('3 задания', listing)
 
 
