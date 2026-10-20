@@ -3,171 +3,278 @@
 {% block title %}Запустить тестирование{% endblock %}
 
 {% block content %}
-<div class="launch-page">
-    <div class="page-header">
-        <h1>▶️ Запустить тестирование</h1>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Назад</a>
-    </div>
+<div class="lp">
+    <header class="lp-head">
+        <h1>Запустить тестирование</h1>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary btn-small">← Назад</a>
+    </header>
 
     {% if not variants and not show_ege_banks %}
-    <section class="card">
-        <p>Нет ни одного варианта.</p>
-        <a href="{{ url_for('variant_builder') }}" class="btn btn-primary">📝 Новый вариант</a>
-        <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">📥 Загрузить из LocalShot</a>
+    <section class="lp-card lp-empty">
+        <h2>Вариантов пока нет</h2>
+        <p>Загрузите варианты на странице «Варианты» — кнопкой «Загрузить новые» из папки или файлами .variant.</p>
+        <a href="{{ url_for('variants_list') }}" class="btn btn-primary">Перейти к вариантам</a>
     </section>
     {% else %}
     <form action="{{ url_for('session_new') }}" method="POST" id="launchForm">
-        <div class="launch-grid">
-        <section class="card variants-col">
-            <h2>Вариант</h2>
+        <div class="lp-grid">
+        <section class="lp-card lp-variants" aria-label="Выбор варианта">
+            <div class="lp-variants-head">
+                <h2>Вариант</h2>
+                {% if variants|length > 1 or show_ege_banks %}
+                <div class="lp-seg" role="radiogroup" aria-label="Как раздать варианты">
+                    <label><input type="radio" name="variant_mode" value="single" {% if not preset_ids %}checked{% endif %}><span>Один для всех</span></label>
+                    {% if variants|length > 1 %}<label title="Ученик при входе выбирает номер варианта: 1, 2, 3…"><input type="radio" name="variant_mode" value="multi_choice" {% if preset_ids %}checked{% endif %}><span>Несколько (комплект)</span></label>{% endif %}
+                    {% if show_ege_banks %}<label><input type="radio" name="variant_mode" value="individual"><span>Из банка ЕГЭ</span></label>{% endif %}
+                </div>
+                {% else %}
+                <input type="hidden" name="variant_mode" value="single">
+                {% endif %}
+            </div>
             {% if preset_kit %}
-            <div class="kit-banner">🗂 Комплект «{{ preset_kit }}»: отмечено {{ preset_ids|length }} {{ plural(preset_ids|length, 'вариант', 'варианта', 'вариантов') }}, время подставлено. Проверьте настройки справа и нажмите «Запустить».</div>
-            <style>.kit-banner { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }</style>
-            {% endif %}
-            {% if variants|length > 1 or show_ege_banks %}
-            <div class="mode-switch">
-                <label><input type="radio" name="variant_mode" value="single" {% if not preset_ids %}checked{% endif %}> Один вариант для всех</label>
-                {% if variants|length > 1 %}<label><input type="radio" name="variant_mode" value="multi_choice" {% if preset_ids %}checked{% endif %}> Несколько вариантов (ученик выбирает номер)</label>{% endif %}
-                {% if show_ege_banks %}<label><input type="radio" name="variant_mode" value="individual"> Индивидуальные из банка ЕГЭ</label>{% endif %}
-            </div>
-            {% else %}
-            <input type="hidden" name="variant_mode" value="single">
+            <p class="lp-kit-note">Комплект «{{ preset_kit }}»: отмечено {{ preset_ids|length }} {{ plural(preset_ids|length, 'вариант', 'варианта', 'вариантов') }}, время подставлено.</p>
             {% endif %}
 
-            <input type="search" id="variantSearch" class="variant-search" placeholder="🔍 Найти вариант по названию" autocomplete="off">
-            <p class="muted" id="noMatch" hidden>Ничего не найдено.</p>
-            <div id="singleBox" class="variant-list">
-                {% for variant in variants %}
-                <label class="variant-option" data-name="{{ variant.name|lower }}">
-                    <input type="radio" name="variant_id" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}"
-                           {% if variant.id == preselected_variant or (loop.first and not preselected_variant) %}checked{% endif %}>
-                    <span class="variant-name">{{ variant.name }}</span>
-                    <span class="muted">{{ tasks_word(variant.tasks_count) }} · {{ variant.created_at|local_date }}</span>
+            <div class="lp-tools" id="pickTools">
+                <label class="lp-search">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>
+                    <input type="search" id="variantSearch" placeholder="Поиск: тема, номер ЕГЭ…" autocomplete="off" aria-label="Поиск варианта">
                 </label>
-                {% endfor %}
+                <div class="lp-grades" id="gradeFilter" role="group" aria-label="Класс">
+                    <button type="button" data-grade="" class="on">Все</button>
+                    {% for g in filter_grades %}<button type="button" data-grade="{{ g }}" title="{{ g or 'Без класса' }}">{{ grade_short(g) }}</button>{% endfor %}
+                </div>
             </div>
+            <p class="lp-hint" id="multiHint" hidden>Отметьте варианты с одинаковым числом заданий — ученик при входе выберет свой номер.
+                У комплекта есть кнопка «все».</p>
 
-            <p class="muted" id="multiHint" hidden>Отметьте варианты с одинаковым числом заданий. Ученик при входе выбирает номер: 1, 2, 3…</p>
-            <div id="multiBox" class="variant-list" hidden>
-                {% for variant in variants %}
-                <label class="variant-option" data-name="{{ variant.name|lower }}">
-                    <input type="checkbox" name="variant_ids" value="{{ variant.id }}" data-count="{{ variant.tasks_count }}" {% if variant.id in preset_ids %}checked{% endif %}>
-                    <span class="variant-name">{{ variant.name }}</span>
-                    <span class="muted">{{ tasks_word(variant.tasks_count) }}</span>
-                </label>
+            <ol class="lp-works" id="worksList">
+                {% set ns = namespace(month='') %}
+                {% for w in works %}
+                {% set picked = (preset_ids and w.variants|selectattr('id', 'in', preset_ids)|list) or (preselected_variant and w.variants|selectattr('id', 'equalto', preselected_variant)|list) %}
+                {% if loop.first and picked %}
+                <li class="lp-month">Выбрано</li>
+                {% else %}
+                {% set m = (w.date|local_dt)[:7] %}
+                {% if m != ns.month %}{% set ns.month = m %}<li class="lp-month" data-month="{{ m }}"></li>{% endif %}
+                {% endif %}
+                <li class="lp-work" data-grade="{{ w.grade }}"
+                    data-search="{{ (w.title ~ ' ' ~ w.grade ~ ' ' ~ w.topic ~ ' ' ~ (w.variants|map(attribute='name')|join(' ')))|lower }}">
+                    <span class="lp-badge" title="{{ w.grade or 'Без класса' }}">{{ grade_short(w.grade) }}</span>
+                    <div class="lp-work-body">
+                        <div class="lp-work-title">{{ w.list_title }}</div>
+                        <div class="lp-work-meta">
+                            {% if w.topic and not w.topic_in_title %}<span>{{ w.topic }}</span>{% endif %}
+                            {% if w.tasks %}<span>{{ tasks_word(w.tasks) }}</span>{% endif %}
+                            {% if w.minutes %}<span>{{ w.minutes }} мин</span>{% endif %}
+                            <span>{{ (w.date|local_dt)[8:10] }}.{{ (w.date|local_dt)[5:7] }}</span>
+                            {% if w.used %}<span title="Сколько раз проводился">▶ {{ w.used }}</span>{% endif %}
+                        </div>
+                        <div class="lp-chips">
+                            {% for v in w.variants %}
+                            {% set label = v.short if w.is_kit else 'Выбрать' %}
+                            <label class="lp-chip only-single{% if not w.is_kit %} wide{% endif %}" title="{{ v.name }}">
+                                <input type="radio" name="variant_id" value="{{ v.id }}" data-count="{{ v.tasks_count }}" data-minutes="{{ v.minutes or '' }}" data-name="{{ v.name }}"
+                                       {% if v.id == preselected_variant or (not preselected_variant and not preset_ids and loop.first and loop.length >= 1 and works[0] is sameas w) %}checked{% endif %}>
+                                <span>{{ label }}</span>
+                            </label>
+                            <label class="lp-chip only-multi{% if not w.is_kit %} wide{% endif %}" title="{{ v.name }}">
+                                <input type="checkbox" name="variant_ids" value="{{ v.id }}" data-count="{{ v.tasks_count }}" data-minutes="{{ v.minutes or '' }}" data-name="{{ v.name }}"
+                                       {% if v.id in preset_ids %}checked{% endif %}>
+                                <span>{{ v.short if w.is_kit else 'Отметить' }}</span>
+                            </label>
+                            {% endfor %}
+                            {% if w.is_kit %}<button type="button" class="lp-all only-multi" data-kit-all>все</button>{% endif %}
+                        </div>
+                    </div>
+                </li>
                 {% endfor %}
-            </div>
+            </ol>
+            <p class="lp-hint" id="noMatch" hidden>Ничего не найдено. <button type="button" class="lp-link" id="resetPick">Сбросить поиск</button></p>
 
             {% if show_ege_banks %}
-            <div id="individualBox" hidden>
+            <div id="individualBox" class="lp-individual" hidden>
                 <label><input type="radio" name="individual_type" value="full" checked> Полный ЕГЭ (27 заданий)</label>
                 <label><input type="radio" name="individual_type" value="thematic"> Тематический:</label>
                 <select name="individual_ege">{% for num in range(1, 28) %}<option value="{{ num }}">№{{ num }} ({{ task_counts.get(num, 0) }})</option>{% endfor %}</select>
-                <input type="number" name="individual_count" value="10" min="1" max="50" style="width:80px;"> заданий
+                <label><input type="number" name="individual_count" value="10" min="1" max="50"> заданий</label>
             </div>
             {% endif %}
         </section>
 
-        <div class="settings-col">
-        <section class="card">
+        <div class="lp-settings">
+        <section class="lp-card">
             <h2>Время и инструменты</h2>
-            <div class="time-row">
-                <label>Время на работу:</label>
-                <input type="number" name="time_limit" id="timeLimit" value="{{ last.time_limit }}" min="1" max="300" style="width:90px;"> мин
-                {% for minutes in (20, 30, 45, 90, 235) %}
-                <button type="button" class="btn btn-small btn-outline" onclick="document.getElementById('timeLimit').value={{ minutes }}">{{ minutes }}</button>
-                {% endfor %}
+            <div class="lp-time">
+                <label for="timeLimit">Время</label>
+                <input type="number" name="time_limit" id="timeLimit" value="{{ last.time_limit }}" min="1" max="300" inputmode="numeric">
+                <span>мин</span>
+                <div class="lp-time-quick" role="group" aria-label="Быстрый выбор времени">
+                    {% for minutes in (20, 30, 40, 45, 60, 80, 90, 235) %}<button type="button" data-minutes="{{ minutes }}">{{ minutes }}</button>{% endfor %}
+                </div>
             </div>
-            <label class="check"><input type="checkbox" name="calculator_enabled" value="1" {% if last.calculator %}checked{% endif %}> 🧮 Калькулятор для учеников</label>
-            <label class="check"><input type="checkbox" name="python_enabled" value="1" {% if last.python %}checked{% endif %}> 🐍 Редактор Python для учеников</label>
-            <label class="check"><input type="checkbox" name="shuffle_tasks" value="1" {% if last.shuffle %}checked{% endif %}> 🔀 Задания вразброс: у каждого ученика свой порядок</label>
-            <label class="check"><input type="checkbox" name="mask_answers" value="1" {% if last.mask %}checked{% endif %}> 🙈 Скрывать введённые ответы точками (видно, только когда ученик нажал на поле)</label>
-            {% if show_access_code_option %}
-            <label class="check"><input type="checkbox" name="use_code" value="1"> 🔑 Требовать код для входа</label>
-            {% endif %}
+            <div class="lp-checks">
+                <label><input type="checkbox" name="calculator_enabled" value="1" {% if last.calculator %}checked{% endif %}> Калькулятор</label>
+                <label><input type="checkbox" name="python_enabled" value="1" {% if last.python %}checked{% endif %}> Редактор Python</label>
+                <label><input type="checkbox" name="shuffle_tasks" value="1" {% if last.shuffle %}checked{% endif %}> Задания вразброс <small>у каждого свой порядок</small></label>
+                <label><input type="checkbox" name="mask_answers" value="1" {% if last.mask %}checked{% endif %}> Скрывать ответы точками <small>видно, пока ученик в поле</small></label>
+                {% if show_access_code_option %}
+                <label><input type="checkbox" name="use_code" value="1"> Код для входа</label>
+                {% endif %}
+            </div>
             <input type="hidden" name="show_answers" value="1">
-            <p class="muted small">Ученики не завершают тест сами: до конца времени ответы можно менять. Когда вы завершите тестирование, каждый ученик сразу увидит свою оценку и правильные ответы.</p>
+            <p class="lp-hint">Ученики не завершают тест сами: до конца времени ответы можно менять. Когда вы завершите тестирование,
+                каждый сразу увидит оценку и правильные ответы.</p>
         </section>
 
-        <section class="card">
-            <h2>Оценки</h2>
+        <section class="lp-card">
+            <h2>Оценки <small id="ofTasks"></small></h2>
             <input type="hidden" name="total_tasks" id="totalTasks" value="1">
-            <div class="grades">
+            <div class="lp-grades-set">
                 {% for grade, percent in [(5, percents[0]), (4, percents[1]), (3, percents[2])] %}
-                <div class="grade-box g{{ grade }}">
-                    <div class="grade-title">«{{ grade }}»</div>
-                    <div>от <input type="number" id="p{{ grade }}" value="{{ percent }}" min="1" max="100" style="width:64px;"> %</div>
-                    <div class="grade-count">= от <input type="number" name="grade_{{ grade }}_min" id="g{{ grade }}" min="1" style="width:64px;"> <span class="of"></span></div>
+                <div class="lp-grade g{{ grade }}">
+                    <div class="lp-grade-title">«{{ grade }}»</div>
+                    <label>от <input type="number" id="p{{ grade }}" value="{{ percent }}" min="1" max="100" aria-label="Процент на «{{ grade }}»"> %</label>
+                    <label>= от <input type="number" name="grade_{{ grade }}_min" id="g{{ grade }}" min="1" aria-label="Заданий на «{{ grade }}»"> <span class="of"></span></label>
                 </div>
                 {% endfor %}
             </div>
-            <p class="muted small">Проценты по умолчанию меняются в «Настройках». Число заданий пересчитывается само под выбранный вариант; его можно поправить вручную.</p>
+            <p class="lp-hint">Проценты по умолчанию — в «Настройках». Число заданий пересчитывается под выбранный вариант; можно поправить вручную.</p>
         </section>
+        </div>
+        </div>
 
-        <div class="launch-bar card">
-            <div class="launch-choice"><span class="muted">Выбрано:</span> <strong id="chosenName">—</strong></div>
-            <button type="submit" class="btn btn-success btn-large">🚀 Запустить тестирование</button>
-        </div>
-        </div>
+        <div class="lp-bar">
+            <div class="lp-choice"><span>Выбрано:</span> <strong id="chosenName">—</strong> <span id="chosenWarn" class="lp-warn" hidden></span></div>
+            <button type="submit" class="btn btn-success" id="launchBtn">Запустить тестирование</button>
         </div>
     </form>
     {% endif %}
 </div>
 
 <style>
-.launch-page { max-width: 1200px; margin: 0 auto; }
-.launch-page section { margin-bottom: 16px; }
-.launch-page h2 { margin-bottom: 12px; }
-.mode-switch { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
-.variant-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 4px; }
-.variant-search { width: 100%; margin-bottom: 10px; }
-.variant-option { padding: 8px 12px !important; }
-.launch-grid { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; align-items: start; }
-.variants-col { position: sticky; top: 86px; margin-bottom: 0; }
-.variants-col .variant-list { max-height: calc(100vh - 330px); min-height: 200px; }
-.variants-col .variant-option { flex-wrap: wrap; row-gap: 2px; }
-.variants-col .variant-option .muted { flex-basis: 100%; padding-left: 26px; font-size: 13px; }
-.launch-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-@media (max-width: 860px) { .launch-grid { grid-template-columns: 1fr; } .variants-col { position: static; } }
-.launch-choice { max-width: min(520px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.variant-option { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: 10px; cursor: pointer; }
-.variant-option:has(input:checked) { border-color: var(--primary); background: var(--primary-bg); }
-.variant-name { font-weight: 600; flex: 1; }
-.muted { color: var(--text-muted); }
-.small { font-size: 13px; margin-top: 8px; }
-.time-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.check { display: block; margin: 8px 0; }
-.grades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.launch-choice strong { font-size: 18px; }
-.grade-box { padding: 12px; border-radius: 12px; }
-.grade-box.g5 { background: #d1fae5; } .grade-box.g4 { background: #dbeafe; } .grade-box.g3 { background: #fef3c7; }
-.grade-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
-.grade-count { margin-top: 6px; font-size: 14px; }
-@media (max-width: 640px) { .grades { grid-template-columns: 1fr; } }
+.lp { max-width: 1280px; margin: 0 auto; padding-bottom: 72px; }
+.lp-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.lp-head h1 { font-size: 26px; letter-spacing: -0.02em; margin: 0; }
+.lp-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+.lp-card h2 { font-size: 18px; margin: 0 0 12px; }
+.lp-card h2 small { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.lp-empty { text-align: center; padding: 48px 20px; }
+.lp-grid { display: grid; grid-template-columns: minmax(340px, 460px) minmax(0, 1fr); gap: 12px; align-items: start; }
+
+.lp-variants { position: sticky; top: 84px; display: flex; flex-direction: column; max-height: calc(100vh - 180px); padding: 14px 0 0; }
+.lp-variants > * { margin-left: 16px; margin-right: 16px; }
+.lp-variants-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.lp-variants-head h2 { margin: 0; }
+.lp-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lp-seg label { cursor: pointer; }
+.lp-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.lp-seg span { display: block; padding: 6px 11px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.lp-seg label + label span { border-left: 1px solid var(--border); }
+.lp-seg input:checked + span { background: var(--primary); color: #fff; }
+.lp-seg input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: -2px; }
+.lp-kit-note { margin-top: 0; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px; background: var(--primary-bg); font-size: 13px; }
+.lp-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.lp-search { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.lp-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-bg); background: #fff; }
+.lp-search svg { width: 16px; height: 16px; fill: none; stroke: var(--text-muted); stroke-width: 2; flex: none; }
+main .lp-search input[type="search"] { flex: 1; min-width: 0; border: 0; padding: 0; height: 34px; background: transparent; box-shadow: none; outline: 0; font-size: 14px; }
+.lp-grades { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 36px; }
+.lp-grades button { border: 0; background: #fff; padding: 0 9px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-variant-numeric: tabular-nums; }
+.lp-grades button + button { border-left: 1px solid var(--border); }
+.lp-grades button.on { background: var(--primary); color: #fff; }
+.lp-hint { font-size: 13px; color: var(--text-muted); margin-top: 6px; margin-bottom: 8px; }
+.lp-link { background: none; border: 0; padding: 0; color: var(--primary-dark); font: inherit; font-weight: 600; cursor: pointer; }
+
+.lp-works { list-style: none; margin: 0 !important; padding: 0; overflow-y: auto; border-top: 1px solid var(--border); flex: 1 1 auto; min-height: 160px; }
+.lp-month { position: sticky; top: 0; z-index: 1; padding: 5px 16px; font-size: 12px; font-weight: 700; color: var(--text-secondary); background: var(--bg-sidebar); border-bottom: 1px solid var(--border); }
+.lp-work { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--border-light); }
+#launchForm:not(.mode-multi) .lp-work:has(.only-single input:checked),
+#launchForm.mode-multi .lp-work:has(.only-multi input:checked) { background: var(--primary-bg); box-shadow: inset 3px 0 0 var(--primary); }
+.lp-badge { width: 30px; height: 26px; border-radius: 6px; background: var(--bg-sidebar); display: grid; place-items: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lp-work-title { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.lp-work-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 2px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.lp-chip { cursor: pointer; }
+.lp-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.lp-chip span { display: inline-grid; place-items: center; min-width: 34px; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px;
+                background: #fff; font-size: 12px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; transition: border-color .15s, background .15s; }
+.lp-chip:hover span { border-color: var(--primary); color: var(--primary-dark); }
+.lp-chip input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.lp-chip input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.lp-all { height: 26px; padding: 0 8px; border: 1px dashed var(--primary-light); border-radius: 6px; background: transparent; color: var(--primary-dark); font-size: 12px; font-weight: 700; cursor: pointer; }
+#launchForm:not(.mode-multi) .only-multi, #launchForm.mode-multi .only-single { display: none; }
+#launchForm.mode-individual #pickTools, #launchForm.mode-individual #worksList, #launchForm.mode-individual #noMatch { display: none; }
+.lp-individual { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-bottom: 14px; }
+
+.lp-time { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.lp-time label { font-weight: 600; }
+main .lp-time input[type="number"] { width: 80px; font-variant-numeric: tabular-nums; }
+.lp-time-quick { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lp-time-quick button { border: 0; background: #fff; padding: 7px 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-variant-numeric: tabular-nums; }
+.lp-time-quick button + button { border-left: 1px solid var(--border); }
+.lp-time-quick button.on { background: var(--primary); color: #fff; }
+.lp-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 16px; }
+.lp-checks label { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 4px 0; cursor: pointer; }
+.lp-checks small { flex-basis: 100%; padding-left: 22px; color: var(--text-muted); font-size: 12px; }
+.lp-grades-set { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.lp-grade { padding: 10px 12px; border-radius: 10px; display: grid; gap: 4px; font-size: 14px; }
+.lp-grade.g5 { background: #d1fae5; } .lp-grade.g4 { background: #dbeafe; } .lp-grade.g3 { background: #fef3c7; }
+.lp-grade-title { font-size: 20px; font-weight: 800; }
+main .lp-grade input[type="number"] { width: 60px; padding: 4px 6px; font-variant-numeric: tabular-nums; }
+
+.lp-bar { position: sticky; bottom: 0; z-index: 6; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+          margin-top: 4px; padding: 12px 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -6px 18px rgba(15, 23, 42, .08); }
+.lp-choice { min-width: 0; flex: 1 1 280px; font-size: 14px; color: var(--text-muted); }
+.lp-choice strong { color: var(--text); font-size: 15px; }
+.lp-choice #chosenName { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lp-head .btn { white-space: nowrap; }
+.lp-warn { display: block; color: #b45309; font-size: 13px; margin-top: 2px; }
+.lp-bar .btn { padding: 12px 22px; font-size: 16px; }
+
+@media (max-width: 900px) {
+  .lp-grid { grid-template-columns: 1fr; }
+  .lp-variants { position: static; max-height: none; }
+  .lp-works { max-height: 50vh; }
+}
+@media (max-width: 600px) {
+  .lp-head h1 { font-size: 22px; }
+  .lp-grades-set { grid-template-columns: 1fr; }
+  .lp-bar { border-radius: 12px 12px 0 0; margin: 0 -12px; }
+  .lp-bar .btn { width: 100%; }
+  .lp-variants-head { flex-direction: column; align-items: stretch; }
+  .lp-seg { display: flex; } .lp-seg label { flex: 1; text-align: center; }
+}
+@media (pointer: coarse) { .lp-chip span, .lp-all { min-height: 34px; min-width: 40px; } }
 </style>
 
 <script>
 (function () {
     const form = document.getElementById('launchForm');
     if (!form) return;
-    const mode = () => (form.querySelector('input[name="variant_mode"]:checked') || form.querySelector('input[name="variant_mode"]') || {value: 'single'}).value;
+    const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    document.querySelectorAll('.lp-month[data-month]').forEach(h => {
+        const m = h.dataset.month; h.textContent = `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+    });
+    const timeInput = document.getElementById('timeLimit');
+    let timeTouched = false;
+    const mode = () => (form.querySelector('input[name="variant_mode"]:checked') || form.querySelector('input[name="variant_mode"]') || { value: 'single' }).value;
+    const picked = () => mode() === 'multi_choice'
+        ? Array.from(form.querySelectorAll('input[name="variant_ids"]:checked'))
+        : Array.from(form.querySelectorAll('input[name="variant_id"]:checked'));
 
     function taskCount() {
-        if (mode() === 'multi_choice') {
-            const checked = form.querySelector('input[name="variant_ids"]:checked');
-            return checked ? Number(checked.dataset.count) : 0;
-        }
         if (mode() === 'individual') {
             return form.querySelector('input[name="individual_type"]:checked').value === 'full'
                 ? 27 : Number(form.querySelector('input[name="individual_count"]').value || 0);
         }
-        const chosen = form.querySelector('input[name="variant_id"]:checked');
-        return chosen ? Number(chosen.dataset.count) : 0;
+        const first = picked()[0];
+        return first ? Number(first.dataset.count) : 0;
     }
-
     function recalc() {
         const total = Math.max(1, taskCount());
         document.getElementById('totalTasks').value = total;
+        document.getElementById('ofTasks').textContent = `· ${total} ${total % 10 === 1 && total % 100 !== 11 ? 'задание' : (total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 12 || total % 100 > 14)) ? 'задания' : 'заданий'}`;
         let previous = total;
         for (const grade of [5, 4, 3]) {
             const percent = Number(document.getElementById('p' + grade).value || 0);
@@ -180,57 +287,94 @@
             input.parentElement.querySelector('.of').textContent = 'из ' + total;
         }
     }
-
-    function chosenText() {
+    function summary() {
+        const name = document.getElementById('chosenName');
+        const warn = document.getElementById('chosenWarn');
+        warn.hidden = true;
+        if (mode() === 'individual') { name.textContent = 'индивидуальные варианты из банка ЕГЭ'; return; }
+        const list = picked();
+        const base = n => n.replace(/\s*·\s*В\d+\b.*$/, '');
+        const short = n => (n.match(/·\s*(В\d+.*)$/) || [, n])[1];
+        const bases = new Set(list.map(i => base(i.dataset.name)));
+        name.textContent = !list.length ? '—'
+            : (list.length > 1 && bases.size === 1) ? `${[...bases][0]} — ${list.map(i => short(i.dataset.name)).join(', ')}`
+            : list.map(i => i.dataset.name).join('; ');
         if (mode() === 'multi_choice') {
-            const names = Array.from(form.querySelectorAll('input[name="variant_ids"]:checked'))
-                .map(input => input.closest('label').querySelector('.variant-name').textContent);
-            return names.length ? names.join(', ') : '—';
+            const counts = new Set(list.map(i => i.dataset.count));
+            if (list.length === 1) { warn.textContent = 'Для комплекта отметьте хотя бы два варианта.'; warn.hidden = false; }
+            else if (counts.size > 1) { warn.textContent = 'У отмеченных вариантов разное число заданий.'; warn.hidden = false; }
         }
-        if (mode() === 'individual') return 'индивидуальные варианты';
-        const chosen = form.querySelector('input[name="variant_id"]:checked');
-        return chosen ? chosen.closest('label').querySelector('.variant-name').textContent : '—';
+        // время из «паспорта» варианта, пока его не меняли вручную
+        const minutes = list.length && list[0].dataset.minutes;
+        if (minutes && !timeTouched) { timeInput.value = minutes; markTime(); }
+    }
+    function markTime() {
+        document.querySelectorAll('.lp-time-quick button').forEach(b => b.classList.toggle('on', b.dataset.minutes === timeInput.value));
     }
 
+    // поиск и класс
+    const search = document.getElementById('variantSearch');
+    let grade = '';
+    const norm = s => s.toLowerCase().replace(/ё/g, 'е').replace(/[№#]/g, '').replace(/\s+/g, ' ').trim();
     function filter() {
-        const query = document.getElementById('variantSearch').value.trim().toLowerCase();
-        const box = document.getElementById(mode() === 'multi_choice' ? 'multiBox' : 'singleBox');
+        const words = norm(search.value).split(' ').filter(Boolean);
         let shown = 0;
-        box.querySelectorAll('.variant-option').forEach(option => {
-            const match = !query || option.dataset.name.includes(query) || option.querySelector('input').checked;
-            option.hidden = !match;
-            if (match) shown++;
+        document.querySelectorAll('.lp-work').forEach(row => {
+            const keep = row.querySelector(mode() === 'multi_choice' ? '.only-multi input:checked' : '.only-single input:checked');
+            const ok = keep || (words.every(w => norm(row.dataset.search).includes(w)) && (!grade || row.dataset.grade === grade));
+            row.hidden = !ok;
+            if (ok) shown++;
         });
-        document.getElementById('noMatch').hidden = shown > 0 || mode() === 'individual';
+        document.querySelectorAll('.lp-month').forEach(h => {      // заголовок месяца — если под ним есть видимые работы
+            let n = h.nextElementSibling, any = false;
+            while (n && !n.classList.contains('lp-month')) { if (!n.hidden) any = true; n = n.nextElementSibling; }
+            h.hidden = !any;
+        });
+        document.getElementById('noMatch').hidden = shown > 0;
+        document.querySelectorAll('#gradeFilter button').forEach(b => b.classList.toggle('on', b.dataset.grade === grade));
     }
-
-    function showBoxes() {
-        document.getElementById('singleBox').hidden = mode() !== 'single';
-        document.getElementById('multiBox').hidden = mode() !== 'multi_choice';
+    function apply() {
+        form.classList.toggle('mode-multi', mode() === 'multi_choice');
+        form.classList.toggle('mode-individual', mode() === 'individual');
         document.getElementById('multiHint').hidden = mode() !== 'multi_choice';
-        document.getElementById('variantSearch').hidden = mode() === 'individual';
-        document.getElementById('chosenName').textContent = chosenText();
-        filter();
         const individual = document.getElementById('individualBox');
         if (individual) individual.hidden = mode() !== 'individual';
-        recalc();
+        summary(); filter(); recalc();
     }
 
-    form.addEventListener('change', event => {
-        if (event.target.id && /^g[345]$/.test(event.target.id)) return;  // ручная правка числа заданий
-        showBoxes();
+    form.addEventListener('change', e => {
+        if (e.target.id && /^g[345]$/.test(e.target.id)) return;   // ручная правка числа заданий
+        apply();
     });
-    form.addEventListener('input', event => {
-        if (event.target.id && /^p[345]$/.test(event.target.id)) recalc();
-        if (event.target.id === 'variantSearch') filter();
+    form.addEventListener('input', e => {
+        if (/^p[345]$/.test(e.target.id || '')) recalc();
+        if (e.target === search) filter();
+        if (e.target === timeInput) { timeTouched = true; markTime(); }
     });
-    // Enter в поиске не отправляет форму
-    document.getElementById('variantSearch').addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
-    showBoxes();
-    const chosen = form.querySelector('input[name="variant_id"]:checked');
-    if (chosen) {  // выбранный вариант виден в списке, страница при этом не прокручивается
-        const box = document.getElementById('singleBox');
-        box.scrollTop = chosen.closest('label').offsetTop - box.offsetTop - 8;
+    search.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+    document.getElementById('gradeFilter').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { grade = b.dataset.grade; filter(); } });
+    document.getElementById('resetPick').addEventListener('click', () => { search.value = ''; grade = ''; filter(); search.focus(); });
+    document.querySelector('.lp-time-quick').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        timeInput.value = b.dataset.minutes; timeTouched = true; markTime();
+    });
+    document.getElementById('worksList').addEventListener('click', e => {   // «все» — отметить весь комплект
+        const b = e.target.closest('[data-kit-all]'); if (!b) return;
+        const boxes = b.closest('.lp-chips').querySelectorAll('input[name="variant_ids"]');
+        const all = Array.from(boxes).every(i => i.checked);
+        boxes.forEach(i => { i.checked = !all; });
+        apply();
+    });
+    form.addEventListener('submit', e => {
+        if (mode() !== 'individual' && !picked().length) { e.preventDefault(); alert('Выберите вариант.'); }
+    });
+    timeTouched = {{ 'true' if preset_kit or preselected_variant else 'false' }};   // время уже подставлено из комплекта/варианта
+    apply();
+    markTime();
+    const chosen = picked()[0];
+    if (chosen) {   // выбранная работа видна в списке, сама страница не прокручивается
+        const list = document.getElementById('worksList');
+        list.scrollTop = chosen.closest('.lp-work').offsetTop - list.offsetTop - 30;
     }
 })();
 </script>

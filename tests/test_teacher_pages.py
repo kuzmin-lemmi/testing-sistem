@@ -259,7 +259,7 @@ class LaunchTests(Base):
 
     def test_page_elements_used_by_script_exist_without_ege_banks(self):
         page = self.client.get('/sessions/new').get_data(as_text=True)
-        for element_id in ('variantSearch', 'noMatch', 'singleBox', 'multiBox', 'multiHint', 'totalTasks',
+        for element_id in ('variantSearch', 'noMatch', 'worksList', 'gradeFilter', 'resetPick', 'multiHint', 'totalTasks', 'timeLimit',
                            'g5', 'g4', 'g3', 'p5', 'p4', 'p3', 'chosenName'):
             self.assertIn(f'id="{element_id}"', page)
 

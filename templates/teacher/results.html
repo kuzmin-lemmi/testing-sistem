@@ -67,7 +67,9 @@
                     <thead>
                         <tr>
                             <th class="name-col">Ученик</th>
-                            {% for task in group.tasks %}<th title="{{ format_expected(task) }}">{{ loop.index }}</th>{% endfor %}
+                            {% for task in group.tasks %}<th><button type="button" class="task-open" title="Показать задание {{ loop.index }}"
+                                data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=task.image_path) }}"
+                                data-expected="{{ format_expected(task) }}" data-solved="{{ group.solved[loop.index0] }}" data-total="{{ group.students|length }}">{{ loop.index }}</button></th>{% endfor %}
                             <th>Верно</th><th>%</th><th>Оценка</th>
                         </tr>
                     </thead>
@@ -76,9 +78,14 @@
                         <tr>
                             <td class="name-col"><a href="{{ url_for('result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a></td>
                             {% for cell in row.cells %}
-                            <td class="cell {% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}"
-                                title="Ответ: {{ cell.given }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}">
-                                {% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}
+                            <td class="cell {% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}">
+                                <button type="button" class="task-open"
+                                        aria-label="Задание {{ loop.index }}: {% if cell.correct %}верно{% elif cell.answered %}неверно{% else %}нет ответа{% endif %}"
+                                        title="Ответ: {{ cell.given or '—' }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}"
+                                        data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=cell.task.image_path) }}"
+                                        data-expected="{{ format_expected(cell.task) }}" data-given="{{ cell.given }}"
+                                        data-status="{% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}"
+                                        data-student="{{ row.student.last_name }} {{ row.student.first_name }}">{% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}</button>
                             </td>
                             {% endfor %}
                             <td class="num">{{ row.correct }} / {{ row.total }}</td>
@@ -97,11 +104,25 @@
             {% else %}
             <p class="muted">В этом тестировании никто не отвечал.</p>
             {% endfor %}
-            {% if groups %}<p class="muted legend">✓ верно · ✗ неверно · — нет ответа. Наведите на клетку, чтобы увидеть ответ; щёлкните на ученика, чтобы исправить отметку вручную.</p>{% endif %}
+            {% if groups %}<p class="muted legend">✓ верно · ✗ неверно · — нет ответа. Щёлкните на клетку или номер задания — откроется само задание с ответами; на ученика — чтобы исправить отметку вручную.</p>{% endif %}
             {% else %}
             <div class="empty-state"><div class="empty-icon">📂</div><h3>Результатов пока нет</h3></div>
             {% endif %}
         </section>
+        <dialog class="task-dialog" id="taskDialog" aria-labelledby="taskDialogTitle">
+            <div class="td-head">
+                <h3 id="taskDialogTitle"></h3>
+                <div class="td-nav">
+                    <button type="button" class="btn btn-secondary btn-small" data-step="-1" aria-label="Предыдущее задание">←</button>
+                    <button type="button" class="btn btn-secondary btn-small" data-step="1" aria-label="Следующее задание">→</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="taskDialogClose" aria-label="Закрыть">✕</button>
+                </div>
+            </div>
+            <div class="td-answers" id="taskDialogAnswers"></div>
+            <a class="td-img" id="taskDialogLink" target="_blank" rel="noopener" title="Открыть картинку в новой вкладке">
+                <img id="taskDialogImg" alt="">
+            </a>
+        </dialog>
     </div>
 </div>
 
@@ -125,6 +146,23 @@
 .note { background: #fef3c7; color: #92400e; padding: 10px 14px; border-radius: 10px; }
 .group-title { margin: 18px 0 8px; }
 .matrix-wrap { overflow-x: auto; }
+.task-open { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 32px; line-height: 32px; text-align: center;
+             cursor: pointer; border-radius: 6px; }
+.task-open:hover { background: rgba(79, 70, 229, .10); }
+.task-open:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+th .task-open { font-weight: 700; color: var(--primary-dark); text-decoration: underline dotted; text-underline-offset: 3px; }
+.task-dialog { margin: auto; width: min(900px, calc(100vw - 24px)); max-height: calc(100vh - 32px); border: 0; border-radius: 14px; padding: 0;
+               box-shadow: var(--shadow-xl); }
+.task-dialog::backdrop { background: rgba(15, 23, 42, .45); }
+.td-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px;
+           border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff; z-index: 1; }
+.td-head h3 { margin: 0; font-size: 18px; }
+.td-nav { display: flex; gap: 6px; flex: none; }
+.td-answers { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; font-size: 14px; background: var(--bg); }
+.td-answers b { font-family: 'JetBrains Mono', monospace; }
+.td-answers .ok { color: #047857; } .td-answers .bad { color: #b91c1c; } .td-answers .none { color: var(--text-muted); }
+.td-img { display: block; padding: 14px 16px 18px; }
+.td-img img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .matrix { border-collapse: collapse; min-width: 100%; }
 .matrix th, .matrix td { border: 1px solid var(--border-light); padding: 8px 10px; text-align: center; white-space: nowrap; }
 .matrix th { font-size: 13px; color: var(--text-muted); background: var(--bg-sidebar, #f8fafc); }
@@ -144,4 +182,56 @@
 .legend { font-size: 13px; margin-top: 10px; }
 @media (max-width: 980px) { .results-layout { grid-template-columns: 1fr; } .session-tree { position: static; } }
 </style>
+<script>
+// Просмотр задания по щелчку на клетку или номер столбца; ← → — соседние задания в той же строке
+(function () {
+    const dialog = document.getElementById('taskDialog');
+    if (!dialog) return;
+    const title = document.getElementById('taskDialogTitle');
+    const answers = document.getElementById('taskDialogAnswers');
+    const img = document.getElementById('taskDialogImg');
+    const link = document.getElementById('taskDialogLink');
+    const STATUS = { ok: 'верно', bad: 'неверно', none: 'нет ответа' };
+    let current = null;
+
+    function show(button) {
+        current = button;
+        const d = button.dataset;
+        const span = (cls, text) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; return s; };
+        const bold = (label, value) => { const s = span('', label + ' '); const b = document.createElement('b'); b.textContent = value; s.appendChild(b); return s; };
+        title.textContent = d.student ? `Задание ${d.n} · ${d.student}` : `Задание ${d.n}`;
+        answers.replaceChildren();
+        answers.appendChild(bold('Правильный ответ:', d.expected || '—'));
+        if (d.student) {
+            answers.appendChild(bold('Ответ ученика:', d.given || '—'));
+            answers.appendChild(span(d.status, STATUS[d.status] || ''));
+        } else {
+            answers.appendChild(span('', `Решили: ${d.solved} из ${d.total}`));
+        }
+        img.src = d.img; img.alt = `Условие задания ${d.n}`; link.href = d.img;
+        if (!dialog.open) dialog.showModal();
+    }
+    function step(delta) {
+        if (!current) return;
+        const row = Array.from(current.closest('tr').querySelectorAll('.task-open'));
+        const next = row[row.indexOf(current) + delta];
+        if (next) show(next);
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('.task-open');
+        if (b) show(b);
+    });
+    dialog.addEventListener('click', e => {
+        if (e.target === dialog) dialog.close();                       // щелчок по затемнению
+        const s = e.target.closest('[data-step]');
+        if (s) step(+s.dataset.step);
+    });
+    document.getElementById('taskDialogClose').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('keydown', e => {
+        if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    });
+    dialog.addEventListener('close', () => { if (current) current.focus(); });
+})();
+</script>
 {% endblock %}

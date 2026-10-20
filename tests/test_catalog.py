@@ -178,7 +178,7 @@ class CatalogPageTests(unittest.TestCase):
         self.assertIn('value="35"', page)
         for name in ('IP 1', 'IP 2'):
             vid = by_name(name)['id']
-            self.assertIn(f'value="{vid}" data-count="2" checked', page)
+            self.assertRegex(page, rf'name="variant_ids" value="{vid}" data-count="2"[^>]*checked')
         self.assertRegex(page, r'value="multi_choice"\s+checked')
 
     def test_average_result(self):

@@ -2265,8 +2265,15 @@ def session_new():
         order = {vid: i for i, vid in enumerate(preset_ids)}
         variants.sort(key=lambda v: order.get(v['id'], len(order)))
 
+    works = catalog.build_works(variants)
+    selected_ids = set(preset_ids) if len(preset_ids) > 1 else {preselected_variant}
+    if len(preset_ids) > 1 or preselected_variant:   # выбранная работа — первой в списке
+        works.sort(key=lambda w: not any(v['id'] in selected_ids for v in w['variants']))
     return render_template('teacher/session_new.html',
                          variants=variants,
+                         works=works,
+                         filter_grades=sorted({w['grade'] for w in works}, key=catalog._grade_order),
+                         grade_short=catalog.grade_short,
                          task_counts=task_counts,
                          preselected_variant=preselected_variant,
                           preset_kit=preset_kit if len(preset_ids) > 1 else '',
