@@ -169,5 +169,16 @@ class AwayTests(unittest.TestCase):
         self.assertEqual(summary['matches'], [])
 
 
+    # ---- программа ученика (student_app): метка в мониторинге и что пытался открыть
+    def test_student_app_is_marked_in_monitor(self):
+        teacher = server.app.test_client()
+        self.pupil.post('/test/ping', environ_base=PC)
+        self.assertFalse(teacher.get(f'/sessions/{self.session_id}/live').get_json()['students'][0]['in_app'])
+        self.pupil.post('/test/ping', environ_base=PC, headers={'User-Agent': 'Mozilla/5.0 Edg/130.0 TestingStudentApp/0.1'})
+        self.pupil.post('/test/away', data={'away': '1', 'app': 'chrome.exe'}, environ_base=PC)
+        pupil = teacher.get(f'/sessions/{self.session_id}/live').get_json()['students'][0]
+        self.assertEqual((pupil['in_app'], pupil['foreign_app'], pupil['leaves']), (True, 'chrome.exe', 1))
+
+
 if __name__ == '__main__':
     unittest.main()

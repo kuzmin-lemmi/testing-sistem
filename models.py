@@ -245,7 +245,9 @@ def migrate_db():
 
     # 6d2) students: сколько раз ученик уходил со страницы теста и сколько секунд там пробыл
     for column, kind in (('leave_count', 'INTEGER NOT NULL DEFAULT 0'), ('leave_seconds', 'INTEGER NOT NULL DEFAULT 0'),
-                         ('left_at', 'DATETIME')):
+                         ('left_at', 'DATETIME'),
+                         # программа ученика (запертое окно) вместо обычного браузера; что ученик пытался открыть
+                         ('in_app', 'INTEGER NOT NULL DEFAULT 0'), ('foreign_app', 'TEXT')):
         if not _table_has_column(conn, 'students', column):
             cur.execute(f"ALTER TABLE students ADD COLUMN {column} {kind}")
 
@@ -1232,13 +1234,14 @@ class Student:
         return dict(student) if student else None
 
     @staticmethod
-    def touch(student_id):
+    def touch(student_id, in_app=None):
+        """in_app: True/False — ученик в программе ученика / в обычном браузере (None — не менять)."""
         conn = get_db()
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE students SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?
-            ''', (student_id,))
+                UPDATE students SET last_seen_at = CURRENT_TIMESTAMP, in_app = COALESCE(?, in_app) WHERE id = ?
+            ''', (None if in_app is None else int(in_app), student_id))
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1283,6 +1286,15 @@ class Student:
         except Exception:
             conn.rollback()
             raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def set_foreign_app(student_id, name):
+        conn = get_db()
+        try:
+            conn.execute('UPDATE students SET foreign_app = ? WHERE id = ?', (name, student_id))
+            conn.commit()
         finally:
             conn.close()
 

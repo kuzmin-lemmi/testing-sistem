@@ -2381,6 +2381,8 @@ def _monitor_state(session):
             'away': online and bool(st.get('left_at')),
             'leaves': int(st.get('leave_count') or 0),
             'away_text': format_away(st),
+            'in_app': bool(st.get('in_app')),
+            'foreign_app': st.get('foreign_app') or '',
         })
     students.sort(key=lambda s: s['name'].casefold())
     in_progress = [s['remaining'] for s in students]
@@ -2774,7 +2776,7 @@ def student_ping():
     if not test_session:
         return jsonify({'active': False}), 404
 
-    Student.touch(student_id)
+    Student.touch(student_id, in_app=_from_student_app())
     remaining = _calc_remaining_seconds(student, test_session)
 
     if test_session['status'] == 'closed':
@@ -2784,6 +2786,13 @@ def student_ping():
 
     return jsonify({'active': True, 'paused': bool(test_session.get('paused')), 'remaining_seconds': remaining,
                     'submitted': bool(student.get('submitted_at'))})
+
+
+STUDENT_APP_MARK = 'TestingStudentApp/'  # программа ученика (student_app) дописывает это к User-Agent
+
+
+def _from_student_app():
+    return STUDENT_APP_MARK in (request.headers.get('User-Agent') or '')
 
 
 TASK_TIME_PORTION_MAX = 60  # страница шлёт время раз в 10 секунд; больше минуты за раз — сбой или подделка
@@ -2824,6 +2833,12 @@ def student_away():
     away = request.values.get('away')
     if away == '0' or (away == '1' and working):  # возврат учитываем всегда, чтобы не потерять время отсутствия
         Student.set_away(student['id'], away == '1')
+    # программа ученика сообщает, какую программу он пытался открыть (окно теста она уже вернула)
+    app_name = (request.values.get('app') or '').strip()[:60]
+    if working and away == '1' and app_name:
+        Student.set_foreign_app(student['id'], app_name)
+        log_event(f"{student['last_name']} {student['first_name']} пытался открыть «{app_name}» — {{pc}}.", 'warn',
+                  request.remote_addr)
     if working and request.values.get('times'):
         allowed = {task['id'] for task in Variant.get_tasks(student['variant_id'])}
         Student.add_task_times(student['id'], _parse_task_times(request.values.get('times'), allowed))

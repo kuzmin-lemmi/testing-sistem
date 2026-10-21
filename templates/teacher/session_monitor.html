@@ -104,6 +104,8 @@ tr.submitted td { background: #f0fdf4; }
 tr.offline td { background: #fef2f2; }
 tr.away td { background: #fffbeb; }
 .away-now { color: #b45309; font-weight: 700; }
+.app-tag { margin-left: 6px; font-size: 13px; }
+.foreign-app { font-size: 12px; color: #b91c1c; font-weight: 600; }
 .leaves { color: #92400e; font-weight: 600; white-space: nowrap; }
 </style>
 
@@ -142,13 +144,13 @@ tr.away td { background: #fffbeb; }
                 ? `<span class="work-done">🔒 сдал в ${esc(s.submitted)}</span><button class="btn-tiny" onclick="studentAction(${s.id}, 'return')" title="Вернуть к решению">🔓 вернуть</button>`
                 : `${s.all_answered ? '<span class="work-ready">ответил на всё</span>' : '<span class="muted">решает</span>'}<button class="btn-tiny" onclick="studentAction(${s.id}, 'accept')" title="Принять работу: у ученика заставка, ответы не меняются">🔒 принять</button>`;
             return `<tr class="${offline ? 'offline' : ''}${s.away ? ' away' : ''}${s.submitted ? ' submitted' : ''}">
-                <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}</td>
+                <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}${s.in_app ? '<span class="app-tag" title="Программа ученика: экран заперт">🔒</span>' : ''}</td>
                 <td><div class="progress"><div class="progress-bar ${s.answered === s.total ? 'full' : ''}"><div style="width:${percent}%"></div></div>
                     ${s.answered} из ${s.total}${s.uploads ? ` · 📁 ${s.uploads}` : ''}</div></td>
                 <td>${s.submitted ? '<span class="muted">—</span>' : s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
                 <td class="work-state">${work}</td>
                 <td>${s.away ? '<span class="away-now">● вне страницы</span>' : s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
-                <td class="${s.leaves ? 'leaves' : 'muted'}">${esc(s.away_text)}</td>
+                <td class="${s.leaves ? 'leaves' : 'muted'}">${esc(s.away_text)}${s.foreign_app ? `<div class="foreign-app">открывал: ${esc(s.foreign_app)}</div>` : ''}</td>
                 <td>${esc(s.started)}</td>
                 <td><a href="${resultBase}${s.id}">ответы →</a></td>
             </tr>`;

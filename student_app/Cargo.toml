@@ -1,0 +1,10 @@
+[package]
+description = "Программа ученика: окно теста на весь экран, из которого незаметно не уйти (прототип)"
+name = "student_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tao = "0.37"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
+wry = "0.57"
