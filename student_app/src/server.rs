@@ -34,23 +34,17 @@ impl Config {
             .iter()
             .position(|a| a == "--server")
             .and_then(|i| args.get(i + 1).cloned());
-        let from_file = std::fs::read_to_string(dir.join("server.txt"))
-            .ok()
-            .and_then(|text| text.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).map(String::from));
+        let from_file = read_lines(&dir.join("server.txt")).into_iter().next();
         let mut origin = from_args.or(from_file).unwrap_or_else(|| "http://127.0.0.1:8080".into());
         if !origin.starts_with("http") {
             origin = format!("http://{origin}");
         }
         let origin = origin.trim_end_matches('/').to_string();
 
-        let allowed = match std::fs::read_to_string(dir.join("allowed.txt")) {
-            Ok(text) => text
-                .lines()
-                .map(|l| l.trim().to_lowercase())
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .collect(),
-            Err(_) => DEFAULT_ALLOWED.iter().map(|s| s.to_string()).collect(),
-        };
+        let mut allowed: Vec<String> = read_lines(&dir.join("allowed.txt")).iter().map(|l| l.to_lowercase()).collect();
+        if allowed.is_empty() {
+            allowed = DEFAULT_ALLOWED.iter().map(|s| s.to_string()).collect();
+        }
         let exit_after = args
             .iter()
             .position(|a| a == "--exit-after")
@@ -58,6 +52,19 @@ impl Config {
             .and_then(|v| v.parse().ok());
         Config { origin, allowed, exit_after }
     }
+}
+
+/// Непустые строки файла без комментариев `#`. Блокнот может сохранить файл с невидимой меткой BOM
+/// в начале — её отбрасываем, иначе адрес из server.txt сломается.
+fn read_lines(path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .trim_start_matches('\u{feff}')
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(String::from)
+        .collect()
 }
 
 /// Ждём, пока система учителя ответит на /test/alive, и открываем тест.
