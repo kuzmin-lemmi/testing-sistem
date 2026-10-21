@@ -314,6 +314,17 @@ def migrate_db():
         )
     ''')
 
+    # 15) task_times: сколько секунд ученик провёл на каждом задании (пока был на странице теста)
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS task_times (
+            student_id INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            seconds INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (student_id, task_id),
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -1314,6 +1325,32 @@ class Student:
             raise
         finally:
             conn.close()
+
+    @staticmethod
+    def add_task_times(student_id, times):
+        """times: {task_id: секунды} — порция времени со страницы ученика, прибавляется к накопленному."""
+        if not times:
+            return
+        conn = get_db()
+        try:
+            conn.executemany('''
+                INSERT INTO task_times (student_id, task_id, seconds) VALUES (?, ?, ?)
+                ON CONFLICT(student_id, task_id) DO UPDATE SET seconds = seconds + excluded.seconds
+            ''', [(student_id, task_id, seconds) for task_id, seconds in times.items()])
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_task_times(student_id):
+        """{task_id: секунды} — время ученика на каждом задании."""
+        conn = get_db()
+        rows = conn.execute('SELECT task_id, seconds FROM task_times WHERE student_id = ?', (student_id,)).fetchall()
+        conn.close()
+        return {row['task_id']: row['seconds'] for row in rows}
 
     @staticmethod
     def get_answers(student_id):

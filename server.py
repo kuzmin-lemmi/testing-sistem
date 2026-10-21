@@ -5,6 +5,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory, send_file, flash, session
 import hashlib
 import io
+import json
 import os
 import re
 import uuid
@@ -2376,6 +2377,10 @@ def _monitor_state(session):
             'uploads': Answer.count_uploads_for_student(st['id']),
             'all_answered': bool(score['total']) and score['answered'] >= score['total'],
             'submitted': to_local_dt(st.get('submitted_at'))[11:16] if st.get('submitted_at') else '',
+            # в сети, но страница теста скрыта или не в фокусе (другое окно, вкладка, свёрнут браузер)
+            'away': online and bool(st.get('left_at')),
+            'leaves': int(st.get('leave_count') or 0),
+            'away_text': format_away(st),
         })
     students.sort(key=lambda s: s['name'].casefold())
     in_progress = [s['remaining'] for s in students]
@@ -2388,6 +2393,7 @@ def _monitor_state(session):
         'remaining': max(in_progress) if in_progress else full,
         'students': students,
         'online': sum(1 for s in students if s['online']),
+        'away': sum(1 for s in students if s['away']),
         'finished_all': bool(students) and all(s['remaining'] <= 0 or s['submitted'] for s in students),
         'submitted_count': sum(1 for s in students if s['submitted']),
         'ready_count': sum(1 for s in students if s['all_answered'] and not s['submitted']),
@@ -2780,9 +2786,34 @@ def student_ping():
                     'submitted': bool(student.get('submitted_at'))})
 
 
+TASK_TIME_PORTION_MAX = 60  # страница шлёт время раз в 10 секунд; больше минуты за раз — сбой или подделка
+
+
+def _parse_task_times(raw, allowed_ids):
+    """'{"12": 7, "15": 3}' -> {12: 7, 15: 3}: только задания своего варианта, всего не больше минуты."""
+    try:
+        data = json.loads(raw or '{}')
+    except ValueError:
+        return {}
+    times, total = {}, 0
+    if not isinstance(data, dict):
+        return {}
+    for key, value in data.items():
+        try:
+            task_id, seconds = int(key), int(value)
+        except (TypeError, ValueError):
+            continue
+        seconds = min(seconds, TASK_TIME_PORTION_MAX - total)
+        if task_id in allowed_ids and seconds > 0:
+            times[task_id] = seconds
+            total += seconds
+    return times
+
+
 @app.route('/test/away', methods=['POST'])
 def student_away():
-    """Страница теста потеряла фокус или скрылась (away=1) / ученик вернулся (away=0). Учитывается только в ходе работы."""
+    """Страница теста: ушёл (away=1) / вернулся (away=0) и порция времени по заданиям (times).
+    Учитывается только в ходе работы."""
     from flask import session
     student = Student.get_by_id(session.get('student_id') or 0)
     if not student:
@@ -2790,9 +2821,12 @@ def student_away():
     test_session = TestSession.get_by_id(student['session_id'])
     working = (student['status'] == 'in_progress' and test_session and test_session['status'] == 'active'
                and not test_session.get('paused') and not student.get('submitted_at'))
-    away = request.values.get('away') == '1'
-    if working or not away:  # возврат учитываем всегда, чтобы не потерять время отсутствия
-        Student.set_away(student['id'], away)
+    away = request.values.get('away')
+    if away == '0' or (away == '1' and working):  # возврат учитываем всегда, чтобы не потерять время отсутствия
+        Student.set_away(student['id'], away == '1')
+    if working and request.values.get('times'):
+        allowed = {task['id'] for task in Variant.get_tasks(student['variant_id'])}
+        Student.add_task_times(student['id'], _parse_task_times(request.values.get('times'), allowed))
     return ('', 204)
 
 
@@ -3166,8 +3200,13 @@ def result_student(student_id):
         return redirect(url_for('results_list'))
     test_session = TestSession.get_by_id(student['session_id'])
     score = results_logic.student_score(student, test_session)
+    matches = []
+    if test_session:
+        _, summary = results_logic.session_results(test_session)
+        matches = [m for m in summary['matches'] if student_id in (m['students'][0]['id'], m['students'][1]['id'])]
     return render_template('teacher/result_student.html', student=student, test_session=test_session,
-                           session_title=_session_title(test_session) if test_session else '', score=score)
+                           session_title=_session_title(test_session) if test_session else '', score=score,
+                           matches=matches)
 
 @app.route('/results/export/<int:session_id>.xlsx')
 def result_export_xlsx(session_id):

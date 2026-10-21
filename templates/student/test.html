@@ -2677,6 +2677,7 @@
                 window.pySaveCurrentCode();
             }
 
+            tickTaskTime();  // время до переключения — предыдущему заданию
             currentTask = index;
 
             if (typeof window.pyEditorOnTaskChange === 'function' && previousTask !== currentTask) {
@@ -2844,6 +2845,7 @@
         }
 
         function setPausedState(paused, remaining) {
+            if (window.taskTimeTick) window.taskTimeTick();  // время до паузы засчитать, во время паузы — нет
             isPaused = !!paused;
             if (typeof remaining === 'number') {
                 remainingSeconds = remaining;
@@ -2921,17 +2923,50 @@
         }, 15000);
 
         // Уход со страницы: другая вкладка, другое окно, свёрнутый браузер. Считает сервер.
-        let awayReported = false;
+        // null — ещё не сообщали: первое сообщение «на месте» закрывает уход, оставшийся с прошлого входа.
+        let awayReported = null;
         let awayTimer = null;
         let awaySuppressed = false;  // системные окна браузера (confirm) уходом не считаются
-        function reportAway(away) {
-            if (awayReported === away) return;
-            awayReported = away;
-            const body = new Blob(['away=' + (away ? 1 : 0)], { type: 'application/x-www-form-urlencoded' });
+
+        // Время на каждое задание: копится, пока ученик на странице и тест не на паузе; уходит на сервер порциями.
+        const taskMs = {};
+        let timingSince = Date.now();
+        function tickTaskTime() {
+            const now = Date.now();
+            const taskId = getTaskIdByIndex(currentTask);
+            if (taskId && awayReported !== true && !isPaused) {
+                taskMs[taskId] = (taskMs[taskId] || 0) + (now - timingSince);
+            }
+            timingSince = now;
+        }
+
+        function sendAway(away) {
+            tickTaskTime();
+            const params = new URLSearchParams();
+            if (away !== null) params.set('away', away ? '1' : '0');
+            const times = {};
+            Object.keys(taskMs).forEach(id => {
+                const seconds = Math.floor(taskMs[id] / 1000);
+                if (seconds > 0) {
+                    times[id] = seconds;
+                    taskMs[id] -= seconds * 1000;  // доли секунды остаются до следующей порции
+                }
+            });
+            if (Object.keys(times).length) params.set('times', JSON.stringify(times));
+            if (![...params.keys()].length) return;
+            const body = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded' });
             if (!(navigator.sendBeacon && navigator.sendBeacon('{{ url_for("student_away") }}', body))) {
                 fetch('{{ url_for("student_away") }}', { method: 'POST', body: body, keepalive: true }).catch(() => {});
             }
         }
+        function reportAway(away) {
+            if (awayReported === away) return;
+            sendAway(away);  // время до ухода засчитывается текущему заданию
+            awayReported = away;
+        }
+        setInterval(() => sendAway(null), 10000);
+        window.taskTimeTick = tickTaskTime;  // для setPausedState: до этой строки учёт времени ещё не готов
+        reportAway(false);
         function checkAway() {
             clearTimeout(awayTimer);
             const away = document.visibilityState === 'hidden' || !document.hasFocus();
@@ -2941,6 +2976,11 @@
         }
         window.addEventListener('blur', checkAway);
         window.addEventListener('focus', checkAway);
+        // события blur/focus приходят не всегда (вкладка открылась без фокуса, встроенные браузеры) — проверяем и сами
+        setInterval(() => {
+            const away = document.visibilityState === 'hidden' || !document.hasFocus();
+            if (away !== awayReported) checkAway();
+        }, 1000);
 
         document.addEventListener('visibilitychange', () => {
             checkAway();
@@ -2950,6 +2990,7 @@
         });
 
         window.addEventListener('pagehide', () => {
+            sendAway(null);
             flushAll();
         });
     </script>

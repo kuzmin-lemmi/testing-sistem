@@ -23,10 +23,24 @@
         </div>
     </section>
 
+    {% if matches %}
+    <section class="card matches">
+        <h2>⚠ Одинаковые неверные ответы</h2>
+        <ul>
+            {% for m in matches %}
+            {% set other = m.students[1] if m.students[0].id == student.id else m.students[0] %}
+            <li>с <a href="{{ url_for('result_student', student_id=other.id) }}">{{ other.last_name }} {{ other.first_name }}</a> —
+                {{ m.numbers|length }} {{ plural(m.numbers|length, 'задание', 'задания', 'заданий') }} (№ {{ m.numbers|join(', ') }})</li>
+            {% endfor %}
+        </ul>
+        <p class="muted hint">Ошибки, которые сделали многие, не учитываются. Решение за учителем.</p>
+    </section>
+    {% endif %}
+
     <section class="card">
         <h2>Ответы по заданиям</h2>
         <table class="answers">
-            <thead><tr><th>№</th><th>Ответ ученика</th><th>Правильный ответ</th><th>Отметка</th></tr></thead>
+            <thead><tr><th>№</th><th>Ответ ученика</th><th>Правильный ответ</th><th title="Сколько времени задание было открыто у ученика">Время</th><th>Отметка</th></tr></thead>
             <tbody>
             {% for cell in score.cells %}
             {% set task = cell.task %}
@@ -43,6 +57,7 @@
                         {% endif %}
                     </td>
                     <td><span class="value">{{ format_expected(task) }}</span></td>
+                    <td class="time{% if cell.fast %} fast{% endif %}"{% if cell.fast %} title="Верный ответ меньше чем за 15 секунд"{% endif %}>{% if cell.time %}{{ cell.time }}{% if cell.fast %} ⚡{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td class="marks">
                         {% if cell.correct %}<span class="ok-text">✓ Верно</span>
                         {% elif cell.marked is not none and cell.marked == 0 and task.answer_kind == 'file_upload' %}<span class="bad-text">✗ Не зачтено</span>
@@ -94,5 +109,10 @@ async function markAnswer(taskId, isCorrect) {
 .ok-text { color: #059669; font-weight: 700; }
 .bad-text { color: #dc2626; font-weight: 700; }
 .hint { font-size: 13px; margin-top: 10px; }
+.time { white-space: nowrap; font-size: 14px; }
+.time.fast { color: #b45309; font-weight: 700; }
+.matches { background: #fff7ed; border: 1px solid #fed7aa; }
+.matches h2 { color: #9a3412; }
+.matches ul { margin: 8px 0; padding-left: 20px; }
 </style>
 {% endblock %}

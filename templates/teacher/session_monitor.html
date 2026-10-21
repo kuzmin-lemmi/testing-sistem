@@ -54,14 +54,15 @@
     <section class="card">
         <h2>Ученики: <span id="countAll">{{ live.students|length }}</span>
             <span class="muted" style="font-weight:400;">· в сети <span id="countOnline">{{ live.online }}</span>
-            · сдали <span id="countSubmitted">{{ live.submitted_count }}</span></span></h2>
+            · сдали <span id="countSubmitted">{{ live.submitted_count }}</span>
+            <span id="awayNote" {% if not live.away %}hidden{% endif %}>· <span class="away-now">вне страницы <span id="countAway">{{ live.away }}</span></span></span></span></h2>
         <div class="ready-row" id="readyRow" {% if not live.ready_count %}hidden{% endif %}>
             <span>Ответили на все задания, но ещё не сдали: <strong id="countReady">{{ live.ready_count }}</strong></span>
             <button type="button" class="btn btn-primary btn-small" onclick="acceptReady()">🔒 Принять у всех, кто ответил на всё</button>
         </div>
         <table class="monitor-table">
             <thead>
-                <tr><th>Ученик</th><th>Ответил</th><th>Осталось</th><th>Работа</th><th>В сети</th><th>Начал</th><th></th></tr>
+                <tr><th>Ученик</th><th>Ответил</th><th>Осталось</th><th>Работа</th><th>В сети</th><th title="Сколько раз ученик уходил со страницы теста и сколько был вне её">Уходы</th><th>Начал</th><th></th></tr>
             </thead>
             <tbody id="rows"></tbody>
         </table>
@@ -101,6 +102,9 @@ tr.submitted td { background: #f0fdf4; }
 .online-no { color: #dc2626; font-weight: 700; }
 .variant-tag { margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; }
 tr.offline td { background: #fef2f2; }
+tr.away td { background: #fffbeb; }
+.away-now { color: #b45309; font-weight: 700; }
+.leaves { color: #92400e; font-weight: 600; white-space: nowrap; }
 </style>
 
 <script>
@@ -137,13 +141,14 @@ tr.offline td { background: #fef2f2; }
             const work = s.submitted
                 ? `<span class="work-done">🔒 сдал в ${esc(s.submitted)}</span><button class="btn-tiny" onclick="studentAction(${s.id}, 'return')" title="Вернуть к решению">🔓 вернуть</button>`
                 : `${s.all_answered ? '<span class="work-ready">ответил на всё</span>' : '<span class="muted">решает</span>'}<button class="btn-tiny" onclick="studentAction(${s.id}, 'accept')" title="Принять работу: у ученика заставка, ответы не меняются">🔒 принять</button>`;
-            return `<tr class="${offline ? 'offline' : ''}${s.submitted ? ' submitted' : ''}">
+            return `<tr class="${offline ? 'offline' : ''}${s.away ? ' away' : ''}${s.submitted ? ' submitted' : ''}">
                 <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}</td>
                 <td><div class="progress"><div class="progress-bar ${s.answered === s.total ? 'full' : ''}"><div style="width:${percent}%"></div></div>
                     ${s.answered} из ${s.total}${s.uploads ? ` · 📁 ${s.uploads}` : ''}</div></td>
                 <td>${s.submitted ? '<span class="muted">—</span>' : s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
                 <td class="work-state">${work}</td>
-                <td>${s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
+                <td>${s.away ? '<span class="away-now">● вне страницы</span>' : s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
+                <td class="${s.leaves ? 'leaves' : 'muted'}">${esc(s.away_text)}</td>
                 <td>${esc(s.started)}</td>
                 <td><a href="${resultBase}${s.id}">ответы →</a></td>
             </tr>`;
@@ -151,6 +156,8 @@ tr.offline td { background: #fef2f2; }
         document.getElementById('rows').innerHTML = rows.join('');
         document.getElementById('countAll').textContent = state.students.length;
         document.getElementById('countOnline').textContent = state.online;
+        document.getElementById('countAway').textContent = state.away;
+        document.getElementById('awayNote').hidden = !state.away;
         document.getElementById('empty').hidden = state.students.length > 0;
         document.getElementById('pausedBanner').hidden = !state.paused;
         document.getElementById('doneBanner').hidden = !state.finished_all;

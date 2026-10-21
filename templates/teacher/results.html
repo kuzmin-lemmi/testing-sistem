@@ -60,6 +60,20 @@
             <p class="note">Тестирование ещё идёт: ответы меняются, итог — после завершения.</p>
             {% endif %}
 
+            {% if summary and summary.matches %}
+            <details class="matches" open>
+                <summary>⚠ Одинаковые неверные ответы: {{ summary.matches|length }} {{ plural(summary.matches|length, 'пара', 'пары', 'пар') }}</summary>
+                <ul>
+                    {% for m in summary.matches %}
+                    <li><strong>{{ m.students[0].last_name }} {{ m.students[0].first_name }}</strong> и
+                        <strong>{{ m.students[1].last_name }} {{ m.students[1].first_name }}</strong> —
+                        {{ m.numbers|length }} {{ plural(m.numbers|length, 'задание', 'задания', 'заданий') }} (№ {{ m.numbers|join(', ') }})</li>
+                    {% endfor %}
+                </ul>
+                <p class="muted">Одна и та же ошибка у двух учеников часто значит, что ответ списан. Ошибки, которые сделали многие, не учитываются. Решение за учителем.</p>
+            </details>
+            {% endif %}
+
             {% for group in groups %}
             {% if groups|length > 1 %}<h3 class="group-title">Вариант {{ group.label or '' }} — {{ group.variant_name }}</h3>{% endif %}
             <div class="matrix-wrap">
@@ -81,11 +95,11 @@
                             <td class="cell {% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}">
                                 <button type="button" class="task-open"
                                         aria-label="Задание {{ loop.index }}: {% if cell.correct %}верно{% elif cell.answered %}неверно{% else %}нет ответа{% endif %}"
-                                        title="Ответ: {{ cell.given or '—' }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}"
+                                        title="Ответ: {{ cell.given or '—' }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}{% if cell.time %} · время: {{ cell.time }}{% endif %}{% if cell.fast %} · ⚡ очень быстро{% endif %}"
                                         data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=cell.task.image_path) }}"
                                         data-expected="{{ format_expected(cell.task) }}" data-given="{{ cell.given }}"
                                         data-status="{% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}"
-                                        data-student="{{ row.student.last_name }} {{ row.student.first_name }}">{% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}</button>
+                                        data-student="{{ row.student.last_name }} {{ row.student.first_name }}">{% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}{% if cell.fast %}<sup class="fast">⚡</sup>{% endif %}</button>
                             </td>
                             {% endfor %}
                             <td class="num">{{ row.correct }} / {{ row.total }}</td>
@@ -174,6 +188,11 @@ th .task-open { font-weight: 700; color: var(--primary-dark); text-decoration: u
 .matrix .none { background: #f3f4f6; color: #6b7280; }
 .matrix .num { font-weight: 600; }
 .solved-row td { font-weight: 700; background: #f8fafc; }
+.matches { margin: 12px 0; padding: 10px 14px; border-radius: 10px; background: #fff7ed; border: 1px solid #fed7aa; }
+.matches summary { cursor: pointer; font-weight: 700; color: #9a3412; }
+.matches ul { margin: 8px 0; padding-left: 20px; }
+.matches p { font-size: 13px; margin: 0; }
+.fast { font-size: 10px; margin-left: 1px; }
 .away.warn { color: #92400e; background: #fef3c7; }
 .grade { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
 .grade.g5 { background: #d1fae5; color: #065f46; }

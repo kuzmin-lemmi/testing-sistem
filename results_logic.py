@@ -9,7 +9,9 @@ import re
 import zipfile
 from xml.sax.saxutils import escape
 
-from models import GradeCriteria, Student, TestSession, Variant
+from itertools import combinations
+
+from models import GradeCriteria, Student, TestSession, Variant, unify_letters
 
 
 def plural(number, one, few, many):
@@ -25,15 +27,18 @@ def plural(number, one, few, many):
     return many
 
 
+def format_duration(seconds):
+    """130 -> '2 мин 10 с', 7 -> '7 с'."""
+    minutes, sec = divmod(int(seconds or 0), 60)
+    return f'{minutes} мин {sec} с' if minutes else f'{sec} с'
+
+
 def format_away(student):
     """Уходы ученика со страницы теста: '—' если не уходил, иначе '3 раза · 2 мин 10 с'."""
     count = int(student.get('leave_count') or 0)
     if not count:
         return '—'
-    seconds = int(student.get('leave_seconds') or 0)
-    minutes, sec = divmod(seconds, 60)
-    spent = f'{minutes} мин {sec} с' if minutes else f'{sec} с'
-    return f'{count} {plural(count, "раз", "раза", "раз")} · {spent}'
+    return f'{count} {plural(count, "раз", "раза", "раз")} · {format_duration(student.get("leave_seconds"))}'
 
 
 def tasks_word(number):
@@ -121,6 +126,9 @@ def session_criteria(test_session):
     return {key: test_session.get(key) for key in ('grade_5_min', 'grade_4_min', 'grade_3_min')}
 
 
+FAST_SECONDS = 15
+
+
 def student_score(student, test_session=None, tasks=None):
     """Баллы ученика: только задания его варианта (ответы на другие задания не считаются)."""
     if test_session is None:
@@ -128,16 +136,23 @@ def student_score(student, test_session=None, tasks=None):
     if tasks is None:
         tasks = Variant.get_tasks(student['variant_id'])
     answers = {a['task_id']: a for a in Student.get_answers(student['id'])}
+    times = Student.get_task_times(student['id'])
     cells = []
     for task in tasks:
         answer = answers.get(task['id'])
         given = given_answers(task, answer)
+        seconds = times.get(task['id'], 0)
+        correct = bool(answer and answer.get('is_correct'))
         cells.append({
+            'seconds': seconds,
+            'time': format_duration(seconds) if seconds else '',
+            # верный ответ почти без времени на задании: возможно, ответ подсказали
+            'fast': correct and 0 < seconds < FAST_SECONDS,
             'task': task,
             'answer': answer,
             'given': format_answer(given, task),
             'answered': bool(given),
-            'correct': bool(answer and answer.get('is_correct')),
+            'correct': correct,
             'marked': answer.get('is_correct') if answer else None,
         })
     correct = sum(1 for cell in cells if cell['correct'])
@@ -180,8 +195,43 @@ def session_results(test_session):
         'students': len(scored),
         'average_percent': round(sum(r['percent'] for r in scored) / len(scored)) if scored else 0,
         'grades': {grade: sum(1 for r in scored if r['grade'] == grade) for grade in (5, 4, 3, 2)},
+        'matches': wrong_answer_matches(result),
     }
     return result, summary
+
+
+MATCH_MIN = 2  # столько одинаковых неверных ответов у пары уже подозрительно
+
+
+def _same_answer_key(text):
+    return unify_letters(' '.join(str(text).split()).casefold())
+
+
+def wrong_answer_matches(groups):
+    """Пары учеников с одинаковыми неверными ответами на MATCH_MIN и больше заданий.
+    Ошибку, которую сделали многие (больше четверти класса, но не меньше трёх), не считаем:
+    это типичная ошибка, а не списывание."""
+    wrong = []  # (ученик, {task_id: (ответ, номер задания у этого ученика)})
+    for group in groups:
+        for row in group['students']:
+            answers = {}
+            for number, cell in enumerate(row['cells'], 1):
+                if cell['answered'] and not cell['correct'] and not is_file_task(cell['task']):
+                    answers[cell['task']['id']] = (_same_answer_key(cell['given']), number)
+            wrong.append((row['student'], answers))
+    popularity = {}
+    for _, answers in wrong:
+        for task_id, (key, _) in answers.items():
+            popularity[(task_id, key)] = popularity.get((task_id, key), 0) + 1
+    common = max(2, len(wrong) // 4)
+    matches = []
+    for (first, a), (second, b) in combinations(wrong, 2):
+        numbers = sorted(a[task_id][1] for task_id in a.keys() & b.keys()
+                         if a[task_id][0] == b[task_id][0] and popularity[(task_id, a[task_id][0])] <= common)
+        if len(numbers) >= MATCH_MIN:
+            matches.append({'students': (first, second), 'numbers': numbers})
+    matches.sort(key=lambda m: -len(m['numbers']))
+    return matches
 
 
 def grade_minimums(total, percents):
