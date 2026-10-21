@@ -120,32 +120,69 @@ def _no_window():
     return subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
 
 
-def firewall_status():
-    """'ok' — для учеников открыт доступ, 'missing' — не открыт, 'unknown' — не Windows или не удалось проверить."""
-    if sys.platform != 'win32':
-        return 'unknown'
+PORT_CHECK_SECONDS = 60
+_port_check = {'open': None, 'at': 0.0, 'running': False}
+
+
+def _own_rule_exists():
+    """Своё правило: по коду возврата netsh (текст netsh бывает в UTF-8 или в CP866 — его не разбираем)."""
     try:
         result = subprocess.run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={FIREWALL_RULE}'],
                                 capture_output=True, timeout=8, creationflags=_no_window())
     except (OSError, subprocess.SubprocessError):
+        return None
+    return result.returncode == 0
+
+
+def _check_port_rules():
+    """Есть ли любое включённое правило, разрешающее входящие TCP на наш порт (например, созданное вручную).
+    Перебор правил занимает несколько секунд, поэтому идёт в фоне, а результат хранится минуту."""
+    script = (f"$r = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | "
+              f"Get-NetFirewallPortFilter -ErrorAction SilentlyContinue | "
+              f"Where-Object {{ $_.Protocol -eq 'TCP' -and $_.LocalPort -contains '{PORT}' }}; "
+              f"if ($r) {{ 'open' }} else {{ 'closed' }}")
+    try:
+        result = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True, timeout=60,
+                                creationflags=_no_window())
+        answer = (result.stdout or b'').decode('ascii', 'ignore').strip()
+        _port_check['open'] = {'open': True, 'closed': False}.get(answer)
+    except (OSError, subprocess.SubprocessError):
+        _port_check['open'] = None
+    finally:
+        _port_check['at'] = time.time()
+        _port_check['running'] = False
+
+
+def firewall_status():
+    """'ok' — для учеников открыт доступ, 'missing' — не открыт, 'unknown' — не Windows, не удалось проверить
+    или проверка ещё идёт (тогда предупреждение не показываем)."""
+    if sys.platform != 'win32':
         return 'unknown'
-    output = (result.stdout or b'').decode('cp866', 'replace') + (result.stdout or b'').decode('cp1251', 'replace')
-    if result.returncode == 0 and FIREWALL_RULE in output:
+    own = _own_rule_exists()
+    if own:
         return 'ok'
-    return 'missing'
+    if own is None:
+        return 'unknown'
+    if time.time() - _port_check['at'] > PORT_CHECK_SECONDS and not _port_check['running']:
+        _port_check['running'] = True
+        threading.Thread(target=_check_port_rules, daemon=True).start()
+    return {True: 'ok', False: 'missing'}.get(_port_check['open'], 'unknown')
 
 
 def open_firewall():
     """Добавляет правило брандмауэра Windows (только для своей локальной сети). Windows спросит разрешение у учителя."""
     if sys.platform != 'win32':
         return False
-    arguments = (f"advfirewall firewall add rule name='{FIREWALL_RULE}' dir=in action=allow protocol=TCP "
-                 f"localport={PORT} profile=any remoteip=localsubnet")
-    command = f'Start-Process netsh -ArgumentList "{arguments}" -Verb RunAs -WindowStyle Hidden -Wait'
+    # имя — в двойных кавычках отдельным аргументом: одинарные netsh не понимает и режет имя по пробелам
+    arguments = ', '.join(f"'{item}'" for item in (
+        'advfirewall', 'firewall', 'add', 'rule', f'name="{FIREWALL_RULE}"', 'dir=in', 'action=allow',
+        'protocol=TCP', f'localport={PORT}', 'profile=any', 'remoteip=localsubnet'))
+    command = f'Start-Process netsh -ArgumentList {arguments} -Verb RunAs -WindowStyle Hidden -Wait'
     try:
         subprocess.run(['powershell', '-NoProfile', '-Command', command], timeout=120, creationflags=_no_window())
     except (OSError, subprocess.SubprocessError):
         return False
+    _port_check['at'] = 0.0  # перепроверить
     return firewall_status() == 'ok'
 
 
