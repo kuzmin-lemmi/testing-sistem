@@ -243,6 +243,12 @@ def migrate_db():
     if not _table_has_column(conn, 'test_sessions', 'mask_answers'):
         cur.execute("ALTER TABLE test_sessions ADD COLUMN mask_answers BOOLEAN NOT NULL DEFAULT 0")
 
+    # 6d2) students: сколько раз ученик уходил со страницы теста и сколько секунд там пробыл
+    for column, kind in (('leave_count', 'INTEGER NOT NULL DEFAULT 0'), ('leave_seconds', 'INTEGER NOT NULL DEFAULT 0'),
+                         ('left_at', 'DATETIME')):
+        if not _table_has_column(conn, 'students', column):
+            cur.execute(f"ALTER TABLE students ADD COLUMN {column} {kind}")
+
     # 6e) variants: место в каталоге «Класс → Тема → Комплект» и время на работу
     for column, kind in (('grade', 'TEXT'), ('topic', 'TEXT'), ('kit', 'TEXT'), ('minutes', 'INTEGER')):
         if not _table_has_column(conn, 'variants', column):
@@ -1244,13 +1250,42 @@ class Student:
             conn.close()
 
     @staticmethod
+    def set_away(student_id, away):
+        """Ученик ушёл со страницы (away=True) или вернулся. Время считает сервер по своим часам."""
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            if away:
+                # повторный «уход» без возвращения не считается ещё раз
+                cursor.execute('''
+                    UPDATE students SET leave_count = leave_count + 1, left_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND left_at IS NULL
+                ''', (student_id,))
+            else:
+                cursor.execute('''
+                    UPDATE students
+                    SET leave_seconds = leave_seconds + MAX(0, CAST(strftime('%s','now') - strftime('%s', left_at) AS INTEGER)),
+                        left_at = NULL
+                    WHERE id = ? AND left_at IS NOT NULL
+                ''', (student_id,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
     def finish(student_id):
         conn = get_db()
         try:
             cursor = conn.cursor()
             cursor.execute('''
                 UPDATE students
-                SET status = 'finished', finished_at = CURRENT_TIMESTAMP
+                SET leave_seconds = leave_seconds + CASE WHEN left_at IS NULL THEN 0
+                        ELSE MAX(0, CAST(strftime('%s','now') - strftime('%s', left_at) AS INTEGER)) END,
+                    left_at = NULL,
+                    status = 'finished', finished_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (student_id,))
             conn.commit()
@@ -1267,7 +1302,10 @@ class Student:
             cursor = conn.cursor()
             cursor.execute('''
                 UPDATE students
-                SET status = 'finished', finished_at = CURRENT_TIMESTAMP
+                SET leave_seconds = leave_seconds + CASE WHEN left_at IS NULL THEN 0
+                        ELSE MAX(0, CAST(strftime('%s','now') - strftime('%s', left_at) AS INTEGER)) END,
+                    left_at = NULL,
+                    status = 'finished', finished_at = CURRENT_TIMESTAMP
                 WHERE session_id = ? AND status != 'finished'
             ''', (session_id,))
             conn.commit()

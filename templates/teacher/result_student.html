@@ -17,6 +17,7 @@
         <div class="muted">{{ score.percent }}%</div>
         {% if score.grade %}<div class="grade g{{ score.grade }}">«{{ score.grade }}»</div>{% endif %}
         <div class="muted times">
+            Уходы со страницы теста: <strong>{{ format_away(student) }}</strong>{% if student.left_at and student.status != 'finished' %} · <strong>сейчас вне страницы</strong>{% endif %}<br>
             Начал: {{ student.started_at|local_dt }}{% if student.finished_at %} · Закончил: {{ student.finished_at|local_dt }}{% endif %}
             {% if student.status != 'finished' %} · <strong>ещё решает</strong>{% endif %}
         </div>

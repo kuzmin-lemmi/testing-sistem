@@ -70,7 +70,7 @@
                             {% for task in group.tasks %}<th><button type="button" class="task-open" title="Показать задание {{ loop.index }}"
                                 data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=task.image_path) }}"
                                 data-expected="{{ format_expected(task) }}" data-solved="{{ group.solved[loop.index0] }}" data-total="{{ group.students|length }}">{{ loop.index }}</button></th>{% endfor %}
-                            <th>Верно</th><th>%</th><th>Оценка</th>
+                            <th>Верно</th><th>%</th><th>Оценка</th><th title="Сколько раз ученик уходил со страницы теста">Уходы</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -91,12 +91,13 @@
                             <td class="num">{{ row.correct }} / {{ row.total }}</td>
                             <td class="num">{{ row.percent }}</td>
                             <td class="num">{% if row.grade %}<span class="grade g{{ row.grade }}">{{ row.grade }}</span>{% endif %}</td>
+                            <td class="num away{% if row.student.leave_count %} warn{% endif %}">{{ format_away(row.student) }}</td>
                         </tr>
                         {% endfor %}
                         <tr class="solved-row">
                             <td class="name-col">Решили</td>
                             {% for n in group.solved %}<td>{{ n }}</td>{% endfor %}
-                            <td colspan="3"></td>
+                            <td colspan="4"></td>
                         </tr>
                     </tbody>
                 </table>
@@ -173,6 +174,7 @@ th .task-open { font-weight: 700; color: var(--primary-dark); text-decoration: u
 .matrix .none { background: #f3f4f6; color: #6b7280; }
 .matrix .num { font-weight: 600; }
 .solved-row td { font-weight: 700; background: #f8fafc; }
+.away.warn { color: #92400e; background: #fef3c7; }
 .grade { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
 .grade.g5 { background: #d1fae5; color: #065f46; }
 .grade.g4 { background: #dbeafe; color: #1e40af; }

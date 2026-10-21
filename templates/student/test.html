@@ -2903,7 +2903,10 @@
             const warning = empty
                 ? 'Не отвечено заданий: ' + empty + '.\n\n'
                 : 'Ответы даны на все задания.\n\n';
-            if (confirm(warning + 'Сдать работу? После сдачи изменить ответы будет нельзя. Оценка появится, когда учитель завершит тестирование.')) {
+            awaySuppressed = true;
+            const ok = confirm(warning + 'Сдать работу? После сдачи изменить ответы будет нельзя. Оценка появится, когда учитель завершит тестирование.');
+            awaySuppressed = false;
+            if (ok) {
                 document.getElementById('submitForm').submit();
             }
         }
@@ -2917,7 +2920,30 @@
             }
         }, 15000);
 
+        // Уход со страницы: другая вкладка, другое окно, свёрнутый браузер. Считает сервер.
+        let awayReported = false;
+        let awayTimer = null;
+        let awaySuppressed = false;  // системные окна браузера (confirm) уходом не считаются
+        function reportAway(away) {
+            if (awayReported === away) return;
+            awayReported = away;
+            const body = new Blob(['away=' + (away ? 1 : 0)], { type: 'application/x-www-form-urlencoded' });
+            if (!(navigator.sendBeacon && navigator.sendBeacon('{{ url_for("student_away") }}', body))) {
+                fetch('{{ url_for("student_away") }}', { method: 'POST', body: body, keepalive: true }).catch(() => {});
+            }
+        }
+        function checkAway() {
+            clearTimeout(awayTimer);
+            const away = document.visibilityState === 'hidden' || !document.hasFocus();
+            if (away && awaySuppressed) return;
+            // короткая задержка: переключение между полями и всплывающими окнами не должно считаться уходом
+            awayTimer = setTimeout(() => reportAway(away), away ? 400 : 0);
+        }
+        window.addEventListener('blur', checkAway);
+        window.addEventListener('focus', checkAway);
+
         document.addEventListener('visibilitychange', () => {
+            checkAway();
             if (document.visibilityState === 'hidden') {
                 flushAll();
             }

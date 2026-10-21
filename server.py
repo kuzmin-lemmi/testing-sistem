@@ -27,7 +27,7 @@ from models import remember_variant_file, known_variant_files
 import variant_folder
 import results_logic
 import catalog
-from results_logic import expected_answers, format_expected, format_given, plural, tasks_word
+from results_logic import expected_answers, format_away, format_expected, format_given, plural, tasks_word
 from student_shortcut import local_addresses, student_urls
 import activity
 from activity import log_event
@@ -425,7 +425,7 @@ def grade_percents():
 def inject_csrf_token():
     return {'csrf_token': _get_csrf_token, 'show_ege_banks': show_ege_banks(),
             'format_expected': format_expected, 'format_given': format_given, 'expected_answers': expected_answers,
-            'plural': plural, 'tasks_word': tasks_word}
+            'plural': plural, 'tasks_word': tasks_word, 'format_away': format_away}
 
 @app.before_request
 def track_student_computers():
@@ -2778,6 +2778,22 @@ def student_ping():
 
     return jsonify({'active': True, 'paused': bool(test_session.get('paused')), 'remaining_seconds': remaining,
                     'submitted': bool(student.get('submitted_at'))})
+
+
+@app.route('/test/away', methods=['POST'])
+def student_away():
+    """Страница теста потеряла фокус или скрылась (away=1) / ученик вернулся (away=0). Учитывается только в ходе работы."""
+    from flask import session
+    student = Student.get_by_id(session.get('student_id') or 0)
+    if not student:
+        return ('', 204)
+    test_session = TestSession.get_by_id(student['session_id'])
+    working = (student['status'] == 'in_progress' and test_session and test_session['status'] == 'active'
+               and not test_session.get('paused') and not student.get('submitted_at'))
+    away = request.values.get('away') == '1'
+    if working or not away:  # возврат учитываем всегда, чтобы не потерять время отсутствия
+        Student.set_away(student['id'], away)
+    return ('', 204)
 
 
 @app.route('/test/submit', methods=['POST'])

@@ -25,6 +25,17 @@ def plural(number, one, few, many):
     return many
 
 
+def format_away(student):
+    """Уходы ученика со страницы теста: '—' если не уходил, иначе '3 раза · 2 мин 10 с'."""
+    count = int(student.get('leave_count') or 0)
+    if not count:
+        return '—'
+    seconds = int(student.get('leave_seconds') or 0)
+    minutes, sec = divmod(seconds, 60)
+    spent = f'{minutes} мин {sec} с' if minutes else f'{sec} с'
+    return f'{count} {plural(count, "раз", "раза", "раз")} · {spent}'
+
+
 def tasks_word(number):
     return f'{number} {plural(number, "задание", "задания", "заданий")}'
 
@@ -262,7 +273,7 @@ def build_workbook(title, subtitle, groups):
         if len(groups) > 1:
             rows.append([(f'Вариант {group["label"] or ""}: {group["variant_name"]}'.replace(' :', ':'), _BOLD)])
         header = [('№', _HEADER), ('Ученик', _HEADER)] + [(n, _HEADER) for n in range(1, len(group['tasks']) + 1)]
-        header += [('Верно', _HEADER), ('Всего', _HEADER), ('%', _HEADER), ('Оценка', _HEADER)]
+        header += [('Верно', _HEADER), ('Всего', _HEADER), ('%', _HEADER), ('Оценка', _HEADER), ('Уходы', _HEADER)]
         rows.append(header)
         for number, row in enumerate(group['students'], 1):
             student = row['student']
@@ -275,13 +286,14 @@ def build_workbook(title, subtitle, groups):
                 else:
                     line.append(('—', _EMPTY))
             line += [(row['correct'], _BOLD), (row['total'], _BOLD), (row['percent'], _BOLD),
-                     (row['grade'] if row['grade'] is not None else '', _BOLD)]
+                     (row['grade'] if row['grade'] is not None else '', _BOLD),
+                     (format_away(student), _DEFAULT)]
             rows.append(line)
         if group['students']:
             rows.append([None, ('Решили', _BOLD)] + [(n, _BOLD) for n in group['solved']])
         rows.append([])
     frozen = 4 if len(groups) == 1 else 0
-    sheet1 = _sheet(rows, [5, 28] + [12] * width + [8, 8, 6, 8], frozen_rows=frozen, frozen_cols=2 if frozen else 0)
+    sheet1 = _sheet(rows, [5, 28] + [12] * width + [8, 8, 6, 8, 18], frozen_rows=frozen, frozen_cols=2 if frozen else 0)
 
     answers = [[('Вариант', _HEADER), ('№', _HEADER), ('Правильный ответ', _HEADER), ('Решили', _HEADER)]]
     for group in groups:
