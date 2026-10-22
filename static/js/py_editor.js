@@ -89,6 +89,7 @@
     }
 
     function seconds(value) {
+        if (value < 0.05) return '< 0,1 с';
         return (Math.round(value * 10) / 10).toLocaleString('ru-RU') + ' с';
     }
 
