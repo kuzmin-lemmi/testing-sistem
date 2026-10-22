@@ -171,8 +171,26 @@ pub fn start_watchdog(hwnd: isize, allowed: Vec<String>, proxy: EventLoopProxy<U
                 on_top = Some(top);
             }
         };
+        let own_desk = crate::desktop::is_child();
+        let mut left_desk = false;
         loop {
             sleep(300);
+            if own_desk {
+                // на экране обычный стол Windows (ушёл через Ctrl+Alt+Del → «Диспетчер задач»): вернуть стол теста.
+                // None — сам экран Ctrl+Alt+Del: туда программам доступа нет, ждём, куда ученик пойдёт дальше
+                match crate::desktop::input_desktop() {
+                    Some(name) if name != crate::desktop::DESK => {
+                        crate::desktop::return_to_test_desk();
+                        if !left_desk {
+                            send(&proxy, UserEvent::ForeignWindow("рабочий стол Windows".into()));
+                            left_desk = true;
+                        }
+                        continue;
+                    }
+                    Some(_) => left_desk = false,
+                    None => {}
+                }
+            }
             let front = unsafe { GetForegroundWindow() };
             if front.is_null() || front == hwnd {
                 set_on_top(true);

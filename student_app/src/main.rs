@@ -2,13 +2,18 @@
 //!
 //! - Открывает страницу теста с компьютера учителя (адрес — `server.txt` рядом с программой
 //!   или `--server http://192.168.1.10:8080`); пока система учителя не запущена, показывает «Подождите».
-//! - Перехватывает Win, Alt+Tab, Alt+Esc, Ctrl+Esc, Alt+F4, Ctrl+Shift+Esc.
+//! - Работает на **своём рабочем столе Windows** (как Safe Exam Browser): там нет проводника, панели задач
+//!   и меню «Пуск», поэтому Win и Alt+Tab увести некуда. Уход на обычный стол (Ctrl+Alt+Del → «Диспетчер
+//!   задач») сразу возвращается и виден учителю. `--no-desktop` — без своего стола.
+//! - Перехватывает Win, Alt+Tab, Alt+Esc, Ctrl+Esc, Alt+F4, Ctrl+Shift+Esc (запасной путь: пока впереди
+//!   окно WebView2, Windows часто не показывает нажатия перехватчикам).
 //! - Если на передний план вышла не разрешённая программа (браузер, проводник, диспетчер задач…),
 //!   возвращает окно теста и сообщает учителю. Разрешённые программы (Excel, Python…) — `allowed.txt`.
 //! - Ctrl+Alt+Del Windows не отдаёт ни одной программе: уход через него тоже виден учителю.
 //! - Выход для учителя: Ctrl+Alt+Shift+Q.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod desktop;
 mod lock;
 mod server;
 
@@ -22,6 +27,9 @@ use tao::window::{Fullscreen, WindowBuilder};
 use wry::WebViewBuilder;
 
 pub const APP_MARK: &str = "TestingStudentApp/0.1";
+
+/// Ctrl+Alt+Shift+Q на любой странице — выход (учитель).
+const EXIT_SCRIPT: &str = "window.addEventListener('keydown', e => {     if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); window.ipc.postMessage('exit'); } }, true);";
 
 /// Диагностика: `set STUDENT_APP_DEBUG=1` — программа пишет в stderr, что видит и что делает.
 pub fn debug_enabled() -> bool {
@@ -47,6 +55,9 @@ pub enum UserEvent {
 }
 
 fn main() -> wry::Result<()> {
+    if let Some(code) = desktop::launch() {
+        std::process::exit(code); // тест шёл на своём столе, экран уже возвращён
+    }
     let config = server::Config::load();
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -69,6 +80,16 @@ fn main() -> wry::Result<()> {
         // только страницы системы тестирования: ни поиска, ни других сайтов
         .with_navigation_handler(move |url| !url.starts_with("http") || url.starts_with(&origin))
         .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
+        // выход для учителя: нажатия точно доходят до страницы (до перехвата клавиатуры — не всегда)
+        .with_initialization_script(EXIT_SCRIPT)
+        .with_ipc_handler({
+            let proxy = proxy.clone();
+            move |request| {
+                if request.body() == "exit" {
+                    send(&proxy, UserEvent::Exit);
+                }
+            }
+        })
         .build(&window)?;
 
     lock::install_keyboard_hook(proxy.clone());
