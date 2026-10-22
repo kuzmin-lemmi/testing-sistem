@@ -1,7 +1,9 @@
 //! Программа ученика (прототип): окно теста на весь экран, из которого незаметно не уйти.
 //!
-//! - Открывает страницу теста с компьютера учителя (адрес — `server.txt` рядом с программой
-//!   или `--server http://192.168.1.10:8080`); пока система учителя не запущена, показывает «Подождите».
+//! - Первый запуск (с флешки) устанавливает программу в профиль ученика и кладёт на рабочий стол ярлык
+//!   «Тестирование» (`install.rs`).
+//! - Сама находит систему учителя в своей сети и запоминает её; несколько — ученик выбирает, адрес можно
+//!   ввести и вручную (`server.rs`). Пока система не запущена — «Подождите».
 //! - Работает на **своём рабочем столе Windows** (как Safe Exam Browser): там нет проводника, панели задач
 //!   и меню «Пуск», поэтому Win и Alt+Tab увести некуда. Уход на обычный стол (Ctrl+Alt+Del → «Диспетчер
 //!   задач») сразу возвращается и виден учителю. `--no-desktop` — без своего стола.
@@ -15,6 +17,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
+mod install;
 mod lock;
 mod server;
 
@@ -62,8 +65,10 @@ macro_rules! debug_log {
 pub enum UserEvent {
     /// Текст на странице ожидания.
     Status(String),
-    /// Система учителя ответила — открыть страницу теста.
-    ServerUp,
+    /// Нашли систему учителя (адрес «http://192.168.0.77:8080») — открыть страницу теста.
+    ServerUp(String),
+    /// Нашлось несколько систем — ученик выбирает (пустой список — убрать выбор).
+    Servers(Vec<server::Found>),
     /// На передний план вышла чужая программа (имя файла программы).
     ForeignWindow(String),
     /// Учитель нажал Ctrl+Alt+Shift+Q (или --exit-after): закрыть всегда.
@@ -73,6 +78,9 @@ pub enum UserEvent {
 }
 
 fn main() -> wry::Result<()> {
+    if let Some(code) = install::install_if_needed() {
+        std::process::exit(code); // отработала установленная копия
+    }
     if let Some(code) = desktop::launch() {
         std::process::exit(code); // тест шёл на своём столе, экран уже возвращён
     }
@@ -92,16 +100,23 @@ fn main() -> wry::Result<()> {
     // (/test/result: учитель завершил тестирование). По адресам, а не по текущей странице: «Назад» (Alt+←)
     // может показать из кеша страницу входа или ожидания, не спрашивая сервер.
     let in_test = Arc::new(AtomicBool::new(false));
-    let origin = config.origin.clone();
+    // адрес системы учителя — станет известен, когда найдём (до того — только страница ожидания)
+    let origin: Arc<Mutex<String>> = Arc::default();
+    let connected = Arc::new(AtomicBool::new(false));
+    let navigation_origin = origin.clone();
     let navigation_test = in_test.clone();
     let webview = WebViewBuilder::new()
-        .with_html(server::waiting_page(&config.origin))
+        .with_html(server::waiting_page())
         .with_user_agent(format!(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0 {APP_MARK}"
         ))
         .with_devtools(cfg!(debug_assertions))
         // только страницы системы тестирования: ни поиска, ни других сайтов
         .with_navigation_handler(move |url| {
+            let origin = navigation_origin.lock().unwrap().clone();
+            if origin.is_empty() {
+                return !url.starts_with("http"); // ещё не подключились: только страница ожидания
+            }
             if let Some(path) = url.strip_prefix(origin.as_str()) {
                 if path.starts_with("/test/exam") {
                     navigation_test.store(true, Ordering::Relaxed);
@@ -120,6 +135,8 @@ fn main() -> wry::Result<()> {
                 match request.body().as_str() {
                     "teacher-exit" => send(&proxy, UserEvent::Exit),
                     "exit" => send(&proxy, UserEvent::StudentExit),
+                    // выбрал систему из списка или ввёл адрес на странице ожидания
+                    body if body.starts_with("server:") => server::choose(body["server:".len()..].to_string(), proxy.clone()),
                     _ => {}
                 }
             }
@@ -128,7 +145,7 @@ fn main() -> wry::Result<()> {
 
     lock::install_keyboard_hook(proxy.clone());
     lock::start_watchdog(hwnd, config.allowed.clone(), proxy.clone());
-    server::wait_until_up(config.origin.clone(), proxy.clone());
+    server::start_finder(config.fixed.clone(), connected.clone(), proxy.clone());
     if let Some(seconds) = config.exit_after {
         // для проверки на своём компьютере: программа сама закроется и вернёт экран
         let proxy = proxy.clone();
@@ -151,9 +168,21 @@ fn main() -> wry::Result<()> {
                     js_string(&text)
                 ));
             }
-            Event::UserEvent(UserEvent::ServerUp) => {
+            Event::UserEvent(UserEvent::ServerUp(address)) => {
+                if connected.swap(true, Ordering::Relaxed) {
+                    return; // уже подключились (выбрал сам, пока шёл поиск)
+                }
+                debug_log!("подключаемся к {address}");
+                *origin.lock().unwrap() = address.clone();
                 test_open = true;
-                let _ = webview.load_url(&format!("{}/test", config.origin));
+                let _ = webview.load_url(&format!("{address}/test"));
+            }
+            Event::UserEvent(UserEvent::Servers(list)) => {
+                let items: Vec<String> = list
+                    .iter()
+                    .map(|f| format!("{{origin: {}, computer: {}}}", js_string(&f.origin), js_string(&f.computer)))
+                    .collect();
+                let _ = webview.evaluate_script(&format!("window.showServers && window.showServers([{}])", items.join(",")));
             }
             Event::UserEvent(UserEvent::ForeignWindow(app)) => {
                 debug_log!("впереди чужая программа: {app}");

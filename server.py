@@ -527,6 +527,12 @@ def student_alive():
     return 'ok', 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
+@app.route('/test/hello')
+def student_hello():
+    """Программа ученика ищет систему в сети: это именно система тестирования, и на каком она компьютере."""
+    return jsonify({'app': 'testing', 'computer': socket.gethostname()})
+
+
 @app.route('/test/state')
 def student_state():
     """Есть ли запущенное тестирование: страницы ученика следят за этим и обновляются сами."""
