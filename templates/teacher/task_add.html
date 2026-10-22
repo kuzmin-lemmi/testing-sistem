@@ -8,15 +8,15 @@
         <h1>➕ Добавить задачу</h1>
         <div class="header-actions">
             {% if mode == 'ege' %}
-            <a href="{{ url_for('tasks_bulk_upload', ege=ege_number) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
-            <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+            <a href="{{ url_for('teacher.tasks_bulk_upload', ege=ege_number) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
+            <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
             {% else %}
-            <a href="{{ url_for('tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">← Назад к списку</a>
+            <a href="{{ url_for('teacher.tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">← Назад к списку</a>
             {% endif %}
         </div>
     </div>
     
-    <form action="{{ url_for('task_add', mode=mode, class_id=class_id) }}" method="POST" enctype="multipart/form-data" class="task-form card" id="taskForm">
+    <form action="{{ url_for('teacher.task_add', mode=mode, class_id=class_id) }}" method="POST" enctype="multipart/form-data" class="task-form card" id="taskForm">
         <input type="hidden" name="mode" value="{{ mode }}">
         {% if mode == 'class' %}
         <div class="form-group">
@@ -99,9 +99,9 @@
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">💾 Сохранить задачу</button>
             {% if mode == 'ege' %}
-            <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">Отмена</a>
+            <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">Отмена</a>
             {% else %}
-            <a href="{{ url_for('tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">Отмена</a>
+            <a href="{{ url_for('teacher.tasks_list', mode='class', class_id=class_id) }}" class="btn btn-secondary">Отмена</a>
             {% endif %}
         </div>
     </form>

@@ -14,8 +14,8 @@
             {% if active_session.paused %}<div class="home-now-hint">⏸ На паузе</div>{% endif %}
         </div>
         <div class="home-actions">
-            <a href="{{ url_for('session_monitor', session_id=active_session.id) }}" class="btn btn-primary">👁 Мониторинг</a>
-            <a href="{{ url_for('sessions_list') }}" class="btn btn-secondary">Управление</a>
+            <a href="{{ url_for('teacher.session_monitor', session_id=active_session.id) }}" class="btn btn-primary">👁 Мониторинг</a>
+            <a href="{{ url_for('teacher.sessions_list') }}" class="btn btn-secondary">Управление</a>
         </div>
     </section>
     {% else %}
@@ -25,7 +25,7 @@
             <div class="home-now-name">Тестирование не запущено</div>
         </div>
         <div class="home-actions">
-            <a href="{{ url_for('session_new') }}" class="btn btn-success">▶️ Запустить тестирование</a>
+            <a href="{{ url_for('teacher.session_new') }}" class="btn btn-success">▶️ Запустить тестирование</a>
         </div>
     </section>
     {% endif %}
@@ -36,12 +36,12 @@
             <p class="home-big">{{ variants_count }}</p>
             <div class="home-actions">
                 <button type="button" class="btn btn-primary" onclick="document.getElementById('homeImportFile').click()">📥 Загрузить из LocalShot</button>
-                <form action="{{ url_for('variant_import_localshot') }}" method="POST" enctype="multipart/form-data" style="display:none;">
+                <form action="{{ url_for('variants.variant_import_localshot') }}" method="POST" enctype="multipart/form-data" style="display:none;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="file" name="file" id="homeImportFile" accept=".variant,.zip" onchange="if (this.files.length) this.form.submit()">
                 </form>
-                <a href="{{ url_for('variant_builder') }}" class="btn btn-secondary">📝 Новый вариант</a>
-                <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">Все варианты</a>
+                <a href="{{ url_for('variants.variant_builder') }}" class="btn btn-secondary">📝 Новый вариант</a>
+                <a href="{{ url_for('variants.variants_list') }}" class="btn btn-secondary">Все варианты</a>
             </div>
         </section>
 
@@ -49,7 +49,7 @@
             <h2>📊 Результаты</h2>
             <p class="home-big">{{ sessions_count }}</p>
             <div class="home-actions">
-                <a href="{{ url_for('results_list') }}" class="btn btn-secondary">Открыть результаты</a>
+                <a href="{{ url_for('teacher.results_list') }}" class="btn btn-secondary">Открыть результаты</a>
             </div>
         </section>
     </div>
@@ -69,7 +69,7 @@
             </div>
         </div>
         <div class="home-row">
-            <a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать ярлык для учеников</a>
+            <a href="{{ url_for('system.student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать ярлык для учеников</a>
             <span class="home-muted">Скопируйте его на рабочие столы учеников — один раз.</span>
         </div>
         <details class="home-details">
@@ -92,10 +92,10 @@
             {% else %}<li class="ev-info">Пока ничего не происходило.</li>{% endfor %}
         </ul>
         <div class="home-actions" style="margin-top:12px;">
-            <a href="{{ url_for('system_log') }}" class="btn btn-small btn-outline">📄 Скачать журнал для разработчика</a>
+            <a href="{{ url_for('system.system_log') }}" class="btn btn-small btn-outline">📄 Скачать журнал для разработчика</a>
             <button type="button" class="btn btn-small btn-outline" onclick="stopSystem()">⏹ Остановить систему</button>
         </div>
-        <form id="stopForm" action="{{ url_for('system_stop') }}" method="POST" style="display:none;"></form>
+        <form id="stopForm" action="{{ url_for('system.system_stop') }}" method="POST" style="display:none;"></form>
     </section>
 </div>
 
@@ -138,7 +138,7 @@ function copyUrl(button) {
     });
 }
 
-const statusUrl = {{ url_for('system_status')|tojson }};
+const statusUrl = {{ url_for('system.system_status')|tojson }};
 function esc(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function refreshStatus() {
     const dot = document.getElementById('statusDot'), text = document.getElementById('statusText');
@@ -161,7 +161,7 @@ setInterval(refreshStatus, 5000);
 async function openFirewall(button) {
     button.disabled = true; button.textContent = 'Ждём ответа Windows…';
     try {
-        const r = await fetch({{ url_for('system_firewall')|tojson }}, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
+        const r = await fetch({{ url_for('system.system_firewall')|tojson }}, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
         const d = await r.json();
         if (d.ok) { document.getElementById('firewallWarn').hidden = true; }
         else { button.textContent = 'Не получилось — попробуйте ещё раз'; button.disabled = false; return; }

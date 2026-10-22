@@ -118,4 +118,4 @@ cargo build --release
   если он хоть раз ответил медленно) и слежка за окном на переднем плане.
 - `src/server.rs` — адрес учителя, разрешённые программы, ожидание запуска системы.
 
-Сервер узнаёт программу по `TestingStudentApp/0.1` в User-Agent (`server.py`, `_from_student_app`).
+Сервер узнаёт программу по `TestingStudentApp/0.1` в User-Agent (`blueprints/student.py`, `_from_student_app`).

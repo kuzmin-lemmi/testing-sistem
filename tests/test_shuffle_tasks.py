@@ -16,6 +16,7 @@ if 'EGE_DATA_DIR' not in os.environ:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402
+import blueprints.common  # noqa: E402
 from models import Student, Task, TestSession, Variant  # noqa: E402
 
 COUNT = 12
@@ -42,7 +43,7 @@ class ShuffleTests(unittest.TestCase):
 
     def order(self, student):
         session = TestSession.get_by_id(student['session_id'])
-        return [t['id'] for t in server._tasks_for_student(Student.get_by_id(student['id']), session)]
+        return [t['id'] for t in blueprints.common._tasks_for_student(Student.get_by_id(student['id']), session)]
 
     def join(self, session_id, first):
         server.app.test_client().post('/test/start', data={'first_name': first, 'last_name': 'Тестов'})

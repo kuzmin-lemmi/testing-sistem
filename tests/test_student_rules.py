@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 import config  # noqa: E402
 import server  # noqa: E402
+import blueprints.student  # noqa: E402
 from models import Student, Task, TestSession, Variant, get_db  # noqa: E402
 
 PC_1 = {'REMOTE_ADDR': '192.168.1.11'}
@@ -125,7 +126,7 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(self.join(self.pupil, PC_1).headers['Location'], '/test/exam')
 
     def test_can_continue_on_another_computer_after_the_old_window_is_closed(self):
-        shift_student(self.student['id'], 'last_seen_at', server.RELOGIN_BLOCK_SECONDS + 5)
+        shift_student(self.student['id'], 'last_seen_at', blueprints.student.RELOGIN_BLOCK_SECONDS + 5)
         other = server.app.test_client()
         self.assertEqual(self.join(other, PC_2).headers['Location'], '/test/exam')
 

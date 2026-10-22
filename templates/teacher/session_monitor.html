@@ -25,24 +25,24 @@
 
     <section class="card monitor-controls">
         {% if session.paused %}
-        <form action="{{ url_for('session_resume', session_id=session.id) }}" method="POST" class="inline-form">
+        <form action="{{ url_for('teacher.session_resume', session_id=session.id) }}" method="POST" class="inline-form">
             <button type="submit" class="btn btn-primary">▶️ Продолжить</button>
         </form>
         {% else %}
-        <form action="{{ url_for('session_pause', session_id=session.id) }}" method="POST" class="inline-form">
+        <form action="{{ url_for('teacher.session_pause', session_id=session.id) }}" method="POST" class="inline-form">
             <button type="submit" class="btn btn-warning">⏸ Пауза</button>
         </form>
         {% endif %}
-        <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+        <form action="{{ url_for('teacher.session_extend', session_id=session.id) }}" method="POST" class="inline-form">
             <input type="hidden" name="minutes" value="5">
             <button type="submit" class="btn btn-secondary">+5 мин</button>
         </form>
-        <form action="{{ url_for('session_extend', session_id=session.id) }}" method="POST" class="inline-form">
+        <form action="{{ url_for('teacher.session_extend', session_id=session.id) }}" method="POST" class="inline-form">
             <input type="hidden" name="minutes" value="10">
             <button type="submit" class="btn btn-secondary">+10 мин</button>
         </form>
         <span class="spacer"></span>
-        <form action="{{ url_for('session_close', session_id=session.id) }}" method="POST" class="inline-form"
+        <form action="{{ url_for('teacher.session_close', session_id=session.id) }}" method="POST" class="inline-form"
               onsubmit="return confirm('Завершить тестирование?\n\nОтветы больше не принимаются, ученики сразу увидят свои оценки и правильные ответы.')">
             <button type="submit" class="btn btn-danger btn-large">⏹ Завершить тестирование</button>
         </form>
@@ -114,8 +114,8 @@ tr.away td { background: #fffbeb; }
 
 <script>
 (function () {
-    const liveUrl = {{ url_for('session_live', session_id=session.id)|tojson }};
-    const resultBase = {{ url_for('result_student', student_id=0)|tojson }}.replace(/0$/, '');
+    const liveUrl = {{ url_for('teacher.session_live', session_id=session.id)|tojson }};
+    const resultBase = {{ url_for('teacher.result_student', student_id=0)|tojson }}.replace(/0$/, '');
     let state = {{ live|tojson }};
     let remaining = state.remaining;
     let receivedAt = Date.now();
@@ -174,7 +174,7 @@ tr.away td { background: #fffbeb; }
         document.getElementById('readyRow').hidden = !state.ready_count;
     }
 
-    const actionBase = {{ url_for('session_accept_work', session_id=session.id, student_id=0)|tojson }}.replace(/0\/accept$/, '');
+    const actionBase = {{ url_for('teacher.session_accept_work', session_id=session.id, student_id=0)|tojson }}.replace(/0\/accept$/, '');
     async function post(url) {
         try {
             await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
@@ -188,7 +188,7 @@ tr.away td { background: #fffbeb; }
     };
     window.acceptReady = function () {
         if (confirm('Принять работы у всех, кто ответил на все задания? У них на экране появится заставка «Работа сдана».')) {
-            post({{ url_for('session_accept_ready', session_id=session.id)|tojson }});
+            post({{ url_for('teacher.session_accept_ready', session_id=session.id)|tojson }});
         }
     };
 

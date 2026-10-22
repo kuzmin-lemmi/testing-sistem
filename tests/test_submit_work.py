@@ -17,6 +17,7 @@ if 'EGE_DATA_DIR' not in os.environ:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402
+import blueprints.teacher  # noqa: E402
 from models import Student, Task, TestSession, Variant  # noqa: E402
 
 PUPIL = {'REMOTE_ADDR': '192.168.0.31'}
@@ -92,10 +93,10 @@ class SubmitWorkTests(unittest.TestCase):
         other = server.app.test_client()
         other.post('/test/start', data={'first_name': 'Борис', 'last_name': 'Сидоров'}, environ_base={'REMOTE_ADDR': '192.168.0.32'})
         self.save(self.t1, '7'); self.save(self.t2, '1')       # Анна ответила на всё
-        state = server._monitor_state(TestSession.get_by_id(self.session_id))
+        state = blueprints.teacher._monitor_state(TestSession.get_by_id(self.session_id))
         self.assertEqual(state['ready_count'], 1)
         self.assertEqual(self.teacher_post(f'/sessions/{self.session_id}/accept-ready').get_json()['accepted'], 1)
-        state = server._monitor_state(TestSession.get_by_id(self.session_id))
+        state = blueprints.teacher._monitor_state(TestSession.get_by_id(self.session_id))
         self.assertEqual(state['submitted_count'], 1)
         borya = [s for s in state['students'] if s['name'].startswith('Сидоров')][0]
         self.assertFalse(borya['submitted'])

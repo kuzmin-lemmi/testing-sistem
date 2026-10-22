@@ -13,7 +13,7 @@
             <h1>📝 Новый вариант</h1>
             {% endif %}
         </div>
-        <a href="{% if variant %}{{ url_for('variant_view', variant_id=variant.id) }}{% else %}{{ url_for('variants_list') }}{% endif %}" class="btn btn-secondary">← Назад</a>
+        <a href="{% if variant %}{{ url_for('variants.variant_view', variant_id=variant.id) }}{% else %}{{ url_for('variants.variants_list') }}{% endif %}" class="btn btn-secondary">← Назад</a>
     </div>
 
     {% if not variant %}
@@ -276,7 +276,7 @@ kbd { background: #f1f5f9; border: 1px solid #cbd5e1; border-bottom-width: 2px; 
         button.disabled = true;
         button.textContent = 'Сохраняем…';
         try {
-            const response = await fetch({{ url_for('variant_builder', variant_id=variant.id if variant else None)|tojson }}, {
+            const response = await fetch({{ url_for('variants.variant_builder', variant_id=variant.id if variant else None)|tojson }}, {
                 method: 'POST', body: data, headers: {'X-CSRFToken': window.CSRF_TOKEN}});
             const result = await response.json().catch(() => ({}));
             if (response.ok && result.redirect) { tasks.length = 0; location.href = result.redirect; return; }

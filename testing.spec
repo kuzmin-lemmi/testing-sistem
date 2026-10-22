@@ -5,7 +5,9 @@ a = Analysis(
     pathex=['.'],
     datas=[('templates', 'templates'), ('static/css', 'static/css'), ('static/js', 'static/js')],
     hiddenimports=['pystray._win32', 'PIL._tkinter_finder', 'activity', 'server', 'models', 'config',
-                   'results_logic', 'localshot_import', 'student_shortcut'],
+                   'results_logic', 'localshot_import', 'student_shortcut',
+                   'blueprints.common', 'blueprints.system', 'blueprints.teacher', 'blueprints.variants',
+                   'blueprints.student'],
     excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas'],
 )
 pyz = PYZ(a.pure)

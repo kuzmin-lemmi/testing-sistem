@@ -6,7 +6,7 @@
 <div class="import-page">
     <div class="page-header">
         <h1>📥 Импорт банка задач</h1>
-        <a href="{{ url_for('tasks_list') }}" class="btn btn-secondary">← Назад к задачам</a>
+        <a href="{{ url_for('teacher.tasks_list') }}" class="btn btn-secondary">← Назад к задачам</a>
     </div>
     
     <div class="import-card card">
@@ -32,7 +32,7 @@
             </div>
         </div>
         
-        <form action="{{ url_for('tasks_import') }}" method="POST" enctype="multipart/form-data" class="import-form">
+        <form action="{{ url_for('teacher.tasks_import') }}" method="POST" enctype="multipart/form-data" class="import-form">
             <div class="dropzone" id="dropzone">
                 <div class="dropzone-content">
                     <span class="dropzone-icon">📁</span>

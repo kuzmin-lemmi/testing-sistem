@@ -17,7 +17,7 @@ if 'EGE_DATA_DIR' not in os.environ:
     atexit.register(shutil.rmtree, _DATA, True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-import server  # noqa: E402
+import server  # noqa: E402, F401 — при импорте создаётся база
 from models import Answer, Student, Task, TestSession, Variant, get_db  # noqa: E402
 
 

@@ -7,14 +7,14 @@
     <div class="page-header">
         <h1>Задача #{{ task.id }}</h1>
         <div class="header-actions">
-            <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-secondary">✏️ Редактировать</a>
-            <a href="{{ url_for('tasks_list', mode=('class' if task.task_scope == 'class' else 'ege'), class_id=task.class_id, ege=task.ege_number) }}" class="btn btn-secondary">← К списку</a>
+            <a href="{{ url_for('teacher.task_edit', task_id=task.id) }}" class="btn btn-secondary">✏️ Редактировать</a>
+            <a href="{{ url_for('teacher.tasks_list', mode=('class' if task.task_scope == 'class' else 'ege'), class_id=task.class_id, ege=task.ege_number) }}" class="btn btn-secondary">← К списку</a>
         </div>
     </div>
     
     <div class="task-details card">
         <div class="task-image-large">
-            <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача {{ task.id }}">
+            <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задача {{ task.id }}">
         </div>
         
         <div class="task-meta">
@@ -53,7 +53,7 @@
             <div class="meta-row">
                 <span class="meta-label">Прикреплённый файл:</span>
                 <span class="meta-value">
-                    <a href="{{ url_for('serve_attachment', filename=task.attachment_path) }}" download="{{ task.attachment_name }}">
+                    <a href="{{ url_for('system.serve_attachment', filename=task.attachment_path) }}" download="{{ task.attachment_name }}">
                         📎 {{ task.attachment_name }}
                     </a>
                 </span>

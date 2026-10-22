@@ -18,9 +18,9 @@ if 'EGE_DATA_DIR' not in os.environ:
     atexit.register(shutil.rmtree, os.environ['EGE_DATA_DIR'], True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-import config  # noqa: E402
 import results_logic  # noqa: E402
 import server  # noqa: E402
+import blueprints.common  # noqa: E402
 from models import (Student, Task, TestSession, Variant, backup_database, get_setting, list_backups,  # noqa: E402
                     set_setting)
 
@@ -118,7 +118,7 @@ class MonitorTests(Base):
         session_id = self.run_test({'Анна': [None, None, None]})
         student = TestSession.get_students(session_id)[0]
         state = self.client.get(f'/sessions/{session_id}/live').get_json()
-        self.assertEqual(state['students'][0]['started'], server.to_local_dt(student['started_at'])[11:16])
+        self.assertEqual(state['students'][0]['started'], blueprints.common.to_local_dt(student['started_at'])[11:16])
 
     def test_close_opens_results_and_closed_monitor_redirects(self):
         session_id = self.run_test({'Анна': [None, None, None]})
@@ -277,21 +277,21 @@ class SettingsTests(Base):
     def test_percents_and_toggles(self):
         self.post('/settings', grade_5_percent='90', grade_4_percent='70', grade_3_percent='50',
                   show_ege_banks='1', show_access_code='1')
-        self.assertEqual(server.grade_percents(), (90, 70, 50))
-        self.assertTrue(server.show_ege_banks())
+        self.assertEqual(blueprints.common.grade_percents(), (90, 70, 50))
+        self.assertTrue(blueprints.common.show_ege_banks())
         self.assertIn('Банк задач', self.client.get('/').get_data(as_text=True))
         self.assertIn('name="use_code"', self.client.get('/sessions/new').get_data(as_text=True))
         self.post('/settings', grade_5_percent='90', grade_4_percent='70', grade_3_percent='50')
-        self.assertFalse(server.show_ege_banks())
+        self.assertFalse(blueprints.common.show_ege_banks())
 
     def test_bad_percents_are_refused(self):
         self.post('/settings', grade_5_percent='50', grade_4_percent='70', grade_3_percent='40')
-        self.assertEqual(server.grade_percents(), server.DEFAULT_GRADE_PERCENTS)
+        self.assertEqual(blueprints.common.grade_percents(), blueprints.common.DEFAULT_GRADE_PERCENTS)
 
     def test_backup(self):
         folder = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, folder, True)
-        with patch('server.BACKUPS_DIR', folder):
+        with patch('blueprints.system.BACKUPS_DIR', folder):
             self.post('/settings/backup')
             page = self.client.get('/settings').get_data(as_text=True)
         (item,) = list_backups(folder)

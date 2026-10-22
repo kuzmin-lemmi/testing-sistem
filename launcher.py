@@ -96,13 +96,14 @@ def main():
         import activity
         activity.setup_logging()
         import server
+        from models import TestSession
         from werkzeug.serving import make_server
         server.prepare_startup()
         httpd = make_server(config.HOST, config.PORT, server.app, threaded=True)
 
         def has_active_test():
             try:
-                return bool(server.TestSession.get_active())
+                return bool(TestSession.get_active())
             except Exception:
                 return False
 

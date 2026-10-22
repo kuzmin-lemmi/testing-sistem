@@ -16,6 +16,8 @@ if 'EGE_DATA_DIR' not in os.environ:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402
+import blueprints.common  # noqa: E402
+import blueprints.teacher  # noqa: E402
 from models import Student, Task, TestSession, Variant, get_db  # noqa: E402
 
 
@@ -50,7 +52,7 @@ class StudentTimerTests(unittest.TestCase):
         return Student.get_by_session_and_name(self.session_id, first, last)
 
     def remaining(self, student):
-        return server._calc_remaining_seconds(Student.get_by_id(student['id']), TestSession.get_by_id(self.session_id))
+        return blueprints.common._calc_remaining_seconds(Student.get_by_id(student['id']), TestSession.get_by_id(self.session_id))
 
     def test_late_student_gets_full_time(self):
         student = self.join()
@@ -72,11 +74,11 @@ class StudentTimerTests(unittest.TestCase):
         self.assertAlmostEqual(self.remaining(student), 17 * 60, delta=2)
 
     def test_teacher_timer_waits_for_students(self):
-        state = server._monitor_state(TestSession.get_by_id(self.session_id))
+        state = blueprints.teacher._monitor_state(TestSession.get_by_id(self.session_id))
         self.assertTrue(state['waiting'])
         self.assertEqual(state['remaining'], 20 * 60)
         self.join()
-        state = server._monitor_state(TestSession.get_by_id(self.session_id))
+        state = blueprints.teacher._monitor_state(TestSession.get_by_id(self.session_id))
         self.assertFalse(state['waiting'])
 
 

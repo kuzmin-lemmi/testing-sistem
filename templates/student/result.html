@@ -94,7 +94,7 @@
                 <span class="mark">{% if state == 'ok' %}✓ Верно{% elif state == 'wait' %}⏳ Проверит учитель{% else %}✗ Неверно{% endif %}</span>
             </div>
             <div class="task-image">
-                <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy" onclick="zoom(this)">
+                <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy" onclick="zoom(this)">
             </div>
             <dl class="answers">
                 <dt>Ваш ответ</dt>

@@ -6,17 +6,17 @@
 <div class="lp">
     <header class="lp-head">
         <h1>Запустить тестирование</h1>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary btn-small">← Назад</a>
+        <a href="{{ url_for('system.index') }}" class="btn btn-secondary btn-small">← Назад</a>
     </header>
 
     {% if not variants and not show_ege_banks %}
     <section class="lp-card lp-empty">
         <h2>Вариантов пока нет</h2>
         <p>Загрузите варианты на странице «Варианты» — кнопкой «Загрузить новые» из папки или файлами .variant.</p>
-        <a href="{{ url_for('variants_list') }}" class="btn btn-primary">Перейти к вариантам</a>
+        <a href="{{ url_for('variants.variants_list') }}" class="btn btn-primary">Перейти к вариантам</a>
     </section>
     {% else %}
-    <form action="{{ url_for('session_new') }}" method="POST" id="launchForm">
+    <form action="{{ url_for('teacher.session_new') }}" method="POST" id="launchForm">
         <div class="lp-grid">
         <section class="lp-card lp-variants" aria-label="Выбор варианта">
             <div class="lp-variants-head">

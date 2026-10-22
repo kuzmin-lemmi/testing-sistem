@@ -14,19 +14,19 @@
 <body>
     <nav class="navbar">
         <div class="nav-brand">
-            <a href="{{ url_for('index') }}">
+            <a href="{{ url_for('system.index') }}">
                 <span style="font-size: 1.2em;">📚</span> Тестирование
             </a>
         </div>
         <div class="nav-links">
-            <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>🏠 Главная</a>
+            <a href="{{ url_for('system.index') }}" {% if request.endpoint == 'system.index' %}class="active"{% endif %}>🏠 Главная</a>
             {% if show_ege_banks %}
-            <a href="{{ url_for('tasks_list') }}" {% if 'task' in request.endpoint %}class="active"{% endif %}>📝 Банк задач</a>
+            <a href="{{ url_for('teacher.tasks_list') }}" {% if 'task' in request.endpoint %}class="active"{% endif %}>📝 Банк задач</a>
             {% endif %}
-            <a href="{{ url_for('variants_list') }}" {% if 'variant' in request.endpoint %}class="active"{% endif %}>📋 Варианты</a>
-            <a href="{{ url_for('sessions_list') }}" {% if 'session' in request.endpoint %}class="active"{% endif %}>▶️ Тестирование</a>
-            <a href="{{ url_for('results_list') }}" {% if 'result' in request.endpoint %}class="active"{% endif %}>📊 Результаты</a>
-            <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>⚙️ Настройки</a>
+            <a href="{{ url_for('variants.variants_list') }}" {% if 'variant' in request.endpoint %}class="active"{% endif %}>📋 Варианты</a>
+            <a href="{{ url_for('teacher.sessions_list') }}" {% if 'session' in request.endpoint %}class="active"{% endif %}>▶️ Тестирование</a>
+            <a href="{{ url_for('teacher.results_list') }}" {% if 'result' in request.endpoint %}class="active"{% endif %}>📊 Результаты</a>
+            <a href="{{ url_for('system.settings') }}" {% if request.endpoint == 'system.settings' %}class="active"{% endif %}>⚙️ Настройки</a>
         </div>
     </nav>
 
