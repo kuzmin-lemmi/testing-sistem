@@ -113,12 +113,15 @@ fn process_name(pid: u32) -> Option<String> {
 }
 
 /// Меню «Пуск», поиск, центр уведомлений.
-const SHELL_MENUS: &[&str] = &["searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe"];
+/// searchhost — Windows 11; searchapp и searchui — меню «Пуск» и поиск Windows 10 (новые и старые сборки).
+const SHELL_MENUS: &[&str] = &[
+    "searchhost.exe", "searchapp.exe", "searchui.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe",
+];
 
 /// Как назвать программу для учителя.
 fn friendly_name(name: &str) -> String {
     match name {
-        "searchhost.exe" | "startmenuexperiencehost.exe" => "меню «Пуск»".into(),
+        "searchhost.exe" | "searchapp.exe" | "searchui.exe" | "startmenuexperiencehost.exe" => "меню «Пуск»".into(),
         "shellexperiencehost.exe" => "панель уведомлений".into(),
         "taskmgr.exe" => "диспетчер задач".into(),
         "explorer.exe" => "проводник или рабочий стол".into(),
