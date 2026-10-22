@@ -75,6 +75,9 @@
 .ready-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #ecfdf5; border: 1px solid #10b981; border-radius: 10px; padding: 10px 14px; margin: 6px 0 12px; }
 .work-state { white-space: nowrap; }
 .work-done { color: #047857; font-weight: 600; }
+.work-finished { color: #475569; font-weight: 600; }
+.btn-finish { color: #b91c1c; border-color: #fecaca; }
+tr.finished td { background: #f8fafc; color: #64748b; }
 .work-ready { color: #b45309; font-weight: 600; }
 .btn-tiny { padding: 3px 8px; font-size: 13px; border-radius: 6px; margin-left: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
 .btn-tiny:hover { background: #f1f5f9; }
@@ -139,15 +142,18 @@ tr.away td { background: #fffbeb; }
     function drawRows() {
         const rows = state.students.map(s => {
             const percent = s.total ? Math.round(100 * s.answered / s.total) : 0;
-            const offline = !s.online && s.remaining > 0 && !s.submitted;
-            const work = s.submitted
-                ? `<span class="work-done">🔒 сдал в ${esc(s.submitted)}</span><button class="btn-tiny" onclick="studentAction(${s.id}, 'return')" title="Вернуть к решению">🔓 вернуть</button>`
-                : `${s.all_answered ? '<span class="work-ready">ответил на всё</span>' : '<span class="muted">решает</span>'}<button class="btn-tiny" onclick="studentAction(${s.id}, 'accept')" title="Принять работу: у ученика заставка, ответы не меняются">🔒 принять</button>`;
-            return `<tr class="${offline ? 'offline' : ''}${s.away ? ' away' : ''}${s.submitted ? ' submitted' : ''}">
+            const offline = !s.online && s.remaining > 0 && !s.submitted && !s.finished;
+            const finishButton = `<button class="btn-tiny btn-finish" onclick="studentAction(${s.id}, 'finish')" title="Завершить тест только этому ученику: у него сразу оценка, остальные продолжают">⏹ завершить</button>`;
+            const work = s.finished
+                ? '<span class="work-finished">⏹ тест завершён</span>'
+                : s.submitted
+                ? `<span class="work-done">🔒 сдал в ${esc(s.submitted)}</span><button class="btn-tiny" onclick="studentAction(${s.id}, 'return')" title="Вернуть к решению">🔓 вернуть</button>${finishButton}`
+                : `${s.all_answered ? '<span class="work-ready">ответил на всё</span>' : '<span class="muted">решает</span>'}<button class="btn-tiny" onclick="studentAction(${s.id}, 'accept')" title="Принять работу: у ученика заставка, ответы не меняются">🔒 принять</button>${finishButton}`;
+            return `<tr class="${offline ? 'offline' : ''}${s.away ? ' away' : ''}${s.submitted ? ' submitted' : ''}${s.finished ? ' finished' : ''}">
                 <td><strong>${esc(s.name)}</strong>${s.variant ? `<span class="variant-tag">В${esc(s.variant)}</span>` : ''}${s.in_app ? '<span class="app-tag" title="Программа ученика: экран заперт">🔒</span>' : ''}</td>
                 <td><div class="progress"><div class="progress-bar ${s.answered === s.total ? 'full' : ''}"><div style="width:${percent}%"></div></div>
                     ${s.answered} из ${s.total}${s.uploads ? ` · 📁 ${s.uploads}` : ''}</div></td>
-                <td>${s.submitted ? '<span class="muted">—</span>' : s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
+                <td>${s.submitted || s.finished ? '<span class="muted">—</span>' : s.remaining > 0 ? clock(s.remaining) : '<span class="muted">вышло</span>'}</td>
                 <td class="work-state">${work}</td>
                 <td>${s.away ? '<span class="away-now">● вне страницы</span>' : s.online ? '<span class="online-yes">● в сети</span>' : `<span class="online-no">● не в сети</span>${s.last_seen ? ` <span class="muted">с ${esc(s.last_seen)}</span>` : ''}`}</td>
                 <td class="${s.leaves ? 'leaves' : 'muted'}">${esc(s.away_text)}${s.foreign_app ? `<div class="foreign-app">открывал: ${esc(s.foreign_app)}</div>` : ''}</td>
@@ -177,6 +183,7 @@ tr.away td { background: #fffbeb; }
     }
     window.studentAction = function (id, action) {
         if (action === 'return' && !confirm('Вернуть ученика к решению? Он снова увидит задания и сможет менять ответы.')) return;
+        if (action === 'finish' && !confirm('Завершить тест этому ученику? Он сразу увидит оценку; войти снова и менять ответы будет нельзя. Остальные продолжают решать.')) return;
         post(actionBase + id + '/' + action);
     };
     window.acceptReady = function () {

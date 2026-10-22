@@ -2382,6 +2382,7 @@ def _monitor_state(session):
             'leaves': int(st.get('leave_count') or 0),
             'away_text': format_away(st),
             'in_app': bool(st.get('in_app')),
+            'finished': st.get('status') == 'finished',
             'foreign_app': st.get('foreign_app') or '',
         })
     students.sort(key=lambda s: s['name'].casefold())
@@ -2396,9 +2397,9 @@ def _monitor_state(session):
         'students': students,
         'online': sum(1 for s in students if s['online']),
         'away': sum(1 for s in students if s['away']),
-        'finished_all': bool(students) and all(s['remaining'] <= 0 or s['submitted'] for s in students),
+        'finished_all': bool(students) and all(s['remaining'] <= 0 or s['submitted'] or s['finished'] for s in students),
         'submitted_count': sum(1 for s in students if s['submitted']),
-        'ready_count': sum(1 for s in students if s['all_answered'] and not s['submitted']),
+        'ready_count': sum(1 for s in students if s['all_answered'] and not s['submitted'] and not s['finished']),
     }
 
 
@@ -2426,6 +2427,17 @@ def session_return_work(session_id, student_id):
     if student and student.get('submitted_at'):
         Student.set_submitted(student_id, False)
         log_event(f"{student['last_name']} {student['first_name']} возвращён к решению.", 'warn')
+    return jsonify({'ok': bool(student)})
+
+
+@app.route('/sessions/<int:session_id>/students/<int:student_id>/finish', methods=['POST'])
+def session_finish_student(session_id, student_id):
+    """Учитель завершает тест одному ученику: у него сразу оценка, войти снова и менять ответы нельзя.
+    Остальные продолжают решать."""
+    student = _session_student(session_id, student_id)
+    if student:
+        Student.finish(student_id)
+        log_event(f"Учитель завершил тест ученику: {student['last_name']} {student['first_name']}.", 'warn')
     return jsonify({'ok': bool(student)})
 
 
@@ -2625,9 +2637,11 @@ def student_test():
         return redirect(url_for('student_login'))
 
     student = Student.get_by_id(student_id)
-    if not student or student['status'] == 'finished':
+    if not student:
         _clear_student_session()
         return redirect(url_for('student_login'))
+    if student['status'] == 'finished':
+        return redirect(url_for('student_result'))  # учитель завершил тест этому ученику
 
     test_session = TestSession.get_by_id(student['session_id'])
     if test_session and test_session['status'] == 'closed':
@@ -2779,7 +2793,8 @@ def student_ping():
     Student.touch(student_id, in_app=_from_student_app())
     remaining = _calc_remaining_seconds(student, test_session)
 
-    if test_session['status'] == 'closed':
+    if test_session['status'] == 'closed' or student['status'] == 'finished':
+        # тестирование завершено для всех — или учитель завершил его только этому ученику
         if student['status'] != 'finished':
             Student.finish(student_id)
         return jsonify({'active': False, 'finished': True, 'redirect': url_for('student_result')})
@@ -3132,7 +3147,8 @@ def student_result():
 
     test_session = TestSession.get_by_id(student['session_id'])
 
-    if test_session and test_session.get('teacher_finish_only') and test_session['status'] != 'closed':
+    session_open = bool(test_session) and test_session['status'] != 'closed'
+    if session_open and test_session.get('teacher_finish_only') and student['status'] != 'finished':
         return redirect(url_for('student_test'))
 
     if student['status'] != 'finished':
@@ -3169,6 +3185,8 @@ def student_result():
                           grade=grade,
                           show_answers=(
                               True if (test_session and test_session.get('teacher_finish_only') and test_session['status'] == 'closed')
+                              # учитель завершил тест только этому ученику: остальные ещё решают — правильные ответы не показываем
+                              else False if (session_open and test_session.get('teacher_finish_only'))
                               else (test_session['show_answers'] if test_session else False)
                           ),
                           variant_label=student.get('variant_label'))

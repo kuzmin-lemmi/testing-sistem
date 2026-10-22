@@ -496,7 +496,12 @@
             padding: 12px 14px;
             border-bottom: 1px solid var(--border);
             font-weight: 700;
+            cursor: move;            /* за заголовок калькулятор перетаскивается */
+            user-select: none;
+            touch-action: none;
         }
+        .calc-header .calc-grip { color: var(--text-muted, #94a3b8); font-weight: 400; margin-right: 6px; }
+        .calc-panel.dragging { box-shadow: 0 24px 48px rgba(0,0,0,0.28); opacity: .96; }
 
         .calc-close {
             background: var(--bg);
@@ -984,8 +989,8 @@
 
     {% if calculator_enabled %}
     <div class="calc-panel" id="calcPanel">
-        <div class="calc-header">
-            <span>🧮 Калькулятор</span>
+        <div class="calc-header" title="Перетащите калькулятор мышью за эту полосу">
+            <span><span class="calc-grip" aria-hidden="true">⠿</span>🧮 Калькулятор</span>
             <button type="button" class="calc-close" aria-label="Закрыть калькулятор" onclick="toggleCalculator()">✕</button>
         </div>
         <div class="calc-body">
@@ -1332,9 +1337,54 @@
                 if (!calcPanel) return;
                 calcPanel.classList.toggle('active');
                 if (calcPanel.classList.contains('active')) {
+                    keepCalcOnScreen();
                     setTimeout(() => calcInput && calcInput.focus(), 0);
                 }
             };
+
+            // Перетаскивание за заголовок; место запоминается (в этом браузере) и не уходит за край экрана
+            const CALC_PLACE = 'calcPlace';
+            function placeCalc(left, top) {
+                const maxLeft = Math.max(0, window.innerWidth - calcPanel.offsetWidth);
+                const maxTop = Math.max(0, window.innerHeight - calcPanel.offsetHeight); // калькулятор целиком на экране
+                calcPanel.style.left = Math.min(Math.max(0, left), maxLeft) + 'px';
+                calcPanel.style.top = Math.min(Math.max(0, top), maxTop) + 'px';
+                calcPanel.style.right = 'auto';
+            }
+            function keepCalcOnScreen() {
+                if (calcPanel.style.left) placeCalc(parseFloat(calcPanel.style.left), parseFloat(calcPanel.style.top));
+            }
+            try {
+                const saved = JSON.parse(localStorage.getItem(CALC_PLACE) || 'null');
+                if (saved) { calcPanel.style.left = saved.left + 'px'; calcPanel.style.top = saved.top + 'px'; calcPanel.style.right = 'auto'; }
+            } catch (e) { /* без запомненного места — на обычном */ }
+            const calcHeader = calcPanel && calcPanel.querySelector('.calc-header');
+            if (calcHeader) {
+                let drag = null;
+                calcHeader.addEventListener('pointerdown', e => {
+                    if (e.button !== 0 || e.target.closest('button')) return; // ✕ — закрывает, а не тащит
+                    const box = calcPanel.getBoundingClientRect();
+                    drag = { dx: e.clientX - box.left, dy: e.clientY - box.top };
+                    calcHeader.setPointerCapture(e.pointerId);
+                    calcPanel.classList.add('dragging');
+                    e.preventDefault();
+                });
+                calcHeader.addEventListener('pointermove', e => {
+                    if (drag) placeCalc(e.clientX - drag.dx, e.clientY - drag.dy);
+                });
+                const stop = () => {
+                    if (!drag) return;
+                    drag = null;
+                    calcPanel.classList.remove('dragging');
+                    try {
+                        localStorage.setItem(CALC_PLACE, JSON.stringify({
+                            left: parseFloat(calcPanel.style.left), top: parseFloat(calcPanel.style.top) }));
+                    } catch (e) { /* не запомнили — не страшно */ }
+                };
+                calcHeader.addEventListener('pointerup', stop);
+                calcHeader.addEventListener('pointercancel', stop);
+                window.addEventListener('resize', keepCalcOnScreen);
+            }
 
             window.calcInsert = function(value) {
                 if (!calcInput) return;

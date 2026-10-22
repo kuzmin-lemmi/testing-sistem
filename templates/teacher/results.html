@@ -90,7 +90,14 @@
                     <tbody>
                         {% for row in group.students %}
                         <tr>
-                            <td class="name-col"><a href="{{ url_for('result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a></td>
+                            <td class="name-col"><a href="{{ url_for('result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a>
+                                {%- if selected_session.status == 'active' %}
+                                {%- if row.student.status == 'finished' %} <span class="finished-mark" title="Тест для этого ученика завершён">⏹ завершён</span>
+                                {%- else %} <button type="button" class="finish-one"
+                                    data-url="{{ url_for('session_finish_student', session_id=selected_session.id, student_id=row.student.id) }}"
+                                    data-name="{{ row.student.last_name }} {{ row.student.first_name }}"
+                                    title="Завершить тест только этому ученику: у него сразу оценка, остальные продолжают">⏹ Завершить</button>
+                                {%- endif %}{% endif %}</td>
                             {% for cell in row.cells %}
                             <td class="cell {% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}">
                                 <button type="button" class="task-open"
@@ -193,6 +200,10 @@ th .task-open { font-weight: 700; color: var(--primary-dark); text-decoration: u
 .matches ul { margin: 8px 0; padding-left: 20px; }
 .matches p { font-size: 13px; margin: 0; }
 .fast { font-size: 10px; margin-left: 1px; }
+.finish-one { margin-left: 6px; padding: 2px 8px; font-size: 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid #fecaca; background: #fff; color: #b91c1c; white-space: nowrap; }
+.finish-one:hover { background: #fef2f2; }
+.finished-mark { margin-left: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .away.warn { color: #92400e; background: #fef3c7; }
 .grade { display: inline-block; min-width: 26px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
 .grade.g5 { background: #d1fae5; color: #065f46; }
@@ -204,6 +215,16 @@ th .task-open { font-weight: 700; color: var(--primary-dark); text-decoration: u
 @media (max-width: 980px) { .results-layout { grid-template-columns: 1fr; } .session-tree { position: static; } }
 </style>
 <script>
+// Завершить тест одному ученику (пока тестирование идёт)
+document.querySelectorAll('.finish-one').forEach(button => button.addEventListener('click', async () => {
+    if (!confirm(`Завершить тест ученику ${button.dataset.name}? Он сразу увидит оценку; войти снова и менять ответы будет нельзя. Остальные продолжают решать.`)) return;
+    button.disabled = true;
+    const response = await fetch(button.dataset.url, { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN } });
+    const data = await response.json().catch(() => ({}));
+    if (data.ok) location.reload();
+    else { alert('Не получилось: ученик уже завершил тест или тестирование окончено.'); location.reload(); }
+}));
+
 // Просмотр задания по щелчку на клетку или номер столбца; ← → — соседние задания в той же строке
 (function () {
     const dialog = document.getElementById('taskDialog');
