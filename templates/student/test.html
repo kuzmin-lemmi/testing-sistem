@@ -944,7 +944,7 @@
             {% if calculator_enabled %}
             <button type="button" class="calc-toggle" onclick="toggleCalculator()">🧮 Калькулятор</button>
             {% endif %}
-            {% if python_enabled %}
+            {% if python_enabled and not student_app %}
             <button type="button" class="calc-toggle" onclick="togglePython()">🐍 Python</button>
             {% endif %}
             <button type="button" class="calc-toggle" onclick="toggleSketchPanel()">✏ Черновик</button>
@@ -1105,7 +1105,31 @@
                     📎 Скачать файл данных
                 </a>
                 {% endif %}
-                
+
+                {% if python_enabled and student_app %}
+                <div class="py-task" id="py-task-{{ task.id }}" data-task-id="{{ task.id }}">
+                    <button type="button" class="py-task-toggle" data-py="toggle" aria-expanded="false">🐍 Решить на Python</button>
+                    <div class="py-task-body" hidden>
+                        <div class="py-task-actions">
+                            <button type="button" class="nav-btn primary" data-py="run" title="F5 или Ctrl+Enter">▶ Запустить</button>
+                            <button type="button" class="nav-btn secondary" data-py="stop" disabled>■ Остановить</button>
+                            <button type="button" class="nav-btn secondary" data-py="insert" title="Последняя строка вывода — в поле ответа">Вставить в ответ</button>
+                            <button type="button" class="nav-btn secondary" data-py="clear">Очистить</button>
+                            <span class="py-task-status" data-py="status" aria-live="polite"></span>
+                        </div>
+                        {% if task.attachment_name %}
+                        <div class="py-task-file">📎 Файл задания уже рядом с программой — пиши <code>open('{{ task.attachment_name }}')</code></div>
+                        {% endif %}
+                        <div class="py-task-editor" data-py="editor"></div>
+                        <pre class="py-task-output" data-py="output" aria-label="Вывод программы"></pre>
+                        <form class="py-task-input" data-py="input" hidden>
+                            <input type="text" autocomplete="off" spellcheck="false" placeholder="Программа ждёт ввода (input) — напиши и нажми Enter">
+                            <button type="submit" class="nav-btn secondary">Отправить</button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="answer-section">
                     {% set saved = answers.get(task.id, {}) %}
                     {% if task.answer_kind == 'file_upload' %}
@@ -1204,7 +1228,7 @@
             </div>
              {% endfor %}
          </main>
-         {% if python_enabled %}
+         {% if python_enabled and not student_app %}
          <div class="py-panel" id="pyPanel">
              <div class="py-header" id="pyHeader">
                  <span>🐍 Python</span>
@@ -1245,6 +1269,14 @@
     {% if calculator_enabled %}
     <script src="{{ url_for('static', filename='js/vendor/decimal.min.js') }}"></script>
     {% endif %}
+    {% if python_enabled and student_app %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/py_editor.css') }}">
+    <script src="{{ url_for('static', filename='js/vendor/codemirror.min.js') }}"></script>
+    <script>
+        window.PY_TASK_CONFIG = {studentId: {{ student.id }}, files: {{ python_files|tojson }}};
+    </script>
+    <script src="{{ url_for('static', filename='js/py_editor.js') }}" defer></script>
+    {% endif %}
 
     <script>
         let currentTask = {{ current_task }};
@@ -1252,7 +1284,7 @@
         const teacherFinishOnly = {{ 'true' if teacher_finish_only else 'false' }};
         const appMode = {{ 'true' if app_mode else 'false' }};
         const calculatorEnabled = {{ 'true' if calculator_enabled else 'false' }};
-        const pythonEnabled = {{ 'true' if python_enabled else 'false' }};
+        const pythonEnabled = {{ 'true' if python_enabled and not student_app else 'false' }};  // боковая панель (браузер)
         let isPaused = {{ 'true' if paused else 'false' }};
         const dirtyTasks = new Set();
         let zoomedImage = null;

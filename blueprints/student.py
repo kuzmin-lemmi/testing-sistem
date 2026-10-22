@@ -321,6 +321,11 @@ def student_test():
 
     current_task = request.args.get('task', 0, type=int)
 
+    # файлы заданий для редактора Python: программа ученика скачивает их в папку, где запускается код
+    python_files = {str(task['id']): {'url': url_for('system.serve_attachment', filename=task['attachment_path']),
+                                      'name': task.get('attachment_name') or task['attachment_path']}
+                    for task in tasks if task.get('attachment_path')}
+
     return render_template('student/test.html',
                           student=student,
                           tasks=tasks,
@@ -332,6 +337,8 @@ def student_test():
                           paused=bool(test_session and test_session.get('paused')),
                           calculator_enabled=bool(test_session and test_session.get('calculator_enabled')),
                           python_enabled=bool(test_session and test_session.get('python_enabled')),
+                          student_app=_from_student_app(),  # в программе ученика Python — под заданием, на его компьютере
+                          python_files=python_files,
                           mask_answers=bool(test_session and test_session.get('mask_answers')),
                           variant_label=student.get('variant_label'))
 

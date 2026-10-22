@@ -1,0 +1,93 @@
+/* Редактор Python под заданием (программа ученика). Цвета — как у прежней панели Python. */
+.py-task {
+    margin: 4px 0 18px;
+}
+
+.py-task-toggle {
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    color: #3730a3;
+    border-radius: 10px;
+    padding: 9px 16px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.py-task-toggle:hover { background: #e0e7ff; }
+.py-task-toggle[aria-expanded="true"] { background: #e0e7ff; border-color: #a5b4fc; }
+
+.py-task-body { margin-top: 10px; }
+
+.py-task-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.py-task-actions .nav-btn { padding: 8px 14px; }
+.py-task-actions .nav-btn:disabled { opacity: .45; cursor: default; }
+
+.py-task-status { color: #475569; font-size: 14px; }
+.py-task-status.running { color: #2563eb; }
+.py-task-status.error { color: #cc0000; }
+
+.py-task-file {
+    font-size: 14px;
+    color: #475569;
+    margin-bottom: 8px;
+}
+.py-task-file code {
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.py-task-editor {
+    height: 300px;
+    min-height: 120px;
+    resize: vertical;
+    overflow: hidden;
+    border: 1px solid #d1d5db;
+    border-radius: 8px 8px 0 0;
+    background: #fff;
+}
+.py-task-editor .cm-editor { height: 100%; }
+
+.py-task-output {
+    margin: 0;
+    min-height: 60px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: #fff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 15px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.py-task-output:empty::before { content: 'Здесь появится вывод программы'; color: #9ca3af; }
+.py-task-output .err { color: #cc0000; }
+.py-task-output .in { color: #2563eb; }
+.py-task-output .note { color: #64748b; font-style: italic; }
+
+.py-task-input {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.py-task-input[hidden] { display: none; }  /* иначе display: flex сильнее атрибута hidden */
+.py-task-input input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 15px;
+}
+.py-task-input input:focus { outline: 2px solid #bfdbfe; }
