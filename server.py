@@ -3183,12 +3183,9 @@ def student_result():
                           correct_count=correct_count,
                           total=total,
                           grade=grade,
-                          show_answers=(
-                              True if (test_session and test_session.get('teacher_finish_only') and test_session['status'] == 'closed')
-                              # учитель завершил тест только этому ученику: остальные ещё решают — правильные ответы не показываем
-                              else False if (session_open and test_session.get('teacher_finish_only'))
-                              else (test_session['show_answers'] if test_session else False)
-                          ),
+                          # правильные ответы — только когда учитель завершил тестирование для всех:
+                          # пока кто-то решает, ученик перескажет их соседям
+                          show_answers=bool(test_session) and not session_open,
                           variant_label=student.get('variant_label'))
 
 # ==================== РЕЗУЛЬТАТЫ ====================

@@ -5,189 +5,130 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%236366f1%27/%3E%3Cpath d=%27M9 9h14v3H9zm0 6h14v3H9zm0 6h9v3H9z%27 fill=%27white%27/%3E%3C/svg%3E">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Результат - {{ student.last_name }} {{ student.first_name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Nunito', sans-serif;
+        body { font-family: 'Nunito', sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; }
+
+        /* итог — одна полоса сверху, всё остальное место — задания */
+        .summary {
+            display: flex; align-items: center; gap: 16px 28px; flex-wrap: wrap;
+            padding: 14px 24px; color: #fff;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 40px 20px;
+            box-shadow: 0 4px 16px rgba(76, 29, 149, .25);
         }
-        .container { max-width: 700px; margin: 0 auto; }
-        
-        .result-card {
-            background: white;
-            border-radius: 24px;
-            padding: 48px;
-            text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            margin-bottom: 24px;
-        }
-        
-        .congrats { font-size: 4em; margin-bottom: 16px; }
-        h1 { color: #1e293b; margin-bottom: 8px; }
-        .student-name { color: #64748b; margin-bottom: 32px; font-size: 1.1em; }
-        .variant-pill {
-            display: inline-block;
-            margin-left: 10px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: #eef2ff;
-            color: #4338ca;
-            font-size: 0.9em;
-            font-weight: 800;
-        }
-        
-        .score-circle {
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            color: white;
-        }
-        .score-number {
-            font-size: 3.5em;
-            font-weight: 700;
-            line-height: 1;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .score-total { font-size: 1.1em; opacity: 0.9; }
-        
-        .grade-badge {
-            display: inline-block;
-            padding: 12px 36px;
-            border-radius: 30px;
-            font-size: 1.5em;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
+        .summary h1 { font-size: 1.35em; font-weight: 800; }
+        .summary .who { opacity: .9; font-weight: 600; }
+        .variant-pill { margin-left: 8px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.2); font-size: .9em; }
+        .summary .score { margin-left: auto; display: flex; align-items: baseline; gap: 6px; font-weight: 700; }
+        .score-number { font-family: 'JetBrains Mono', monospace; font-size: 2em; line-height: 1; }
+        .grade-badge { padding: 6px 18px; border-radius: 999px; font-weight: 800; font-size: 1.15em; }
         .grade-5 { background: #d1fae5; color: #065f46; }
         .grade-4 { background: #dbeafe; color: #1e40af; }
         .grade-3 { background: #fef3c7; color: #92400e; }
         .grade-2 { background: #fee2e2; color: #991b1b; }
-        
-        .details-card {
-            background: white;
-            border-radius: 20px;
-            padding: 32px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+
+        .note { margin: 16px 24px 0; padding: 10px 14px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-weight: 600; }
+
+        .tasks {
+            display: grid; gap: 16px; padding: 16px 24px 80px; /* снизу место под кнопку «Закрыть программу» */
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
         }
-        .details-card h2 { margin-bottom: 20px; color: #1e293b; }
-        
-        .answers-table {
-            width: 100%;
-            border-collapse: collapse;
+        .task {
+            background: #fff; border-radius: 14px; border: 2px solid #e2e8f0; overflow: hidden;
+            display: flex; flex-direction: column;
         }
-        .answers-table th, .answers-table td {
-            padding: 14px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
+        .task.ok { border-color: #86efac; }
+        .task.bad { border-color: #fca5a5; }
+        .task.wait { border-color: #fcd34d; }
+        .task-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 14px; font-weight: 800; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
         }
-        .answers-table th {
-            background: #f8fafc;
-            font-weight: 600;
-            color: #64748b;
-            font-size: 13px;
-            text-transform: uppercase;
-        }
-        .answers-table tr:last-child td { border-bottom: none; }
-        
-        .status-correct { color: #10b981; font-weight: 700; }
-        .status-wrong { color: #ef4444; font-weight: 700; }
-        
-        .answer-value {
-            font-family: 'JetBrains Mono', monospace;
-            background: #f1f5f9;
-            padding: 4px 10px;
-            border-radius: 6px;
-        }
-        .answer-correct {
-            background: #d1fae5;
-            color: #065f46;
+        .mark { font-weight: 800; }
+        .ok .mark { color: #059669; }
+        .bad .mark { color: #dc2626; }
+        .wait .mark { color: #b45309; }
+        .task-image { padding: 10px; display: flex; justify-content: center; flex: 1; }
+        .task-image img { max-width: 100%; max-height: 340px; object-fit: contain; cursor: zoom-in; border-radius: 6px; }
+        .answers { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding: 10px 14px 14px; border-top: 1px solid #f1f5f9; align-items: baseline; }
+        .answers dt { color: #64748b; font-weight: 600; font-size: .92em; }
+        .value { font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 6px; background: #f1f5f9; white-space: pre-wrap; word-break: break-word; }
+        .ok .given { background: #dcfce7; color: #166534; }
+        .bad .given { background: #fee2e2; color: #991b1b; }
+        .expected { background: #d1fae5; color: #065f46; }
+        .empty { color: #94a3b8; }
+
+        /* увеличенное задание */
+        .zoom { position: fixed; inset: 0; background: rgba(15, 23, 42, .85); display: none; align-items: center; justify-content: center; z-index: 1000; cursor: zoom-out; padding: 20px; }
+        .zoom.open { display: flex; }
+        .zoom img { max-width: 100%; max-height: 100%; background: #fff; border-radius: 8px; }
+
+        @media (max-width: 700px) {
+            .summary { padding: 12px 16px; }
+            .summary .score { margin-left: 0; }
+            .tasks { padding: 12px 12px 80px; }
         }
     </style>
 </head>
 <body data-watch="result" data-watch-session="{{ student.session_id }}">
-    <div class="container">
-        <div class="result-card">
-            <div class="congrats">🎉</div>
-            <h1>Тест завершён!</h1>
-            <p class="student-name">
-                {{ student.last_name }} {{ student.first_name }}
-                {% if variant_label %}<span class="variant-pill">Вариант {{ variant_label }}</span>{% endif %}
-            </p>
-            
-            <div class="score-circle">
-                <span class="score-number">{{ correct_count }}</span>
-                <span class="score-total">из {{ total }}</span>
+    <header class="summary">
+        <h1>Тест завершён</h1>
+        <span class="who">{{ student.last_name }} {{ student.first_name }}{% if variant_label %}<span class="variant-pill">Вариант {{ variant_label }}</span>{% endif %}</span>
+        <span class="score">верно <span class="score-number">{{ correct_count }}</span> из {{ total }}</span>
+        {% if grade %}<span class="grade-badge grade-{{ grade }}">Оценка: {{ grade }}</span>{% endif %}
+    </header>
+
+    {% if not show_answers %}
+    <p class="note">Правильные ответы появятся, когда учитель завершит тестирование для всех.</p>
+    {% endif %}
+
+    <main class="tasks">
+        {% for task in tasks %}
+        {% set answer = answers_dict.get(task.id) %}
+        {% set file_task = task.answer_kind == 'file_upload' %}
+        {% set state = 'ok' if answer and answer.is_correct else ('wait' if file_task and answer and answer.upload_name and answer.is_correct is none else 'bad') %}
+        <article class="task {{ state }}">
+            <div class="task-head">
+                <span>Задание {{ loop.index }}</span>
+                <span class="mark">{% if state == 'ok' %}✓ Верно{% elif state == 'wait' %}⏳ Проверит учитель{% else %}✗ Неверно{% endif %}</span>
             </div>
-            
-            <div class="grade-badge grade-{{ grade }}">
-                Оценка: {{ grade }}
+            <div class="task-image">
+                <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy" onclick="zoom(this)">
             </div>
-        </div>
-        
-        {% if show_answers %}
-        <div class="details-card">
-            <h2>📋 Подробные результаты</h2>
-            <table class="answers-table">
-                <thead>
-                    <tr>
-                        <th>№</th>
-                        <th>Ваш ответ</th>
-                        <th>Правильный</th>
-                        <th>Результат</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for task in tasks %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>
-                            {% if task.answer_kind == 'file_upload' %}
-                                {% if answers_dict.get(task.id) and answers_dict[task.id].upload_name %}
-                                    <span class="answer-value">📁 {{ answers_dict[task.id].upload_name }}</span>
-                                {% else %}
-                                    <span style="color: #64748b;">файл не загружен</span>
-                                {% endif %}
-                            {% elif answers_dict.get(task.id) %}
-                                <span class="answer-value">{{ format_given(task, answers_dict[task.id]) }}</span>
-                            {% else %}
-                                <span style="color: #64748b;">не отвечено</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if task.answer_kind == 'file_upload' %}
-                                <span style="color: #64748b;">ручная проверка</span>
-                            {% else %}
-                                <span class="answer-value answer-correct">{{ format_expected(task) }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if answers_dict.get(task.id) and answers_dict[task.id].is_correct %}
-                                <span class="status-correct">✓ Верно</span>
-                            {% else %}
-                                <span class="status-wrong">✗ Неверно</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
+            <dl class="answers">
+                <dt>Ваш ответ</dt>
+                <dd>
+                    {% if file_task %}
+                        {% if answer and answer.upload_name %}<span class="value given">📁 {{ answer.upload_name }}</span>{% else %}<span class="empty">файл не загружен</span>{% endif %}
+                    {% elif answer and format_given(task, answer) %}
+                        <span class="value given">{{ format_given(task, answer) }}</span>
+                    {% else %}
+                        <span class="empty">нет ответа</span>
+                    {% endif %}
+                </dd>
+                {% if show_answers and not file_task %}
+                <dt>Правильный</dt>
+                <dd><span class="value expected">{{ format_expected(task) }}</span></dd>
+                {% endif %}
+            </dl>
+        </article>
+        {% endfor %}
+    </main>
+
+    <div class="zoom" id="zoom" onclick="this.classList.remove('open')"><img alt=""></div>
+
     <script src="{{ url_for('static', filename='js/student_watch.js') }}"></script>
     <script>
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
         }
+        function zoom(img) {
+            const box = document.getElementById('zoom');
+            box.querySelector('img').src = img.src;
+            box.classList.add('open');
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('zoom').classList.remove('open'); });
     </script>
 </body>
 </html>
