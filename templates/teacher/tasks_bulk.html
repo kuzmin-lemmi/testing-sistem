@@ -7,13 +7,13 @@
     <div class="page-header">
         <h1>📦 Массовая загрузка задач</h1>
         {% if mode == 'class' %}
-        <a href="{{ url_for('tasks_list', mode='ege', ege=0) }}" class="btn btn-secondary">← Назад к списку</a>
+        <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=0) }}" class="btn btn-secondary">← Назад к списку</a>
         {% else %}
-        <a href="{{ url_for('tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
+        <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=ege_number) }}" class="btn btn-secondary">← Назад к списку</a>
         {% endif %}
     </div>
     
-    <form action="{{ url_for('tasks_bulk_upload') }}" method="POST" id="bulkForm">
+    <form action="{{ url_for('teacher.tasks_bulk_upload') }}" method="POST" id="bulkForm">
         <input type="hidden" name="mode" value="{{ mode }}">
         {% if mode == 'class' %}
         <input type="hidden" name="class_id" value="{{ class_id }}">
@@ -367,7 +367,7 @@ async function handleFiles(files) {
             const formData = new FormData();
             formData.append('image', file);
             
-            const response = await fetch('{{ url_for("api_upload_image") }}', {
+            const response = await fetch('{{ url_for("teacher.api_upload_image") }}', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': window.CSRF_TOKEN || '' },
                 body: formData
@@ -488,7 +488,7 @@ async function deleteTask(index) {
     
     // Удаляем файл с сервера
     try {
-        await fetch('{{ url_for("api_delete_image") }}', {
+        await fetch('{{ url_for("teacher.api_delete_image") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -509,7 +509,7 @@ async function clearAll() {
     
     for (const file of uploadedFiles) {
         try {
-            await fetch('{{ url_for("api_delete_image") }}', {
+            await fetch('{{ url_for("teacher.api_delete_image") }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -526,7 +526,7 @@ async function clearAll() {
 
 function changeEge(value) {
     if (uploadMode !== 'ege') return;
-    window.location.href = '{{ url_for("tasks_bulk_upload") }}?mode=ege&ege=' + value;
+    window.location.href = '{{ url_for("teacher.tasks_bulk_upload") }}?mode=ege&ege=' + value;
 }
 
 // Валидация формы

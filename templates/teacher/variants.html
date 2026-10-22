@@ -7,18 +7,18 @@
     <header class="vp-head">
         <h1>Варианты</h1>
         <div class="vp-head-actions">
-            <a href="{{ url_for('variant_builder') }}" class="btn btn-primary btn-small">Новый вариант</a>
+            <a href="{{ url_for('variants.variant_builder') }}" class="btn btn-primary btn-small">Новый вариант</a>
             <button type="button" class="btn btn-secondary btn-small" id="importLocalshotBtn"
                     title="Один или несколько файлов .variant (можно выделить сразу несколько или перетащить на страницу)">Загрузить из LocalShot</button>
             <button type="button" class="btn btn-secondary btn-small" id="importFolderBtn"
                     title="Все файлы .variant из выбранной папки">Загрузить папку</button>
             {% if show_ege_banks %}
-            <a href="{{ url_for('variant_create', scope='ege') }}" class="btn btn-secondary btn-small">Создать вариант</a>
+            <a href="{{ url_for('variants.variant_create', scope='ege') }}" class="btn btn-secondary btn-small">Создать вариант</a>
             {% endif %}
         </div>
     </header>
 
-    <form action="{{ url_for('variant_import_localshot') }}" method="POST" enctype="multipart/form-data" id="importLocalshotForm" hidden>
+    <form action="{{ url_for('variants.variant_import_localshot') }}" method="POST" enctype="multipart/form-data" id="importLocalshotForm" hidden>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="file" name="file" id="importLocalshotFile" accept=".variant,.zip" multiple>
     </form>
@@ -27,9 +27,9 @@
 
     {% if show_ege_banks %}
     <nav class="vp-scope">
-        <a href="{{ url_for('variants_list', scope='all') }}" class="{% if scope == 'all' %}on{% endif %}">Все</a>
-        <a href="{{ url_for('variants_list', scope='ege') }}" class="{% if scope == 'ege' %}on{% endif %}">ЕГЭ</a>
-        <a href="{{ url_for('variants_list', scope='class') }}" class="{% if scope == 'class' %}on{% endif %}">Обычные классы</a>
+        <a href="{{ url_for('variants.variants_list', scope='all') }}" class="{% if scope == 'all' %}on{% endif %}">Все</a>
+        <a href="{{ url_for('variants.variants_list', scope='ege') }}" class="{% if scope == 'ege' %}on{% endif %}">ЕГЭ</a>
+        <a href="{{ url_for('variants.variants_list', scope='class') }}" class="{% if scope == 'class' %}on{% endif %}">Обычные классы</a>
     </nav>
     {% endif %}
 
@@ -40,19 +40,19 @@
         {% if bank_new_count %}
         <span class="vp-bank-new" title="{{ bank_new|join('\n') }}{% if bank_new_count > bank_new|length %}&#10;…{% endif %}">
             новых: <strong>{{ bank_new_count }}</strong></span>
-        <form action="{{ url_for('variant_import_folder') }}" method="POST" class="inline-form">
+        <form action="{{ url_for('variants.variant_import_folder') }}" method="POST" class="inline-form">
             <button type="submit" class="btn btn-primary btn-small">Загрузить новые</button>
         </form>
         {% else %}
         <span class="vp-bank-ok">все варианты из папки загружены</span>
         {% endif %}
-        <form action="{{ url_for('variant_open_folder') }}" method="POST" class="inline-form">
+        <form action="{{ url_for('variants.variant_open_folder') }}" method="POST" class="inline-form">
             <button type="submit" class="vp-link">Открыть папку</button>
         </form>
-        <a class="vp-link" href="{{ url_for('settings') }}#variants-dir">Изменить</a>
+        <a class="vp-link" href="{{ url_for('system.settings') }}#variants-dir">Изменить</a>
         {% else %}
         <span>Папка с вариантами не задана или не найдена{% if bank_dir %}: <code>{{ bank_dir }}</code>{% endif %}.</span>
-        <a class="vp-link" href="{{ url_for('settings') }}#variants-dir">Указать в настройках</a>
+        <a class="vp-link" href="{{ url_for('system.settings') }}#variants-dir">Указать в настройках</a>
         {% endif %}
     </div>
 
@@ -84,7 +84,7 @@
 
     <div class="vp-layout">
         <section class="vp-list" aria-label="Список вариантов">
-            <form action="{{ url_for('variant_delete_bulk') }}" method="POST" id="vpBulkForm">
+            <form action="{{ url_for('variants.variant_delete_bulk') }}" method="POST" id="vpBulkForm">
                 <input type="hidden" name="scope" value="{{ scope }}">
                 <div class="vp-bulk" id="vpBulk" hidden>
                     <span id="vpBulkText"></span>
@@ -103,7 +103,7 @@
                         </label>
                         <span class="vp-grade" title="{{ w.grade or 'Без класса' }}">{{ grade_short(w.grade) }}</span>
                         <div class="vp-work-body">
-                            <a class="vp-work-title" href="{{ url_for('variants_list', scope=scope, variant_id=w.variants[0].id) }}" title="{{ w.title }}">{{ w.list_title }}</a>
+                            <a class="vp-work-title" href="{{ url_for('variants.variants_list', scope=scope, variant_id=w.variants[0].id) }}" title="{{ w.title }}">{{ w.list_title }}</a>
                             <div class="vp-work-meta">
                                 {% if w.topic and not w.topic_in_title %}<span>{{ w.topic }}</span>{% endif %}
                                 {% if w.tasks %}<span>{{ tasks_word(w.tasks) }}</span>{% endif %}
@@ -116,11 +116,11 @@
                             <div class="vp-chips">
                                 {% for v in w.variants %}
                                 <a class="vp-chip{% if v.id == selected_variant_id %} on{% endif %}" title="{{ v.name }}"
-                                   href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}">{{ v.short }}</a>
+                                   href="{{ url_for('variants.variants_list', scope=scope, variant_id=v.id) }}">{{ v.short }}</a>
                                 {% endfor %}
                                 {% if w.launchable %}
                                 <a class="vp-link vp-kit-run" title="Запустить тестирование со всеми вариантами: ученик выбирает номер варианта"
-                                   href="{{ url_for('session_new', kit=w.kit, kit_grade=w.grade, kit_topic=w.topic) }}">▶ Запустить комплект</a>
+                                   href="{{ url_for('teacher.session_new', kit=w.kit, kit_grade=w.grade, kit_topic=w.topic) }}">▶ Запустить комплект</a>
                                 {% endif %}
                             </div>
                             {% endif %}
@@ -149,9 +149,9 @@
                     </div>
                 </div>
                 <div class="vp-detail-actions">
-                    <a href="{{ url_for('session_new', variant_id=selected_variant.id) }}" class="btn btn-success btn-small">Запустить</a>
-                    <a href="{{ url_for('variant_view', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">Открыть и править</a>
-                    <form action="{{ url_for('variant_delete', variant_id=selected_variant.id) }}" method="POST" class="inline-form"
+                    <a href="{{ url_for('teacher.session_new', variant_id=selected_variant.id) }}" class="btn btn-success btn-small">Запустить</a>
+                    <a href="{{ url_for('variants.variant_view', variant_id=selected_variant.id) }}" class="btn btn-secondary btn-small">Открыть и править</a>
+                    <form action="{{ url_for('variants.variant_delete', variant_id=selected_variant.id) }}" method="POST" class="inline-form"
                           onsubmit="return confirm('Удалить вариант «{{ selected_variant.name }}»{% if selected_variant.used_count %} и все результаты тестирований с ним{% endif %}? Отменить нельзя.')">
                         <input type="hidden" name="scope" value="{{ scope }}">
                         <button type="submit" class="vp-link vp-danger">Удалить</button>
@@ -164,7 +164,7 @@
                 <span>Комплект:</span>
                 {% for v in selected_work.variants %}
                 <a class="vp-chip{% if v.id == selected_variant.id %} on{% endif %}" title="{{ v.name }}"
-                   href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}">{{ v.short }}</a>
+                   href="{{ url_for('variants.variants_list', scope=scope, variant_id=v.id) }}">{{ v.short }}</a>
                 {% endfor %}
             </nav>
             {% endif %}
@@ -178,7 +178,7 @@
                     <span>{% if selected_variant.minutes %}{{ selected_variant.minutes }} мин{% else %}время не задано{% endif %}</span>
                     <span class="vp-link">Изменить</span>
                 </summary>
-                <form class="vp-passport-form" action="{{ url_for('variant_set_catalog', variant_id=selected_variant.id) }}" method="POST">
+                <form class="vp-passport-form" action="{{ url_for('variants.variant_set_catalog', variant_id=selected_variant.id) }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <label>Класс<input name="grade" list="gradeList" value="{{ selected_variant.grade or '' }}" placeholder="7 класс"></label>
                     <label>Тема<input name="topic" list="topicList" value="{{ selected_variant.topic or '' }}" placeholder="Системы счисления"></label>
@@ -194,8 +194,8 @@
             <ol class="vp-tasks">
                 {% for task in selected_tasks %}
                 <li class="vp-task">
-                    <a class="vp-task-img" href="{{ url_for('variant_view', variant_id=selected_variant.id) }}#task-{{ task.id }}">
-                        <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy">
+                    <a class="vp-task-img" href="{{ url_for('variants.variant_view', variant_id=selected_variant.id) }}#task-{{ task.id }}">
+                        <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy">
                     </a>
                     <div class="vp-task-foot">
                         <span class="vp-task-no">{{ loop.index }}{% if show_ege_banks and task.task_scope == 'ege' %} · №{{ task.ege_number }}{% endif %}</span>

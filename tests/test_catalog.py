@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 import catalog  # noqa: E402
 import server  # noqa: E402
-from models import Answer, Student, Task, TestSession, Variant, autofill_catalog_once, get_db, set_setting  # noqa: E402
+from models import Answer, Student, TestSession, Variant, autofill_catalog_once, set_setting  # noqa: E402
 
 PNG = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde'
        b'\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82')

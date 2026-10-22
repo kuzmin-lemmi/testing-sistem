@@ -17,6 +17,7 @@ if 'EGE_DATA_DIR' not in os.environ:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402
+import blueprints.common  # noqa: E402
 import student_shortcut  # noqa: E402
 
 STUDENT_PC = {'REMOTE_ADDR': '192.168.1.77'}
@@ -42,8 +43,8 @@ class AddressTests(unittest.TestCase):
             self.assertEqual(student_shortcut.student_urls(8080), ['http://127.0.0.1:8080'])
 
     def test_teacher_ip_shown_on_screen_works_without_internet(self):
-        with patch('server.local_addresses', return_value=['192.168.1.5']):
-            self.assertEqual(server.get_local_ip(), '192.168.1.5')
+        with patch('blueprints.common.local_addresses', return_value=['192.168.1.5']):
+            self.assertEqual(blueprints.common.get_local_ip(), '192.168.1.5')
 
 
 class RouteTests(unittest.TestCase):
@@ -61,7 +62,7 @@ class RouteTests(unittest.TestCase):
 
     def test_shortcut_download(self):
         urls = ['http://KAB-205:8080', 'http://192.168.1.5:8080']
-        with patch('server.student_urls', return_value=urls):
+        with patch('blueprints.system.student_urls', return_value=urls):
             response = self.client.get('/shortcut/download')
         self.assertEqual(response.status_code, 200)
         disposition = response.headers['Content-Disposition']
@@ -78,12 +79,12 @@ class RouteTests(unittest.TestCase):
         response.close()
 
     def test_addresses_cannot_break_out_of_the_script(self):
-        with patch('server.student_urls', return_value=['http://</script><script>alert(1)</script>:8080']):
+        with patch('blueprints.system.student_urls', return_value=['http://</script><script>alert(1)</script>:8080']):
             page = self.client.get('/shortcut/download').get_data(as_text=True)
         self.assertNotIn('</script><script>alert(1)', page)
 
     def test_teacher_home_page_offers_the_shortcut(self):
-        with patch('server.student_urls', return_value=['http://KAB-205:8080']):
+        with patch('blueprints.system.student_urls', return_value=['http://KAB-205:8080']):
             page = self.client.get('/').get_data(as_text=True)
         self.assertIn('/shortcut/download', page)
         self.assertIn('http://KAB-205:8080', page)

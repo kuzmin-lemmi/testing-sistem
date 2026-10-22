@@ -6,7 +6,7 @@
 <div class="settings-page">
     <h1>⚙️ Настройки</h1>
 
-    <form method="POST" action="{{ url_for('settings') }}">
+    <form method="POST" action="{{ url_for('system.settings') }}">
         <section class="card">
             <h2>Оценки по умолчанию</h2>
             <p class="muted">Доля верных ответов. При запуске тестирования пороги сами пересчитываются под число заданий варианта.</p>
@@ -41,7 +41,7 @@
         <h2>Папка с вариантами</h2>
         <p class="muted">Где хранятся файлы <code>.variant</code> (банк вариантов). На странице «Варианты» кнопка
             «Загрузить новые» берёт отсюда всё, чего ещё нет в системе, включая подпапки.</p>
-        <form method="POST" action="{{ url_for('settings_variants_dir') }}" class="dir-form">
+        <form method="POST" action="{{ url_for('system.settings_variants_dir') }}" class="dir-form">
             <input type="text" name="variants_dir" id="variantsDirInput" value="{{ variants_dir }}" placeholder="D:\Варианты"
                    aria-label="Папка с вариантами" spellcheck="false">
             <button type="button" class="btn btn-secondary" id="pickVariantsDir">Выбрать…</button>
@@ -56,7 +56,7 @@
 
     <section class="card">
         <h2>Ярлык для учеников</h2>
-        <p><a href="{{ url_for('student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать «Тестирование.html»</a></p>
+        <p><a href="{{ url_for('system.student_shortcut_download') }}" class="btn btn-secondary">💾 Скачать «Тестирование.html»</a></p>
         <p class="muted small">Скопируйте файл на рабочий стол каждого компьютера ученика. Он ищет этот компьютер по адресам:</p>
         <ul class="muted small">{% for url in student_urls %}<li><code>{{ url }}</code></li>{% endfor %}</ul>
         <p class="muted small">Если ученики не подключаются: проверьте, что компьютеры в одной сети, что брандмауэр Windows разрешает порт {{ port }}, и что VPN на этом компьютере выключен или не перехватывает локальную сеть.</p>
@@ -65,7 +65,7 @@
     <section class="card">
         <h2>Копии базы данных</h2>
         <p class="muted">Копия делается сама при каждом запуске системы; хранятся последние 20. Папка: <code>{{ backups_dir }}</code></p>
-        <form method="POST" action="{{ url_for('settings_backup') }}" class="inline-form">
+        <form method="POST" action="{{ url_for('system.settings_backup') }}" class="inline-form">
             <button type="submit" class="btn btn-secondary">📦 Сделать копию сейчас</button>
         </form>
         {% if backups %}
@@ -105,7 +105,7 @@ document.getElementById('pickVariantsDir').addEventListener('click', async (even
     button.disabled = true;
     button.textContent = 'Окно выбора открыто…';
     try {
-        const r = await fetch({{ url_for('settings_pick_folder')|tojson }}, {
+        const r = await fetch({{ url_for('system.settings_pick_folder')|tojson }}, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN },
             body: JSON.stringify({ start: input.value }),
         });

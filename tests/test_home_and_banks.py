@@ -17,6 +17,7 @@ if 'EGE_DATA_DIR' not in os.environ:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import server  # noqa: E402
+import blueprints.common  # noqa: E402
 import student_shortcut  # noqa: E402
 
 
@@ -49,7 +50,7 @@ class EgeBanksTests(unittest.TestCase):
         self.client = server.app.test_client()
 
     def test_hidden_by_default(self):
-        self.assertFalse(server.SHOW_EGE_BANKS)
+        self.assertFalse(blueprints.common.SHOW_EGE_BANKS)
         variants = self.client.get('/variants').get_data(as_text=True)
         self.assertNotIn('Банк задач', variants)
         self.assertNotIn('Создать вариант', variants)
@@ -61,7 +62,7 @@ class EgeBanksTests(unittest.TestCase):
         self.assertEqual(self.client.get('/variants/create').status_code, 200)
 
     def test_can_be_switched_back_on(self):
-        with patch('server.SHOW_EGE_BANKS', True):
+        with patch('blueprints.common.SHOW_EGE_BANKS', True):
             self.assertIn('Банк задач', self.client.get('/variants').get_data(as_text=True))
             self.assertIn('Создать вариант', self.client.get('/variants').get_data(as_text=True))
             self.assertIn('value="individual"', self.client.get('/sessions/new').get_data(as_text=True))

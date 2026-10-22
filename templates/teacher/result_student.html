@@ -9,7 +9,7 @@
             <h1>{{ student.last_name }} {{ student.first_name }}</h1>
             <div class="muted">{{ session_title }}{% if student.variant_label %} · вариант {{ student.variant_label }}{% endif %}</div>
         </div>
-        <a href="{{ url_for('results_list', session_id=student.session_id) }}" class="btn btn-secondary">← К результатам</a>
+        <a href="{{ url_for('teacher.results_list', session_id=student.session_id) }}" class="btn btn-secondary">← К результатам</a>
     </div>
 
     <section class="card summary">
@@ -29,7 +29,7 @@
         <ul>
             {% for m in matches %}
             {% set other = m.students[1] if m.students[0].id == student.id else m.students[0] %}
-            <li>с <a href="{{ url_for('result_student', student_id=other.id) }}">{{ other.last_name }} {{ other.first_name }}</a> —
+            <li>с <a href="{{ url_for('teacher.result_student', student_id=other.id) }}">{{ other.last_name }} {{ other.first_name }}</a> —
                 {{ m.numbers|length }} {{ plural(m.numbers|length, 'задание', 'задания', 'заданий') }} (№ {{ m.numbers|join(', ') }})</li>
             {% endfor %}
         </ul>
@@ -48,7 +48,7 @@
                     <td>{{ loop.index }}</td>
                     <td>
                         {% if task.answer_kind == 'file_upload' and cell.answer and cell.answer.upload_name %}
-                        <a href="{{ url_for('teacher_download_answer_file', student_id=student.id, task_id=task.id) }}"
+                        <a href="{{ url_for('teacher.teacher_download_answer_file', student_id=student.id, task_id=task.id) }}"
                            class="btn btn-small btn-secondary" download>📥 {{ cell.answer.upload_name }}</a>
                         {% elif cell.answered %}
                         <span class="value {% if cell.correct %}ok{% else %}bad{% endif %}">{{ cell.given }}</span>
@@ -79,7 +79,7 @@
 
 <script>
 async function markAnswer(taskId, isCorrect) {
-    const response = await fetch({{ url_for('teacher_mark_answer')|tojson }}, {
+    const response = await fetch({{ url_for('teacher.teacher_mark_answer')|tojson }}, {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
         body: JSON.stringify({student_id: {{ student.id }}, task_id: taskId, is_correct: isCorrect})

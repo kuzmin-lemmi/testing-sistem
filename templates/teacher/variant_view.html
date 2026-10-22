@@ -6,7 +6,7 @@
 <div class="variant-page">
     <div class="page-header">
         <div>
-            <form action="{{ url_for('variant_rename', variant_id=variant.id) }}" method="POST" class="rename-form">
+            <form action="{{ url_for('variants.variant_rename', variant_id=variant.id) }}" method="POST" class="rename-form">
                 <input type="text" name="name" value="{{ variant.name }}" maxlength="80" required aria-label="Название варианта">
                 <button type="submit" class="btn btn-small btn-outline">Переименовать</button>
             </form>
@@ -16,10 +16,10 @@
             </div>
         </div>
         <div class="header-actions">
-            <a href="{{ url_for('session_new', variant_id=variant.id) }}" class="btn btn-success">▶️ Запустить с этим вариантом</a>
-            <a href="{{ url_for('variant_builder', variant_id=variant.id) }}" class="btn btn-primary">➕ Добавить задания</a>
-            {% if show_ege_banks %}<a href="{{ url_for('variant_edit', variant_id=variant.id) }}" class="btn btn-secondary">Состав из банка</a>{% endif %}
-            <a href="{{ url_for('variants_list', variant_id=variant.id) }}" class="btn btn-secondary">← К списку</a>
+            <a href="{{ url_for('teacher.session_new', variant_id=variant.id) }}" class="btn btn-success">▶️ Запустить с этим вариантом</a>
+            <a href="{{ url_for('variants.variant_builder', variant_id=variant.id) }}" class="btn btn-primary">➕ Добавить задания</a>
+            {% if show_ege_banks %}<a href="{{ url_for('variants.variant_edit', variant_id=variant.id) }}" class="btn btn-secondary">Состав из банка</a>{% endif %}
+            <a href="{{ url_for('variants.variants_list', variant_id=variant.id) }}" class="btn btn-secondary">← К списку</a>
         </div>
     </div>
 
@@ -34,22 +34,22 @@
             <div class="vv-meta">
                 <div>Правильный ответ: <strong class="vv-answer">{{ format_expected(task) }}</strong></div>
                 {% if task.attachment_name %}
-                <div class="muted">📎 <a href="{{ url_for('serve_attachment', filename=task.attachment_path) }}">{{ task.attachment_name }}</a></div>
+                <div class="muted">📎 <a href="{{ url_for('system.serve_attachment', filename=task.attachment_path) }}">{{ task.attachment_name }}</a></div>
                 {% endif %}
             </div>
             <div class="vv-actions">
-                <form action="{{ url_for('variant_task_move', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form">
+                <form action="{{ url_for('variants.variant_task_move', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form">
                     <input type="hidden" name="direction" value="up">
                     <button type="submit" class="btn btn-small btn-outline" title="Выше" {% if loop.first %}disabled{% endif %}>↑</button>
                 </form>
-                <form action="{{ url_for('variant_task_move', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form">
+                <form action="{{ url_for('variants.variant_task_move', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form">
                     <input type="hidden" name="direction" value="down">
                     <button type="submit" class="btn btn-small btn-outline" title="Ниже" {% if loop.last %}disabled{% endif %}>↓</button>
                 </form>
                 {% if task.answer_kind != 'file_upload' %}
                 <button type="button" class="btn btn-small btn-secondary" onclick="toggleEdit({{ task.id }})">✏️ Ответ</button>
                 {% endif %}
-                <form action="{{ url_for('variant_task_remove', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form"
+                <form action="{{ url_for('variants.variant_task_remove', variant_id=variant.id, task_id=task.id) }}" method="POST" class="inline-form"
                       onsubmit="return confirm('Убрать задание {{ loop.index }} из варианта?')">
                     <button type="submit" class="btn btn-small btn-outline" aria-label="Убрать задание из варианта" title="Убрать задание из варианта">🗑</button>
                 </form>
@@ -57,7 +57,7 @@
         </div>
 
         {% if task.answer_kind != 'file_upload' %}
-        <form action="{{ url_for('variant_task_answer', variant_id=variant.id, task_id=task.id) }}" method="POST"
+        <form action="{{ url_for('variants.variant_task_answer', variant_id=variant.id, task_id=task.id) }}" method="POST"
               class="vv-edit" id="edit-{{ task.id }}" hidden>
             {% if task.answer_count == 0 %}
             <textarea name="answer_text" rows="4" required>{{ task.answer_text or '' }}</textarea>
@@ -74,13 +74,13 @@
         </form>
         {% endif %}
 
-        <img class="vv-image" src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy">
+        <img class="vv-image" src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задание {{ loop.index }}" loading="lazy">
     </section>
     {% else %}
     <div class="card empty-state"><h3>В варианте нет заданий</h3></div>
     {% endfor %}
 
-    <form action="{{ url_for('variant_delete', variant_id=variant.id) }}" method="POST" class="delete-form"
+    <form action="{{ url_for('variants.variant_delete', variant_id=variant.id) }}" method="POST" class="delete-form"
           onsubmit="return confirm('Удалить вариант «{{ variant.name }}»{% if used_count %} и все результаты тестирований с ним{% endif %}? Отменить нельзя.')">
         <input type="hidden" name="cascade" value="1">
         <button type="submit" class="btn btn-outline">🗑 Удалить вариант</button>

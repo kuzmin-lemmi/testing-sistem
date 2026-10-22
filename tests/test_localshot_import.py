@@ -292,7 +292,7 @@ class ImportTests(unittest.TestCase):
                 raise OSError('диск полон')
             return real_create(*args, **kwargs)
 
-        with patch.object(server.Task, 'create', side_effect=flaky), self.assertLogs(server.app.logger, 'ERROR'):
+        with patch.object(Task, 'create', side_effect=flaky), self.assertLogs(server.app.logger, 'ERROR'):
             response = self.upload(data)
         self.assertIn('Ничего не создано', response.get_data(as_text=True))
         self.assertEqual(len(calls), 3)

@@ -120,7 +120,7 @@ class AccessCodeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_option_can_be_switched_back_on(self):
-        with patch('server.SHOW_ACCESS_CODE_OPTION', True):
+        with patch('blueprints.common.SHOW_ACCESS_CODE_OPTION', True):
             page = self.client.get('/sessions/new').get_data(as_text=True)
         self.assertIn('name="use_code"', page)
 

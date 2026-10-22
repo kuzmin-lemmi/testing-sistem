@@ -6,16 +6,16 @@
 <div class="variant-create-page">
     <div class="page-header">
         <h1>➕ Создать вариант</h1>
-        <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">← Назад к списку</a>
+        <a href="{{ url_for('variants.variants_list') }}" class="btn btn-secondary">← Назад к списку</a>
     </div>
 
     <div class="mode-tabs" style="display:flex; gap:10px; margin-bottom:16px;">
-        <a href="{{ url_for('variant_create', scope='ege') }}" class="btn {% if scope == 'ege' %}btn-primary{% else %}btn-outline{% endif %}">ЕГЭ</a>
-        <a href="{{ url_for('variant_create', scope='class') }}" class="btn {% if scope == 'class' %}btn-primary{% else %}btn-outline{% endif %}">Обычные классы</a>
+        <a href="{{ url_for('variants.variant_create', scope='ege') }}" class="btn {% if scope == 'ege' %}btn-primary{% else %}btn-outline{% endif %}">ЕГЭ</a>
+        <a href="{{ url_for('variants.variant_create', scope='class') }}" class="btn {% if scope == 'class' %}btn-primary{% else %}btn-outline{% endif %}">Обычные классы</a>
     </div>
 
     {% if scope == 'class' %}
-    <form action="{{ url_for('variant_create', scope='class') }}" method="POST" class="card">
+    <form action="{{ url_for('variants.variant_create', scope='class') }}" method="POST" class="card">
         <input type="hidden" name="variant_scope" value="class">
         <div class="form-group">
             <label>Название варианта</label>
@@ -92,7 +92,7 @@
             <h2>📤 Загрузка готового варианта</h2>
             <p class="hint-text">Загрузите скриншоты заданий, укажите номера ЕГЭ и ответы. Задачи будут добавлены в банк и объединены в вариант.</p>
             
-            <form action="{{ url_for('variant_upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+            <form action="{{ url_for('variants.variant_upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
                 <div class="form-group">
                     <label for="uploadName">Название варианта</label>
                     <input type="text" name="name" id="uploadName" placeholder="Например: Вариант СтатГрад от 20.01.2026" required>
@@ -127,7 +127,7 @@
         <div class="step-card card" id="step2">
             <h2>2️⃣ Настройки варианта</h2>
             
-            <form action="{{ url_for('variant_create') }}" method="POST" id="variantForm" novalidate>
+            <form action="{{ url_for('variants.variant_create') }}" method="POST" id="variantForm" novalidate>
                 <input type="hidden" name="variant_type" id="hiddenType" value="thematic">
                 
                 <div class="form-group">
@@ -223,7 +223,7 @@
                                         <option value="">— Не выбрано —</option>
                                         {% for task in all_tasks.get(ege_num, []) %}
                                         <option value="{{ task.id }}"
-                                                data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                                                data-image="{{ url_for('system.serve_image', filename=task.image_path) }}"
                                                 data-answer="{{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %}"
                                                 data-ege="{{ ege_num }}">#{{ task.id }} (ответ: {{ task.answer_1 }}{% if task.answer_2 %}, {{ task.answer_2 }}{% endif %})</option>
                                         {% endfor %}
@@ -248,7 +248,7 @@
                 <div class="form-error" id="variantFormError" style="display: none;"></div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">✨ Создать вариант</button>
-                    <a href="{{ url_for('variants_list') }}" class="btn btn-secondary">Отмена</a>
+                    <a href="{{ url_for('variants.variants_list') }}" class="btn btn-secondary">Отмена</a>
                 </div>
             </form>
         </div>

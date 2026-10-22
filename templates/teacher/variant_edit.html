@@ -6,7 +6,7 @@
 <div class="variant-edit-page">
     <div class="page-header">
         <h1>✏️ Редактирование варианта</h1>
-        <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary">← К варианту</a>
+        <a href="{{ url_for('variants.variant_view', variant_id=variant.id) }}" class="btn btn-secondary">← К варианту</a>
     </div>
 
     <form method="POST" enctype="multipart/form-data" class="card edit-form" id="variantEditForm">
@@ -23,7 +23,7 @@
                 {% for task in current_tasks %}
                 <button type="button" class="current-item {% if loop.first %}active{% endif %}"
                         data-task-id="{{ task.id }}"
-                        data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                        data-image="{{ url_for('system.serve_image', filename=task.image_path) }}"
                         data-answer="{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}"
                         data-ege="{{ task.ege_number }}"
                         onclick="selectCurrentTask({{ task.id }}, this)">
@@ -43,7 +43,7 @@
                     </label>
                 </div>
                 <div class="preview-image-wrap">
-                    <img id="previewImage" src="{{ url_for('serve_image', filename=current_tasks[0].image_path) }}" alt="Текущая задача">
+                    <img id="previewImage" src="{{ url_for('system.serve_image', filename=current_tasks[0].image_path) }}" alt="Текущая задача">
                 </div>
                 {% else %}
                 <div class="empty-state">В варианте пока нет задач</div>
@@ -88,11 +88,11 @@
                         <div class="available-row available-task {% if loop.first %}active{% endif %}"
                              data-task-id="{{ task.id }}"
                              data-ege="{{ task.ege_number }}"
-                             data-image="{{ url_for('serve_image', filename=task.image_path) }}"
+                             data-image="{{ url_for('system.serve_image', filename=task.image_path) }}"
                              data-answer="{{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}"
                              onclick="selectAvailableTask({{ task.id }}, this, event)">
                             <input type="checkbox" id="add_task_{{ task.id }}" name="add_task_ids" value="{{ task.id }}" class="add-task-checkbox" onclick="event.stopPropagation()" onchange="syncExistingPreviewCheckbox(this)">
-                            <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача">
+                            <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задача">
                             <div>
                                 <div><strong>#{{ task.id }}</strong> • №{{ task.ege_number }}</div>
                                 <div class="hint-text">Ответ: {{ task.answer_1 }}{% if task.answer_count == 2 %}, {{ task.answer_2 }}{% endif %}</div>
@@ -111,7 +111,7 @@
                             </label>
                         </div>
                         <div class="preview-image-wrap">
-                            <img id="existingPreviewImage" src="{{ url_for('serve_image', filename=available_tasks[0].image_path) }}" alt="Предпросмотр задачи">
+                            <img id="existingPreviewImage" src="{{ url_for('system.serve_image', filename=available_tasks[0].image_path) }}" alt="Предпросмотр задачи">
                         </div>
                         {% else %}
                         <div class="empty-state">Нет доступных задач для добавления</div>
@@ -139,7 +139,7 @@
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">💾 Сохранить изменения</button>
-            <a href="{{ url_for('variant_view', variant_id=variant.id) }}" class="btn btn-secondary">Отмена</a>
+            <a href="{{ url_for('variants.variant_view', variant_id=variant.id) }}" class="btn btn-secondary">Отмена</a>
         </div>
     </form>
 </div>

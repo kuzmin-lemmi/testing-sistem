@@ -955,14 +955,14 @@
             <div class="finish-note">
                 Оценка появится, когда учитель завершит тестирование
             </div>
-            <form action="{{ url_for('student_submit') }}" method="POST" id="submitForm">
+            <form action="{{ url_for('student.student_submit') }}" method="POST" id="submitForm">
                 <button type="button" class="btn-finish" onclick="submitWork()">
                     ✅ Сдать работу
                 </button>
             </form>
-            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm" style="display:none;"></form>
+            <form action="{{ url_for('student.student_finish') }}" method="POST" id="finishForm" style="display:none;"></form>
             {% else %}
-            <form action="{{ url_for('student_finish') }}" method="POST" id="finishForm">
+            <form action="{{ url_for('student.student_finish') }}" method="POST" id="finishForm">
                 <button type="submit" class="btn-finish" onclick="return confirm('Завершить тест? Это действие нельзя отменить.')">
                     Завершить тест
                 </button>
@@ -1096,12 +1096,12 @@
                 </div>
                 
                 <div class="task-image">
-                    <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача" onclick="toggleZoom(this)">
+                    <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задача" onclick="toggleZoom(this)">
                     <span class="zoom-hint">💡 Нажмите на изображение для увеличения</span>
                 </div>
                 
                 {% if task.attachment_path %}
-                <a href="{{ url_for('serve_attachment', filename=task.attachment_path) }}" class="attachment" download>
+                <a href="{{ url_for('system.serve_attachment', filename=task.attachment_path) }}" class="attachment" download>
                     📎 Скачать файл данных
                 </a>
                 {% endif %}
@@ -2221,7 +2221,7 @@
             fd.append('file', file);
 
             try {
-                const resp = await fetch('{{ url_for("student_upload_answer_file") }}', {
+                const resp = await fetch('{{ url_for("student.student_upload_answer_file") }}', {
                     method: 'POST',
                     body: fd,
                 });
@@ -2822,7 +2822,7 @@
                 };
 
                 try {
-                    const response = await fetch('{{ url_for("student_save_answer") }}', {
+                    const response = await fetch('{{ url_for("student.student_save_answer") }}', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
@@ -2865,7 +2865,7 @@
             };
             
             try {
-                const response = await fetch('{{ url_for("student_save_answer") }}', {
+                const response = await fetch('{{ url_for("student.student_save_answer") }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -2923,7 +2923,7 @@
         
         async function heartbeat() {
             try {
-                const res = await fetch('{{ url_for("student_ping") }}', { method: 'POST' });
+                const res = await fetch('{{ url_for("student.student_ping") }}', { method: 'POST' });
                 if (!res.ok) return;
                 const data = await res.json().catch(() => null);
                 if (data && data.redirect) {
@@ -2936,7 +2936,7 @@
                 }
                 if (data && data.submitted) {
                     // учитель принял работу — показываем заставку
-                    window.location.href = '{{ url_for("student_test") }}';
+                    window.location.href = '{{ url_for("student.student_test") }}';
                     return;
                 }
                 if (data && Object.prototype.hasOwnProperty.call(data, 'paused')) {
@@ -3007,8 +3007,8 @@
             if (Object.keys(times).length) params.set('times', JSON.stringify(times));
             if (![...params.keys()].length) return;
             const body = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded' });
-            if (!(navigator.sendBeacon && navigator.sendBeacon('{{ url_for("student_away") }}', body))) {
-                fetch('{{ url_for("student_away") }}', { method: 'POST', body: body, keepalive: true }).catch(() => {});
+            if (!(navigator.sendBeacon && navigator.sendBeacon('{{ url_for("student.student_away") }}', body))) {
+                fetch('{{ url_for("student.student_away") }}', { method: 'POST', body: body, keepalive: true }).catch(() => {});
             }
         }
         function reportAway(away) {

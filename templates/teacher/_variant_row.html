@@ -3,7 +3,7 @@
     <label class="tree-check-item">
         <input type="checkbox" name="variant_ids" value="{{ v.id }}" class="variant-checkbox">
     </label>
-    <a class="tree-item" href="{{ url_for('variants_list', scope=scope, variant_id=v.id) }}" draggable="false">
+    <a class="tree-item" href="{{ url_for('variants.variants_list', scope=scope, variant_id=v.id) }}" draggable="false">
         <div class="tree-item-title">{{ v.name }}</div>
         <div class="tree-item-meta">
             {{ tasks_word(v.tasks_count) }}{% if v.minutes %} · {{ v.minutes }} мин{% endif %}

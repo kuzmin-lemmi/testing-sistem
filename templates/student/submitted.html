@@ -33,11 +33,11 @@
 (function () {
     async function check() {
         try {
-            const response = await fetch('{{ url_for("student_ping") }}', { method: 'POST', cache: 'no-store' });
-            if (response.status === 401 || response.status === 404) { location.href = '{{ url_for("student_login") }}'; return; }
+            const response = await fetch('{{ url_for("student.student_ping") }}', { method: 'POST', cache: 'no-store' });
+            if (response.status === 401 || response.status === 404) { location.href = '{{ url_for("student.student_login") }}'; return; }
             const data = await response.json();
             if (data.redirect) { location.href = data.redirect; return; }
-            if (data.active && !data.submitted) { location.href = '{{ url_for("student_test") }}'; return; }
+            if (data.active && !data.submitted) { location.href = '{{ url_for("student.student_test") }}'; return; }
         } catch (error) { /* сервер учителя временно недоступен */ }
         setTimeout(check, 4000);
     }

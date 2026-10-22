@@ -179,7 +179,7 @@
             {% endif %}
         {% endwith %}
         
-        <form id="studentLoginForm" action="{{ url_for('student_start') }}" method="POST" autocomplete="off">
+        <form id="studentLoginForm" action="{{ url_for('student.student_start') }}" method="POST" autocomplete="off">
             {% if app_mode %}
             <input type="hidden" name="app_mode" value="1">
             {% endif %}

@@ -15,7 +15,7 @@
             <div class="tree-list">
                 {% for s in sessions %}
                 <a class="tree-item {% if selected_session_id == s.id %}active{% endif %}"
-                   href="{{ url_for('results_list', q=search_query, session_id=s.id) }}">
+                   href="{{ url_for('teacher.results_list', q=search_query, session_id=s.id) }}">
                     <div class="tree-item-title">{{ s.title }}</div>
                     <div class="tree-item-meta">
                         {{ s.students_count }} {{ plural(s.students_count, 'ученик', 'ученика', 'учеников') }}
@@ -44,11 +44,11 @@
                 </div>
                 <div class="head-actions">
                     {% if selected_session.status == 'active' %}
-                    <a href="{{ url_for('session_monitor', session_id=selected_session.id) }}" class="btn btn-primary btn-small">👁 Мониторинг</a>
+                    <a href="{{ url_for('teacher.session_monitor', session_id=selected_session.id) }}" class="btn btn-primary btn-small">👁 Мониторинг</a>
                     {% endif %}
-                    <a href="{{ url_for('result_export_xlsx', session_id=selected_session.id) }}" class="btn btn-success btn-small">📥 Excel</a>
+                    <a href="{{ url_for('teacher.result_export_xlsx', session_id=selected_session.id) }}" class="btn btn-success btn-small">📥 Excel</a>
                     {% if selected_session.status != 'active' %}
-                    <form action="{{ url_for('result_delete', session_id=selected_session.id) }}" method="POST" class="inline-form"
+                    <form action="{{ url_for('teacher.result_delete', session_id=selected_session.id) }}" method="POST" class="inline-form"
                           onsubmit="return confirm('Удалить это тестирование и все ответы учеников? Отменить нельзя.')">
                         <button type="submit" class="btn btn-outline btn-small">🗑 Удалить</button>
                     </form>
@@ -82,7 +82,7 @@
                         <tr>
                             <th class="name-col">Ученик</th>
                             {% for task in group.tasks %}<th><button type="button" class="task-open" title="Показать задание {{ loop.index }}"
-                                data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=task.image_path) }}"
+                                data-n="{{ loop.index }}" data-img="{{ url_for('system.serve_image', filename=task.image_path) }}"
                                 data-expected="{{ format_expected(task) }}" data-solved="{{ group.solved[loop.index0] }}" data-total="{{ group.students|length }}">{{ loop.index }}</button></th>{% endfor %}
                             <th>Верно</th><th>%</th><th>Оценка</th><th title="Сколько раз ученик уходил со страницы теста">Уходы</th>
                         </tr>
@@ -90,11 +90,11 @@
                     <tbody>
                         {% for row in group.students %}
                         <tr>
-                            <td class="name-col"><a href="{{ url_for('result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a>
+                            <td class="name-col"><a href="{{ url_for('teacher.result_student', student_id=row.student.id) }}">{{ row.student.last_name }} {{ row.student.first_name }}</a>
                                 {%- if selected_session.status == 'active' %}
                                 {%- if row.student.status == 'finished' %} <span class="finished-mark" title="Тест для этого ученика завершён">⏹ завершён</span>
                                 {%- else %} <button type="button" class="finish-one"
-                                    data-url="{{ url_for('session_finish_student', session_id=selected_session.id, student_id=row.student.id) }}"
+                                    data-url="{{ url_for('teacher.session_finish_student', session_id=selected_session.id, student_id=row.student.id) }}"
                                     data-name="{{ row.student.last_name }} {{ row.student.first_name }}"
                                     title="Завершить тест только этому ученику: у него сразу оценка, остальные продолжают">⏹ Завершить</button>
                                 {%- endif %}{% endif %}</td>
@@ -103,7 +103,7 @@
                                 <button type="button" class="task-open"
                                         aria-label="Задание {{ loop.index }}: {% if cell.correct %}верно{% elif cell.answered %}неверно{% else %}нет ответа{% endif %}"
                                         title="Ответ: {{ cell.given or '—' }}{% if not cell.correct %} · правильный: {{ format_expected(cell.task) }}{% endif %}{% if cell.time %} · время: {{ cell.time }}{% endif %}{% if cell.fast %} · ⚡ очень быстро{% endif %}"
-                                        data-n="{{ loop.index }}" data-img="{{ url_for('serve_image', filename=cell.task.image_path) }}"
+                                        data-n="{{ loop.index }}" data-img="{{ url_for('system.serve_image', filename=cell.task.image_path) }}"
                                         data-expected="{{ format_expected(cell.task) }}" data-given="{{ cell.given }}"
                                         data-status="{% if cell.correct %}ok{% elif cell.answered %}bad{% else %}none{% endif %}"
                                         data-student="{{ row.student.last_name }} {{ row.student.first_name }}">{% if cell.correct %}✓{% elif cell.answered %}✗{% else %}—{% endif %}{% if cell.fast %}<sup class="fast">⚡</sup>{% endif %}</button>

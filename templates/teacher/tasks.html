@@ -8,11 +8,11 @@
         <h1>📝 Банк задач</h1>
         <div class="header-actions">
             {% if selected_ege == 0 %}
-            <a href="{{ url_for('tasks_bulk_upload', mode='class', class_id=default_class_id) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
-            <a href="{{ url_for('task_add', mode='class', class_id=default_class_id) }}" class="btn btn-primary">➕ Добавить задачу</a>
+            <a href="{{ url_for('teacher.tasks_bulk_upload', mode='class', class_id=default_class_id) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
+            <a href="{{ url_for('teacher.task_add', mode='class', class_id=default_class_id) }}" class="btn btn-primary">➕ Добавить задачу</a>
             {% else %}
-            <a href="{{ url_for('tasks_bulk_upload', mode='ege', ege=selected_ege or 1) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
-            <a href="{{ url_for('task_add', mode='ege', ege=selected_ege or 1) }}" class="btn btn-primary">➕ Добавить задачу</a>
+            <a href="{{ url_for('teacher.tasks_bulk_upload', mode='ege', ege=selected_ege or 1) }}" class="btn btn-secondary">📦 Массовая загрузка</a>
+            <a href="{{ url_for('teacher.task_add', mode='ege', ege=selected_ege or 1) }}" class="btn btn-primary">➕ Добавить задачу</a>
             {% endif %}
         </div>
     </div>
@@ -23,14 +23,14 @@
             <p class="form-hint" style="margin-bottom:8px;">Перетащите карточку в нужный банк</p>
             <ul class="ege-list">
                 <li>
-                    <a href="{{ url_for('tasks_list', mode='ege', ege=0) }}" class="bank-drop-target {% if selected_ege == 0 %}active{% endif %}" data-target="general">
+                    <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=0) }}" class="bank-drop-target {% if selected_ege == 0 %}active{% endif %}" data-target="general">
                         <span class="num">Общий</span>
                         <span class="count">{{ general_bank_count }}</span>
                     </a>
                 </li>
                 {% for num in range(1, 28) %}
                 <li>
-                    <a href="{{ url_for('tasks_list', mode='ege', ege=num) }}" class="bank-drop-target {% if selected_ege == num %}active{% endif %}" data-target="ege" data-ege="{{ num }}">
+                    <a href="{{ url_for('teacher.tasks_list', mode='ege', ege=num) }}" class="bank-drop-target {% if selected_ege == num %}active{% endif %}" data-target="ege" data-ege="{{ num }}">
                         <span class="num">№{{ num }}</span>
                         <span class="count">{{ task_counts.get(num, 0) }}</span>
                     </a>
@@ -76,8 +76,8 @@
                 {% for task in tasks %}
                 <div class="task-card" draggable="true" data-task-id="{{ task.id }}">
                     <div class="task-image">
-                        <a href="{{ url_for('serve_image', filename=task.image_path) }}" target="_blank" rel="noopener">
-                            <img src="{{ url_for('serve_image', filename=task.image_path) }}" alt="Задача {{ task.id }}">
+                        <a href="{{ url_for('system.serve_image', filename=task.image_path) }}" target="_blank" rel="noopener">
+                            <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задача {{ task.id }}">
                         </a>
                     </div>
                     <div class="task-info">
@@ -103,9 +103,9 @@
                             Выбрать
                         </label>
                         <span class="form-hint" style="margin:0 6px 0 0;">Перетащить в банк</span>
-                        <a href="{{ url_for('task_view', task_id=task.id) }}" class="btn btn-small">👁</a>
-                        <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-small">✏️</a>
-                        <form action="{{ url_for('task_delete', task_id=task.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить задачу #{{ task.id }}?')">
+                        <a href="{{ url_for('teacher.task_view', task_id=task.id) }}" class="btn btn-small">👁</a>
+                        <a href="{{ url_for('teacher.task_edit', task_id=task.id) }}" class="btn btn-small">✏️</a>
+                        <form action="{{ url_for('teacher.task_delete', task_id=task.id) }}" method="POST" class="inline-form" onsubmit="return confirm('Удалить задачу #{{ task.id }}?')">
                             <input type="hidden" name="return_ege" value="{{ selected_ege if selected_ege is not none else 1 }}">
                             <button type="submit" class="btn btn-small btn-danger" aria-label="Удалить задачу" title="Удалить задачу">🗑</button>
                         </form>
@@ -126,7 +126,7 @@
     </div>
 </div>
 
-<form id="dragMoveForm" action="{{ url_for('tasks_move_bank') }}" method="POST" style="display:none;">
+<form id="dragMoveForm" action="{{ url_for('teacher.tasks_move_bank') }}" method="POST" style="display:none;">
     <input type="hidden" name="task_id" id="dragTaskId">
     <input type="hidden" name="target" id="dragTarget">
     <input type="hidden" name="target_ege" id="dragTargetEge">
@@ -134,7 +134,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
-<form id="bulkActionForm" action="{{ url_for('tasks_bulk_action') }}" method="POST" style="display:none;">
+<form id="bulkActionForm" action="{{ url_for('teacher.tasks_bulk_action') }}" method="POST" style="display:none;">
     <input type="hidden" name="action" id="bulkActionHidden">
     <input type="hidden" name="target" id="bulkTargetHidden">
     <input type="hidden" name="target_ege" id="bulkTargetEgeHidden">
