@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+extend-exclude = ["static", "student_app", "build", "dist"]
+
+[tool.ruff.lint]
+# E4/E7/E9 + F — набор ruff по умолчанию; B — частые ошибки (изменяемые значения по умолчанию и т. п.)
+select = ["E4", "E7", "E9", "F", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E702"]  # в тестах короткие шаги подготовки пишутся в одну строку
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

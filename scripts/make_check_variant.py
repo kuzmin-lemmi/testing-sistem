@@ -5,12 +5,16 @@
 
     <папка LocalShot>\\.venv\\Scripts\\python.exe scripts\\make_check_variant.py "docs\\Проверка в школе.variant" <папка LocalShot>
 """
-import io, math, random, sys, zipfile
+import io
+import math
+import random
+import sys
+import zipfile
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, sys.argv[2] if len(sys.argv) > 2 else r'C:\Users\admin\Desktop\LocalShot')
-from variant import Task, Variant, png_bytes, MODE_FIELDS, MODE_MULTILINE
+from variant import Task, Variant, png_bytes, MODE_MULTILINE
 
 out = Path(sys.argv[1])
 FONT = ImageFont.truetype(r'C:\Windows\Fonts\segoeui.ttf', 30)
