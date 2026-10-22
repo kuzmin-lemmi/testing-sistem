@@ -10,13 +10,15 @@
 //! - Если на передний план вышла не разрешённая программа (браузер, проводник, диспетчер задач…),
 //!   возвращает окно теста и сообщает учителю. Разрешённые программы (Excel, Python…) — `allowed.txt`.
 //! - Ctrl+Alt+Del Windows не отдаёт ни одной программе: уход через него тоже виден учителю.
-//! - Выход для учителя: Ctrl+Alt+Shift+Q.
+//! - Ученик закрывает программу кнопкой «Закрыть программу» — только вне теста (до входа или когда учитель
+//!   завершил тестирование и открылась оценка). Выход учителя: Ctrl+Alt+Shift+Q — всегда.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
 mod lock;
 mod server;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -28,8 +30,22 @@ use wry::WebViewBuilder;
 
 pub const APP_MARK: &str = "TestingStudentApp/0.1";
 
-/// Ctrl+Alt+Shift+Q на любой странице — выход (учитель).
-const EXIT_SCRIPT: &str = "window.addEventListener('keydown', e => {     if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); window.ipc.postMessage('exit'); } }, true);";
+/// На каждой странице: Ctrl+Alt+Shift+Q — выход учителя (всегда); вне теста — кнопка «Закрыть программу».
+/// Нажатия до страницы доходят точно, до перехвата клавиатуры — не всегда.
+const PAGE_SCRIPT: &str = r#"
+window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); window.ipc.postMessage('teacher-exit'); }
+}, true);
+window.addEventListener('DOMContentLoaded', () => {
+    if (location.pathname.startsWith('/test/exam')) return; // во время теста кнопки нет
+    const button = document.createElement('button');
+    button.textContent = '✕ Закрыть программу';
+    button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;padding:10px 18px;border:none;' +
+        'border-radius:10px;background:#1f2937;color:#fff;font:600 15px "Segoe UI",sans-serif;cursor:pointer;opacity:.85';
+    button.onclick = () => window.ipc.postMessage('exit');
+    document.body.appendChild(button);
+});
+"#;
 
 /// Диагностика: `set STUDENT_APP_DEBUG=1` — программа пишет в stderr, что видит и что делает.
 pub fn debug_enabled() -> bool {
@@ -50,8 +66,10 @@ pub enum UserEvent {
     ServerUp,
     /// На передний план вышла чужая программа (имя файла программы).
     ForeignWindow(String),
-    /// Учитель нажал Ctrl+Alt+Shift+Q.
+    /// Учитель нажал Ctrl+Alt+Shift+Q (или --exit-after): закрыть всегда.
     Exit,
+    /// Ученик нажал «Закрыть программу»: можно, только если он не в тесте.
+    StudentExit,
 }
 
 fn main() -> wry::Result<()> {
@@ -70,7 +88,12 @@ fn main() -> wry::Result<()> {
         .expect("окно");
     let hwnd = window.hwnd();
 
+    // Ученик зашёл в тест (/test/exam) — закрыть программу нельзя, пока не откроется страница с оценкой
+    // (/test/result: учитель завершил тестирование). По адресам, а не по текущей странице: «Назад» (Alt+←)
+    // может показать из кеша страницу входа или ожидания, не спрашивая сервер.
+    let in_test = Arc::new(AtomicBool::new(false));
     let origin = config.origin.clone();
+    let navigation_test = in_test.clone();
     let webview = WebViewBuilder::new()
         .with_html(server::waiting_page(&config.origin))
         .with_user_agent(format!(
@@ -78,15 +101,26 @@ fn main() -> wry::Result<()> {
         ))
         .with_devtools(cfg!(debug_assertions))
         // только страницы системы тестирования: ни поиска, ни других сайтов
-        .with_navigation_handler(move |url| !url.starts_with("http") || url.starts_with(&origin))
+        .with_navigation_handler(move |url| {
+            if let Some(path) = url.strip_prefix(origin.as_str()) {
+                if path.starts_with("/test/exam") {
+                    navigation_test.store(true, Ordering::Relaxed);
+                } else if path.starts_with("/test/result") {
+                    navigation_test.store(false, Ordering::Relaxed);
+                }
+            }
+            !url.starts_with("http") || url.starts_with(&origin)
+        })
         .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
         // выход для учителя: нажатия точно доходят до страницы (до перехвата клавиатуры — не всегда)
-        .with_initialization_script(EXIT_SCRIPT)
+        .with_initialization_script(PAGE_SCRIPT)
         .with_ipc_handler({
             let proxy = proxy.clone();
             move |request| {
-                if request.body() == "exit" {
-                    send(&proxy, UserEvent::Exit);
+                match request.body().as_str() {
+                    "teacher-exit" => send(&proxy, UserEvent::Exit),
+                    "exit" => send(&proxy, UserEvent::StudentExit),
+                    _ => {}
                 }
             }
         })
@@ -132,6 +166,15 @@ fn main() -> wry::Result<()> {
                 }
             }
             Event::UserEvent(UserEvent::Exit) => *control_flow = ControlFlow::Exit,
+            Event::UserEvent(UserEvent::StudentExit) => {
+                if in_test.load(Ordering::Relaxed) {
+                    let _ = webview.evaluate_script(
+                        "alert('Сейчас идёт тест. Закрыть программу можно, когда учитель завершит тестирование.')",
+                    );
+                } else {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {} // закрыть окно нельзя
             _ => {}
         }
