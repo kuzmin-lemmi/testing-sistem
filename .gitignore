@@ -26,3 +26,6 @@ static/pyodide/
 # сборка программы
 build/
 dist/
+
+# сборка редактора: npm install в scripts/codemirror
+scripts/codemirror/node_modules/
