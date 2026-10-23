@@ -16,13 +16,13 @@ venv/
 .idea/
 .DS_Store
 
+# Claude Code: локальные настройки и рабочие копии
+.claude/settings.local.json
+.claude/worktrees/
+
 # pyodide offline runtime (large)
 static/pyodide/
 
 # сборка программы
 build/
 dist/
-
-# Claude Code: локальные настройки и рабочие копии
-.claude/settings.local.json
-.claude/worktrees/
