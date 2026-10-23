@@ -10,7 +10,8 @@
 
 | Часть | Где |
 |---|---|
-| Сервер (Flask), все страницы и маршруты | `server.py` |
+| Сборка приложения Flask: хуки, ошибки, регистрация разделов, запуск | `server.py` |
+| Страницы и маршруты по разделам (Blueprints) | `blueprints/system.py` (главная, настройки, файлы заданий), `teacher.py` (банк, тестирования, мониторинг, результаты), `variants.py` (варианты, LocalShot), `student.py` (всё под `/test`), `common.py` (общие помощники) |
 | База SQLite, модели, миграции (`migrate_db`) | `models.py` |
 | Настройки, пути к данным, переменные окружения | `config.py` |
 | Результаты, оценки, совпадения ответов | `results_logic.py` |
@@ -19,7 +20,8 @@
 | Журнал «Что происходит в системе» | `activity.py` |
 | Запуск без консоли, значок у часов | `launcher.py`, `start.bat` |
 | Страницы | `templates/teacher/*`, `templates/student/*`; стили и скрипты — `static/` |
-| Программа ученика (Rust, запертое окно теста) | `student_app/` — см. `student_app/README.md` |
+| Программа ученика (Rust, запертое окно теста; выполняет Python ученика — `src/python.rs`) | `student_app/` — см. `student_app/README.md` |
+| Редактор Python под заданием (только в программе ученика) | `static/js/py_editor.js`, сборка CodeMirror — `scripts/codemirror` |
 | Сборка `.exe` учителя (PyInstaller) | `BUILD_EXE.bat`, `testing.spec` |
 
 Данные — в `data/` (в собранной программе — `Данные/` рядом с `.exe`), в git не попадают.
@@ -32,10 +34,15 @@
 python -m unittest discover -s tests -v
 ```
 
+Проверка кода: `python -m ruff check .` (пакеты разработки — `pip install -r requirements-dev.txt`).
+Имена эндпоинтов — с префиксом раздела: `url_for('student.student_test')`, `url_for('system.index')`.
+
 Запуск сервера для разработки: `python server.py` → http://127.0.0.1:8080. Чтобы не трогать свою базу,
 задайте отдельную папку: `EGE_DATA_DIR=<папка>`.
 
-Программа ученика (из `student_app/`): `cargo check --all-targets`, `cargo build --release`.
+Программа ученика (из `student_app/`): `cargo test`, `cargo clippy --all-targets`, `cargo build --release`.
+Проба на этом компьютере: `cargo run -- --no-desktop --server 127.0.0.1` (`STUDENT_APP_DEBUG=1` — журнал в консоль).
+На GitHub: `ci.yml` — ruff и тесты (Python 3.8 и 3.12), `student_app.yml` — сборка программы ученика.
 
 Python-редактор ученика (Pyodide, офлайн): `python scripts/download_pyodide.py` → `static/pyodide/` (в git не попадает).
 
@@ -55,6 +62,7 @@ Python-редактор ученика (Pyodide, офлайн): `python scripts/
 - [docs/УЛУЧШЕНИЯ.md](docs/УЛУЧШЕНИЯ.md) — список улучшений со статусом и порядком: что делать дальше.
 - [ПЛАН_РАЗРАБОТКИ.md](ПЛАН_РАЗРАБОТКИ.md) — связка с LocalShot, этапы.
 - [docs/СТРАТЕГИЯ.md](docs/СТРАТЕГИЯ.md) — продукт: программа ученика, лицензия, варианты.
+- [docs/ПЛАН_PYTHON_УЧЕНИКА.md](docs/ПЛАН_PYTHON_УЧЕНИКА.md) — Python ученика в программе ученика (этап 3 сделан).
 - [docs/ПЛАН_ПРОВЕРКИ_В_ШКОЛЕ.md](docs/ПЛАН_ПРОВЕРКИ_В_ШКОЛЕ.md) — проверка на настоящих компьютерах.
 - [ИНСТРУКЦИЯ.md](ИНСТРУКЦИЯ.md) — для учителя.
 
