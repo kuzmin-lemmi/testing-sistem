@@ -1,0 +1,38 @@
+name: Проверка
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Тесты системы
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
+  student_app:
+    name: Программа ученика
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: student_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: student_app
+      - run: cargo check --all-targets
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Тестирование.exe
+          path: student_app/target/release/student_app.exe
