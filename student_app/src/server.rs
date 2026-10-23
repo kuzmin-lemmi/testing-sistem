@@ -114,6 +114,33 @@ fn http_get(origin: &str, path: &str, timeout_ms: u64) -> Option<String> {
     Some(reply.split_once("\r\n\r\n").map(|(_, body)| body.to_string()).unwrap_or_default())
 }
 
+/// Файл задания (`/attachments/…`) с системы учителя — в `dest`. В отличие от `http_get`, ответ двоичный
+/// и большой (файлы к №26–27 бывают по несколько мегабайт). Пишем во временный файл: оборвалось — `dest` не испорчен.
+pub fn http_download(origin: &str, path: &str, dest: &std::path::Path) -> Result<(), String> {
+    const LIMIT: u64 = 200 * 1024 * 1024; // как у файла варианта
+    let host_port = origin.trim_start_matches("http://");
+    let addr: SocketAddr = host_port
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next())
+        .ok_or_else(|| format!("неизвестный адрес {host_port}"))?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(Duration::from_secs(15))).map_err(|e| e.to_string())?;
+    stream
+        .write_all(format!("GET {path} HTTP/1.0\r\nHost: {host_port}\r\n\r\n").as_bytes())
+        .map_err(|e| e.to_string())?;
+    let mut reply = Vec::new();
+    stream.take(LIMIT).read_to_end(&mut reply).map_err(|e| e.to_string())?;
+    let head_end = reply.windows(4).position(|w| w == b"\r\n\r\n").ok_or("пустой ответ")?;
+    let status = String::from_utf8_lossy(&reply[..head_end.min(12)]).to_string();
+    if !status.starts_with("HTTP/1.") || status.get(9..12) != Some("200") {
+        return Err(format!("ответ {status}"));
+    }
+    let temp = dest.with_extension("part");
+    std::fs::write(&temp, &reply[head_end + 4..]).map_err(|e| e.to_string())?;
+    std::fs::rename(&temp, dest).map_err(|e| e.to_string())
+}
+
 /// Найденная система тестирования.
 #[derive(Clone, Debug)]
 pub struct Found {
