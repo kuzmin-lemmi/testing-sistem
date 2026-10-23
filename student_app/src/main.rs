@@ -12,13 +12,16 @@
 //! - Если на передний план вышла не разрешённая программа (браузер, проводник, диспетчер задач…),
 //!   возвращает окно теста и сообщает учителю. Разрешённые программы (Excel, Python…) — `allowed.txt`.
 //! - Ctrl+Alt+Del Windows не отдаёт ни одной программе: уход через него тоже виден учителю.
+//! - Выполняет код Python ученика из редактора под заданием его собственным Python (`python.rs`).
 //! - Ученик закрывает программу кнопкой «Закрыть программу» — только вне теста (до входа или когда учитель
 //!   завершил тестирование и открылась оценка). Выход учителя: Ctrl+Alt+Shift+Q — всегда.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
 mod install;
+mod json;
 mod lock;
+mod python;
 mod server;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -75,6 +78,8 @@ pub enum UserEvent {
     Exit,
     /// Ученик нажал «Закрыть программу»: можно, только если он не в тесте.
     StudentExit,
+    /// Скрипт для страницы из другого потока (вывод Python): страницей управляет только поток окна.
+    Script(String),
 }
 
 fn main() -> wry::Result<()> {
@@ -122,6 +127,7 @@ fn main() -> wry::Result<()> {
                     navigation_test.store(true, Ordering::Relaxed);
                 } else if path.starts_with("/test/result") {
                     navigation_test.store(false, Ordering::Relaxed);
+                    python::stop_all(); // тест закончился — программа ученика больше не нужна
                 }
             }
             !url.starts_with("http") || url.starts_with(&origin)
@@ -131,12 +137,19 @@ fn main() -> wry::Result<()> {
         .with_initialization_script(PAGE_SCRIPT)
         .with_ipc_handler({
             let proxy = proxy.clone();
+            let origin = origin.clone();
+            let page: python::Page = {
+                let proxy = proxy.clone();
+                Arc::new(move |script| send(&proxy, UserEvent::Script(script)))
+            };
             move |request| {
                 match request.body().as_str() {
                     "teacher-exit" => send(&proxy, UserEvent::Exit),
                     "exit" => send(&proxy, UserEvent::StudentExit),
                     // выбрал систему из списка или ввёл адрес на странице ожидания
                     body if body.starts_with("server:") => server::choose(body["server:".len()..].to_string(), proxy.clone()),
+                    // редактор Python под заданием (static/js/py_editor.js)
+                    body if body.starts_with("py:") => python::handle(&body["py:".len()..], &origin.lock().unwrap(), &page),
                     _ => {}
                 }
             }
@@ -165,7 +178,7 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::Status(text)) => {
                 let _ = webview.evaluate_script(&format!(
                     "window.setStatus && window.setStatus({})",
-                    js_string(&text)
+                    json::quote(&text)
                 ));
             }
             Event::UserEvent(UserEvent::ServerUp(address)) => {
@@ -180,7 +193,7 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::Servers(list)) => {
                 let items: Vec<String> = list
                     .iter()
-                    .map(|f| format!("{{origin: {}, computer: {}}}", js_string(&f.origin), js_string(&f.computer)))
+                    .map(|f| format!("{{origin: {}, computer: {}}}", json::quote(&f.origin), json::quote(&f.computer)))
                     .collect();
                 let _ = webview.evaluate_script(&format!("window.showServers && window.showServers([{}])", items.join(",")));
             }
@@ -193,6 +206,9 @@ fn main() -> wry::Result<()> {
                         let _ = webview.evaluate_script(&report_script(&app));
                     }
                 }
+            }
+            Event::UserEvent(UserEvent::Script(script)) => {
+                let _ = webview.evaluate_script(&script);
             }
             Event::UserEvent(UserEvent::Exit) => *control_flow = ControlFlow::Exit,
             Event::UserEvent(UserEvent::StudentExit) => {
@@ -212,7 +228,7 @@ fn main() -> wry::Result<()> {
 
 /// Скрипт в странице теста: «ушёл к программе app» и сразу «вернулся» (окно теста уже снова впереди).
 fn report_script(app: &str) -> String {
-    let app = js_string(app);
+    let app = json::quote(app);
     format!(
         r#"(function () {{
             if (!location.pathname.startsWith('/test')) return;
@@ -220,20 +236,6 @@ fn report_script(app: &str) -> String {
             send({{ away: '1', app: {app} }}).then(() => setTimeout(() => send({{ away: '0' }}), 1000));
         }})();"#
     )
-}
-
-fn js_string(text: &str) -> String {
-    let escaped: String = text
-        .chars()
-        .flat_map(|c| match c {
-            '\\' => vec!['\\', '\\'],
-            '\'' => vec!['\\', '\''],
-            '\n' => vec!['\\', 'n'],
-            '<' => "\\u003c".chars().collect(),
-            c => vec![c],
-        })
-        .collect();
-    format!("'{escaped}'")
 }
 
 pub fn send(proxy: &EventLoopProxy<UserEvent>, event: UserEvent) {
