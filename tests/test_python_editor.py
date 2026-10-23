@@ -70,6 +70,30 @@ class PythonEditorTests(unittest.TestCase):
         files = json.loads(config.split('files: ', 1)[1][:-1])
         self.assertEqual(files,{str(self.with_file): {'url': '/attachments/abc123.txt', 'name': '24.txt'}})
 
+    def test_student_app_gets_split_layout(self):
+        self.start()
+        page = self.exam_page(APP_UA)
+        self.assertIn('app-layout', page[page.index('<body'):page.index('<body') + 80])
+        self.assertIn('css/exam_app.css', page)
+        self.assertIn('js/exam_app.js', page)
+        header = page[page.index('<header'):page.index('</header>')]
+        self.assertIn('class="task-nav"', header)  # номера заданий — в шапке
+        self.assertIn('data-task="1"', header)
+        self.assertNotIn('class="sidebar"', page)
+        card = page[page.index(f'data-task-id="{self.plain}"'):]
+        self.assertIn('class="task-card with-py"', page)
+        self.assertLess(card.index('class="task-text"'), card.index('class="py-task"'))
+        self.assertLess(card.index('class="py-task"'), card.index('class="task-answer"'))
+
+    def test_split_layout_only_in_student_app(self):
+        self.start()
+        page = self.exam_page(BROWSER_UA)
+        self.assertNotIn('app-layout', page[page.index('<body'):page.index('<body') + 80])
+        self.assertNotIn('exam_app', page)
+        self.assertIn('class="sidebar"', page)
+        self.assertNotIn('class="task-nav"', page)
+        self.assertNotIn('with-py', page)
+
     def test_browser_keeps_side_panel(self):
         self.start()
         page = self.exam_page(BROWSER_UA)

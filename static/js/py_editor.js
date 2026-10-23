@@ -183,7 +183,8 @@
             send({ type: 'stdin', run: active.run, text: field.value });
             field.value = '';
         });
-        if ((loadStore()[String(taskId)] || '').trim()) open(taskId, false);  // код уже был — сразу показать
+        // раскладка программы ученика (exam_app.css) — редактор всегда рядом с заданием; иначе — если код уже был
+        if (document.body.classList.contains('app-layout') || (loadStore()[String(taskId)] || '').trim()) open(taskId, false);
     }
 
     window.studentPython = {

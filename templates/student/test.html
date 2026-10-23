@@ -931,8 +931,21 @@
             .main-content-wrapper { transition: none; }
         }
     </style>
+    {% if student_app %}
+    <!-- программа ученика: задание и Python рядом, на весь экран (в обычном браузере не подключается) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/exam_app.css') }}">
+    {% endif %}
 </head>
-<body{% if mask_answers %} class="mask-answers"{% endif %}>
+{% macro task_buttons() %}
+             {% for task in tasks %}
+             <button class="task-btn {% if loop.index0 == current_task %}current{% endif %} {% if task.id in answers %}answered{% endif %}"
+                     onclick="goToTask({{ loop.index0 }})" data-task="{{ loop.index0 }}">
+                 {{ loop.index }}
+                 <span class="save-dot"></span>
+             </button>
+             {% endfor %}
+{% endmacro %}
+<body class="{% if mask_answers %}mask-answers{% endif %}{% if student_app %} app-layout{% endif %}">
     <header class="header">
         <div class="student-meta">
             <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>
@@ -940,6 +953,9 @@
             <div class="variant-badge">Ваш вариант: {{ variant_label }}</div>
             {% endif %}
         </div>
+        {% if student_app %}
+        <nav class="task-nav" aria-label="Задания">{{ task_buttons() }}</nav>
+        {% endif %}
         <div class="header-actions">
             {% if calculator_enabled %}
             <button type="button" class="calc-toggle" onclick="toggleCalculator()">🧮 Калькулятор</button>
@@ -956,7 +972,7 @@
                 Оценка появится, когда учитель завершит тестирование
             </div>
             <form action="{{ url_for('student.student_submit') }}" method="POST" id="submitForm">
-                <button type="button" class="btn-finish" onclick="submitWork()">
+                <button type="button" class="btn-finish" onclick="submitWork()" title="Оценка появится, когда учитель завершит тестирование">
                     ✅ Сдать работу
                 </button>
             </form>
@@ -1076,25 +1092,20 @@
     </div>
     
      <div class="main">
-         <aside class="sidebar">
-             {% for task in tasks %}
-             <button class="task-btn {% if loop.index0 == current_task %}current{% endif %} {% if task.id in answers %}answered{% endif %}"
-                     onclick="goToTask({{ loop.index0 }})" data-task="{{ loop.index0 }}">
-                 {{ loop.index }}
-                 <span class="save-dot"></span>
-             </button>
-             {% endfor %}
-         </aside>
+         {% if not student_app %}
+         <aside class="sidebar">{{ task_buttons() }}</aside>
+         {% endif %}
          
          <div class="main-content-wrapper">
          <main class="content">
             {% for task in tasks %}
-            <div class="task-card" id="task-{{ loop.index0 }}" data-task-id="{{ task.id }}" style="{% if loop.index0 != current_task %}display:none{% endif %}">
+            <div class="task-card{% if python_enabled and student_app %} with-py{% endif %}" id="task-{{ loop.index0 }}" data-task-id="{{ task.id }}" style="{% if loop.index0 != current_task %}display:none{% endif %}">
                 <div class="task-header">
                     <span class="task-number">Задание {{ loop.index }} из {{ tasks|length }}</span>
                     
                 </div>
                 
+                <div class="task-text">
                 <div class="task-image">
                     <img src="{{ url_for('system.serve_image', filename=task.image_path) }}" alt="Задача" onclick="toggleZoom(this)">
                     <span class="zoom-hint">💡 Нажмите на изображение для увеличения</span>
@@ -1105,6 +1116,7 @@
                     📎 Скачать файл данных
                 </a>
                 {% endif %}
+                </div>
 
                 {% if python_enabled and student_app %}
                 <div class="py-task" id="py-task-{{ task.id }}" data-task-id="{{ task.id }}">
@@ -1130,6 +1142,7 @@
                 </div>
                 {% endif %}
 
+                <div class="task-answer">
                 <div class="answer-section">
                     {% set saved = answers.get(task.id, {}) %}
                     {% if task.answer_kind == 'file_upload' %}
@@ -1225,6 +1238,7 @@
                     </button>
                 </div>
                 <div class="save-status" id="saveStatus-{{ task.id }}">Все изменения сохранены</div>
+                </div>
             </div>
              {% endfor %}
          </main>
@@ -2752,7 +2766,7 @@
             }
 
             document.querySelectorAll('.task-card').forEach(el => el.style.display = 'none');
-            document.getElementById('task-' + index).style.display = 'block';
+            document.getElementById('task-' + index).style.display = '';
 
             document.querySelectorAll('.task-btn').forEach(el => el.classList.remove('current'));
             document.querySelector('.task-btn[data-task="' + index + '"]').classList.add('current');
@@ -3078,5 +3092,8 @@
             flushAll();
         });
     </script>
+{% if student_app %}
+<script src="{{ url_for('static', filename='js/exam_app.js') }}"></script>
+{% endif %}
 </body>
 </html>
