@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">Система тестирования</title>
+  <desc id="desc">От варианта до результата. Локальная сеть, мониторинг класса и результаты.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#10162f"/><stop offset="1" stop-color="#24244d"/>
+    </linearGradient>
+    <linearGradient id="accent" x2="1" y2="1">
+      <stop stop-color="#a5b4fc"/><stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#fff" stroke-opacity=".035"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="420" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#grid)"/>
+  <circle cx="1150" cy="40" r="240" fill="#818cf8" opacity=".07"/>
+  <circle cx="1210" cy="420" r="190" fill="#2dd4bf" opacity=".05"/>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <rect x="60" y="54" width="226" height="32" rx="16" fill="#818cf8" fill-opacity=".16" stroke="#818cf8" stroke-opacity=".3"/>
+    <circle cx="79" cy="70" r="4" fill="#5eead4"/>
+    <text x="93" y="75" font-size="13" font-weight="600" letter-spacing="1.4" fill="#c7d2fe">КАБИНЕТ ИНФОРМАТИКИ</text>
+    <text x="60" y="159" font-size="49" font-weight="700" letter-spacing="-1.5" fill="#f8fafc">Система</text>
+    <text x="60" y="219" font-size="49" font-weight="700" letter-spacing="-1.5" fill="#f8fafc">тестирования</text>
+    <text x="62" y="267" font-size="23" fill="#b5c0de">От варианта до результата.</text>
+    <path d="M62 315H662" stroke="#8b9ac0" stroke-opacity=".2"/>
+    <text x="62" y="351" font-size="15" fill="#a6b4d3">Локальная сеть</text>
+    <circle cx="209" cy="346" r="2" fill="#6366f1"/>
+    <text x="226" y="351" font-size="15" fill="#a6b4d3">Мониторинг класса</text>
+    <circle cx="405" cy="346" r="2" fill="#6366f1"/>
+    <text x="422" y="351" font-size="15" fill="#a6b4d3">Результаты</text>
+    <g transform="translate(775 72)">
+      <rect x="0" y="0" width="420" height="276" rx="20" fill="#0b1229" stroke="#8997ca" stroke-opacity=".25"/>
+      <path d="M0 50H420" stroke="#8997ca" stroke-opacity=".18"/>
+      <circle cx="24" cy="25" r="4" fill="#818cf8"/>
+      <circle cx="40" cy="25" r="4" fill="#475576"/>
+      <circle cx="56" cy="25" r="4" fill="#475576"/>
+      <text x="84" y="31" font-size="14" fill="#b5c0de">Вариант → Тестирование → Результат</text>
+      <rect x="22" y="72" width="176" height="66" rx="10" fill="#19223e"/>
+      <text x="38" y="95" font-size="12" fill="#a6b4d3">ЗАДАНИЯ</text>
+      <path d="m40 115 5 5 10-12" stroke="#5eead4" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="68" y="112" width="108" height="6" rx="3" fill="#64749c"/>
+      <rect x="214" y="72" width="184" height="66" rx="10" fill="#19223e"/>
+      <text x="230" y="95" font-size="12" fill="#a6b4d3">ПРОГРЕСС</text>
+      <rect x="230" y="112" width="150" height="7" rx="3" fill="#2c3757"/>
+      <rect x="230" y="112" width="112" height="7" rx="3" fill="url(#accent)"/>
+      <rect x="22" y="154" width="376" height="98" rx="10" fill="#19223e"/>
+      <text x="38" y="179" font-size="12" fill="#a6b4d3">РАБОТА КЛАССА</text>
+      <path d="M38 231H381" stroke="#34415f"/>
+      <rect x="42" y="213" width="32" height="18" rx="4" fill="#6366f1"/>
+      <rect x="92" y="200" width="32" height="31" rx="4" fill="#818cf8"/>
+      <rect x="142" y="207" width="32" height="24" rx="4" fill="#6366f1"/>
+      <rect x="192" y="189" width="32" height="42" rx="4" fill="#a5b4fc"/>
+      <rect x="242" y="198" width="32" height="33" rx="4" fill="#818cf8"/>
+      <rect x="292" y="183" width="32" height="48" rx="4" fill="#5eead4"/>
+      <rect x="342" y="193" width="32" height="38" rx="4" fill="#818cf8"/>
+    </g>
+  </g>
+</svg>
