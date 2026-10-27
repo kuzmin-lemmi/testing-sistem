@@ -23,6 +23,7 @@
 | Программа ученика (Rust, запертое окно теста; выполняет Python ученика — `src/python.rs`) | `student_app/` — см. `student_app/README.md` |
 | Редактор Python под заданием (только в программе ученика) | `static/js/py_editor.js`, сборка CodeMirror — `scripts/codemirror` |
 | Раскладка страницы теста в программе ученика (задание и Python рядом) | `static/css/exam_app.css`, `static/js/exam_app.js` |
+| LibreOffice для файла задания: кнопка над заданием, вкладки в шапке | `static/js/office.js`, `student_app/src/office.rs` |
 | Сборка `.exe` учителя (PyInstaller) | `BUILD_EXE.bat`, `testing.spec` |
 
 Данные — в `data/` (в собранной программе — `Данные/` рядом с `.exe`), в git не попадают.

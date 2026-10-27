@@ -13,6 +13,7 @@
 //!   возвращает окно теста и сообщает учителю. Разрешённые программы (Excel, Python…) — `allowed.txt`.
 //! - Ctrl+Alt+Del Windows не отдаёт ни одной программе: уход через него тоже виден учителю.
 //! - Выполняет код Python ученика из редактора под заданием его собственным Python (`python.rs`).
+//! - Открывает файл задания в LibreOffice на столе теста; окна документов — под шапкой теста, как вкладки (`office.rs`).
 //! - Ученик закрывает программу кнопкой «Закрыть программу» — только вне теста (до входа или когда учитель
 //!   завершил тестирование и открылась оценка). Выход учителя: Ctrl+Alt+Shift+Q — всегда.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -21,6 +22,7 @@ mod desktop;
 mod install;
 mod json;
 mod lock;
+mod office;
 mod python;
 mod server;
 
@@ -128,6 +130,7 @@ fn main() -> wry::Result<()> {
                 } else if path.starts_with("/test/result") {
                     navigation_test.store(false, Ordering::Relaxed);
                     python::stop_all(); // тест закончился — программа ученика больше не нужна
+                    office::close_all();
                 }
             }
             !url.starts_with("http") || url.starts_with(&origin)
@@ -150,6 +153,8 @@ fn main() -> wry::Result<()> {
                     body if body.starts_with("server:") => server::choose(body["server:".len()..].to_string(), proxy.clone()),
                     // редактор Python под заданием (static/js/py_editor.js)
                     body if body.starts_with("py:") => python::handle(&body["py:".len()..], &origin.lock().unwrap(), &page),
+                    // LibreOffice для заданий с файлом (static/js/office.js)
+                    body if body.starts_with("office:") => office::handle(&body["office:".len()..], &origin.lock().unwrap(), &page),
                     _ => {}
                 }
             }
@@ -157,6 +162,7 @@ fn main() -> wry::Result<()> {
         .build(&window)?;
 
     lock::install_keyboard_hook(proxy.clone());
+    office::init(hwnd);
     lock::start_watchdog(hwnd, config.allowed.clone(), proxy.clone());
     server::start_finder(config.fixed.clone(), connected.clone(), proxy.clone());
     if let Some(seconds) = config.exit_after {

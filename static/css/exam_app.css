@@ -232,3 +232,34 @@ body.app-layout .py-task-input input { padding: 5px 8px; }
 body.app-layout.resizing { user-select: none; }
 body.app-layout.resizing-col { cursor: col-resize; }
 body.app-layout.resizing-row { cursor: row-resize; }
+
+/* --- LibreOffice: кнопка над заданием и вкладки в шапке (static/js/office.js) --- */
+body.app-layout .task-tools .office-open {
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+    color: #065f46;
+}
+body.app-layout .task-tools .office-open:hover { border-color: #059669; }
+body.app-layout .task-tools .office-open:disabled { opacity: .6; cursor: default; }
+body.app-layout .task-tools .office-status { color: #cc0000; font-size: 13px; }
+body.app-layout .task-tools .attachment[hidden] { display: none; }
+
+body.app-layout .office-tabs { display: flex; gap: 4px; min-width: 0; overflow: hidden; margin-left: 8px; padding-left: 12px; border-left: 1px solid rgba(255,255,255,0.35); }
+body.app-layout .office-tabs[hidden] { display: none; }
+body.app-layout .office-tab {
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border-radius: 7px;
+    padding: 3px 10px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+body.app-layout .office-tab:hover { background: rgba(255,255,255,0.28); }
+body.app-layout .office-tab.active { background: #fff; color: var(--primary); }

@@ -86,6 +86,14 @@ class PythonEditorTests(unittest.TestCase):
         self.assertLess(card.index('class="task-text"'), card.index('class="py-task"'))
         self.assertLess(card.index('class="py-task"'), card.index('class="task-answer"'))
 
+    def test_student_app_can_open_task_file_in_office(self):
+        self.start()
+        page = self.exam_page(APP_UA)
+        self.assertIn('js/office.js', page)
+        # имя файла — для кнопки «Открыть в LibreOffice» и для LibreOffice (файл ляжет под этим именем)
+        self.assertIn('href="/attachments/abc123.txt" class="attachment" data-name="24.txt"', page)
+        self.assertNotIn('js/office.js', self.exam_page(BROWSER_UA))
+
     def test_split_layout_only_in_student_app(self):
         self.start()
         page = self.exam_page(BROWSER_UA)

@@ -144,7 +144,7 @@ fn press_escape() {
 }
 
 /// Windows не даёт фоновой программе забрать фокус; после нажатия Alt — даёт.
-fn take_focus(hwnd: HWND) {
+pub(crate) fn take_focus(hwnd: HWND) {
     unsafe {
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);

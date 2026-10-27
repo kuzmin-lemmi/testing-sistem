@@ -155,7 +155,7 @@ fn execute(job: &Job, page: &Page) -> Outcome {
     if let Err(e) = std::fs::create_dir_all(&dir) {
         return Outcome::Failed(format!("Не удалось создать папку для программы: {e}"));
     }
-    if let Some(Err(message)) = job.file.as_ref().map(|(url, name)| put_task_file(&job.origin, url, name, &dir)) {
+    if let Some(Err(message)) = job.file.as_ref().map(|(url, name)| put_task_file(&job.origin, url, name, &dir, false)) {
         return Outcome::Failed(message);
     }
     if std::fs::write(dir.join(CODE_FILE), &job.code).is_err() {
@@ -232,10 +232,15 @@ fn kill(child: &mut Child, limits: &Option<JobObject>) {
     let _ = child.wait();
 }
 
-/// Файл задания — из кеша (`python\files`, скачан один раз за тест) заново в папку задания:
-/// ученик мог его испортить своей программой.
-fn put_task_file(origin: &str, url: &str, name: &str, dir: &Path) -> Result<(), String> {
+/// Файл задания — из кеша (`python\files`, скачан один раз за тест) в папку задания `dir`; путь к нему.
+/// Для Python — заново перед каждым запуском (ученик мог испортить его своей программой);
+/// `keep_existing` — для LibreOffice: файл уже есть — это работа ученика, не трогаем.
+pub(crate) fn put_task_file(origin: &str, url: &str, name: &str, dir: &Path, keep_existing: bool) -> Result<PathBuf, String> {
     let name = safe_file_name(name).ok_or_else(|| format!("Неподходящее имя файла задания «{name}»"))?;
+    let target = dir.join(&name);
+    if keep_existing && target.is_file() {
+        return Ok(target);
+    }
     let cache_dir = work_root().join("files");
     let _ = std::fs::create_dir_all(&cache_dir);
     let cached = cache_dir.join(safe_file_name(url.rsplit('/').next().unwrap_or("")).unwrap_or_else(|| "file".into()));
@@ -246,8 +251,8 @@ fn put_task_file(origin: &str, url: &str, name: &str, dir: &Path) -> Result<(), 
         server::http_download(origin, url, &cached)
             .map_err(|e| format!("Не удалось скачать файл задания «{name}» ({e}) — обратитесь к учителю"))?;
     }
-    std::fs::copy(&cached, dir.join(&name)).map_err(|e| format!("Не удалось подготовить файл задания «{name}»: {e}"))?;
-    Ok(())
+    std::fs::copy(&cached, &target).map_err(|e| format!("Не удалось подготовить файл задания «{name}»: {e}"))?;
+    Ok(target)
 }
 
 /// Имя файла без папок и запрещённых в Windows знаков. `None` — пустое, `..` или занято кодом ученика.
@@ -364,15 +369,27 @@ fn clean_traceback(text: &str, dir: &Path) -> String {
 
 // --- Job Object ------------------------------------------------------------------
 
-/// Процесс ученика и все его потомки: убить разом и ограничить память.
-struct JobObject(HANDLE);
+/// Процесс ученика и все его потомки: убить разом и ограничить память. Им же пользуется LibreOffice (`office.rs`).
+pub(crate) struct JobObject(HANDLE);
 
 // Описатель объекта ядра: им можно пользоваться из любого потока.
 unsafe impl Send for JobObject {}
+unsafe impl Sync for JobObject {}
 
 impl JobObject {
     /// `None` — Windows не дала создать (тогда останавливаем только сам процесс).
     fn new(child: &Child) -> Option<Self> {
+        let job = Self::create(Some(MEMORY_LIMIT))?;
+        if !job.assign(child.as_raw_handle() as HANDLE) {
+            debug_log!("python: Job Object не подключился");
+            return None;
+        }
+        Some(job)
+    }
+
+    /// Пустой Job Object: закрылся описатель (вышла программа ученика) — всё в нём закрывается;
+    /// `memory` — предел памяти на все процессы вместе.
+    pub(crate) fn create(memory: Option<usize>) -> Option<Self> {
         unsafe {
             let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
             if handle.is_null() {
@@ -380,23 +397,30 @@ impl JobObject {
             }
             let job = JobObject(handle);
             let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_JOB_MEMORY;
-            limits.JobMemoryLimit = MEMORY_LIMIT;
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if let Some(memory) = memory {
+                limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+                limits.JobMemoryLimit = memory;
+            }
             let set = SetInformationJobObject(
                 handle,
                 JobObjectExtendedLimitInformation,
                 &limits as *const _ as *const _,
                 std::mem::size_of_val(&limits) as u32,
             );
-            if set == 0 || AssignProcessToJobObject(handle, child.as_raw_handle() as HANDLE) == 0 {
-                debug_log!("python: Job Object не подключился");
-                return None;
-            }
-            Some(job)
+            (set != 0).then_some(job)
         }
     }
 
-    fn terminate(&self) {
+    pub(crate) fn assign(&self, process: HANDLE) -> bool {
+        unsafe { AssignProcessToJobObject(self.0, process) != 0 }
+    }
+
+    pub(crate) fn handle(&self) -> HANDLE {
+        self.0
+    }
+
+    pub(crate) fn terminate(&self) {
         unsafe { TerminateJobObject(self.0, 1) };
     }
 }
@@ -551,7 +575,7 @@ fn registry_subkeys(root: HKEY, path: &str) -> Vec<String> {
     names
 }
 
-fn registry_string(root: HKEY, path: &str, value: Option<&str>) -> Option<String> {
+pub(crate) fn registry_string(root: HKEY, path: &str, value: Option<&str>) -> Option<String> {
     let path = wide(path);
     let value = value.map(wide);
     let value_ptr = value.as_ref().map_or(std::ptr::null(), |v| v.as_ptr());
