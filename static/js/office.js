@@ -5,7 +5,7 @@
 // Страница → программа: window.ipc.postMessage('office:' + JSON), где JSON —
 //   {type: 'hello', top}                       — чем открывать? top — низ шапки в пикселях экрана
 //   {type: 'layout', top}                      — шапка поменяла высоту (размер окна)
-//   {type: 'open', task, file: {url, name}, top}
+//   {type: 'open', task, student, file: {url, name}, top} — student: у каждого ученика своя папка файлов
 //   {type: 'show', id}                         — вкладка: id окна документа, 0 — тест
 // Программа → страница: window.studentOffice.ready({calc, writer}) — названия программ, '' — нечем
 //   | opened(task) | failed(task, message) | tabs([{id, name, kind: 'calc' | 'writer' | 'other', active}])
@@ -56,7 +56,8 @@
                 button.textContent = 'Открывается…';
                 status.textContent = '';
                 inOffice(true);
-                send({ type: 'open', task, file: { url: link.getAttribute('href'), name }, top: top() });
+                send({ type: 'open', task, student: Number(document.body.dataset.studentId) || 0,
+                       file: { url: link.getAttribute('href'), name }, top: top() });
             });
         });
 

@@ -945,7 +945,7 @@
              </button>
              {% endfor %}
 {% endmacro %}
-<body class="{% if mask_answers %}mask-answers{% endif %}{% if student_app %} app-layout{% endif %}">
+<body class="{% if mask_answers %}mask-answers{% endif %}{% if student_app %} app-layout{% endif %}"{% if student_app %} data-student-id="{{ student.id }}"{% endif %}>
     <header class="header">
         <div class="student-meta">
             <div class="student-name">{{ student.last_name }} {{ student.first_name }}</div>

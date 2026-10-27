@@ -90,6 +90,7 @@ class PythonEditorTests(unittest.TestCase):
         self.start()
         page = self.exam_page(APP_UA)
         self.assertIn('js/office.js', page)
+        self.assertRegex(page, r'<body[^>]* data-student-id="\d+"')  # своя папка файлов у каждого ученика
         # имя файла — для кнопки «Открыть в LibreOffice» и для LibreOffice (файл ляжет под этим именем)
         self.assertIn('href="/attachments/abc123.txt" class="attachment" data-name="24.txt"', page)
         self.assertNotIn('js/office.js', self.exam_page(BROWSER_UA))

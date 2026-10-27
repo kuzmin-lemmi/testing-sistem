@@ -2,8 +2,9 @@
 //! задания, программа открывает его на столе теста и держит окна документа под шапкой теста — как вкладки:
 //! «Тест» и документы. Щелчок по шапке — впереди снова тест (`lock.rs`: разрешённая программа уступает тесту).
 //!
-//! - Файл — в `%LOCALAPPDATA%\Тестирование\office\<задание>` под настоящим именем; уже есть — это работа
-//!   ученика, не трогаем.
+//! - Файл — в `%LOCALAPPDATA%\Тестирование\office\<ученик>\<задание>` под настоящим именем; уже есть — это
+//!   работа ученика (программа могла закрыться посреди теста), не трогаем. Папка у каждого ученика своя:
+//!   на школьных компьютерах одна учётная запись на всех, следующий ученик не должен получить чужой файл.
 //! - Свой профиль LibreOffice на время теста: иначе файл уйдёт в уже запущенный LibreOffice на обычном
 //!   столе Windows, и ученик его не увидит. Заодно пустые «Недавние документы» и без «Совета дня».
 //! - Все процессы — в Job Object: закончился тест или вышла программа — LibreOffice закрывается.
@@ -22,9 +23,9 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_QUERY_LIMITED_INFORMATION, STARTUPINFOW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetForegroundWindow, GetWindow, GetWindowRect, GetWindowTextW,
+    BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow, GetWindow, GetWindowRect, GetWindowTextW,
     GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed, SetWindowPos, ShowWindow, GW_OWNER, HWND_TOP,
-    SWP_NOACTIVATE, SW_RESTORE, SystemParametersInfoW, SPI_GETWORKAREA,
+    SWP_NOACTIVATE, SW_RESTORE, SetForegroundWindow, SystemParametersInfoW, SPI_GETWORKAREA,
 };
 
 use crate::json;
@@ -110,16 +111,17 @@ pub fn handle(message: &str, origin: &str, page: &Page) {
         }
         Some("open") => {
             let Some(task) = message.id("task") else { return };
+            let student = message.id("student").unwrap_or(0);
             let Some(file) = message.get("file") else { return };
             let (Some(url), Some(name)) = (file.str("url"), file.str("name")) else { return };
             let (url, name, origin, page) = (url.to_string(), name.to_string(), origin.to_string(), page.clone());
-            std::thread::spawn(move || match open(task, &url, &name, &origin) {
+            std::thread::spawn(move || match open(student, task, &url, &name, &origin) {
                 Ok(()) => script(&page, format!("opened({task})")),
                 Err(message) => script(&page, format!("failed({task}, {})", json::quote(&message))),
             });
         }
         Some("show") => match message.id("id") {
-            Some(0) => crate::lock::take_focus(TEST_WINDOW.load(Ordering::Relaxed) as HWND),
+            Some(0) => bring_forward(TEST_WINDOW.load(Ordering::Relaxed)),
             Some(hwnd) => show(hwnd as isize),
             None => {}
         },
@@ -145,9 +147,9 @@ fn work_root() -> PathBuf {
     if cfg!(test) { std::env::temp_dir().join("student_app_office_test") } else { server::settings_dir().join("office") }
 }
 
-fn open(task: u64, url: &str, name: &str, origin: &str) -> Result<(), String> {
+fn open(student: u64, task: u64, url: &str, name: &str, origin: &str) -> Result<(), String> {
     let office = find().ok_or("На этом компьютере нет LibreOffice — обратитесь к учителю")?;
-    let dir = work_root().join(task.to_string());
+    let dir = student_dir(&work_root(), student).join(task.to_string());
     std::fs::create_dir_all(&dir).map_err(|e| format!("Не удалось создать папку для файла: {e}"))?;
     let file = put_task_file(origin, url, name, &dir, true)?;
     let command = match office.kind {
@@ -155,9 +157,10 @@ fn open(task: u64, url: &str, name: &str, origin: &str) -> Result<(), String> {
             let profile = work_root().join("profile");
             prepare_profile(&profile);
             format!(
-                "{} -env:UserInstallation={} --nologo --norestore {}",
+                "{} -env:UserInstallation={} --nologo --norestore {}{}",
                 quote(&office.exe.to_string_lossy()),
                 file_url(&profile),
+                calc_filter(&file),
                 quote(&file.to_string_lossy())
             )
         }
@@ -172,6 +175,20 @@ fn open(task: u64, url: &str, name: &str, origin: &str) -> Result<(), String> {
         s.job.as_ref().map(|j| j.handle() as isize)
     });
     launch(&command, &dir, job.map(|h| h as HANDLE))
+}
+
+/// Папка ученика `student`. Первый файл нового ученика — папки прежних учеников больше не нужны
+/// (их тесты закончились), удаляем; свой профиль LibreOffice (`profile`) остаётся.
+fn student_dir(root: &Path, student: u64) -> PathBuf {
+    let dir = root.join(format!("ученик {student}"));
+    if !dir.exists() {
+        for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
+            if entry.file_name().to_string_lossy().starts_with("ученик ") {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    dir
 }
 
 /// Запуск «спящим», в Job Object и только потом — работать: soffice.exe сразу запускает soffice.bin,
@@ -206,6 +223,13 @@ fn launch(command: &str, dir: &Path, job: Option<HANDLE>) -> Result<(), String> 
         CloseHandle(info.hProcess);
     }
     Ok(())
+}
+
+/// `.txt` LibreOffice сам открывает в Writer, а на странице кнопка — «Открыть в LibreOffice Calc»:
+/// числа из файла задания нужны в таблице. Фильтр «Текст CSV» — Calc с окном «Импорт текста».
+fn calc_filter(file: &Path) -> &'static str {
+    let txt = file.extension().is_some_and(|e| e.eq_ignore_ascii_case("txt"));
+    if txt { "\"--infilter=Text - txt - csv (StarCalc)\" " } else { "" }
 }
 
 fn quote(text: &str) -> String {
@@ -308,7 +332,7 @@ fn watch() {
         if window.document {
             show(window.hwnd);
         } else {
-            crate::lock::take_focus(window.hwnd as HWND);
+            bring_forward(window.hwnd);
         }
     }
     let changed = with_state(|s| {
@@ -392,7 +416,21 @@ fn show(hwnd: isize) {
         }
     }
     place(hwnd, slot);
-    crate::lock::take_focus(hwnd as HWND);
+    bring_forward(hwnd);
+}
+
+/// Окно — вперёд. Без нажатия Alt, как в `lock::take_focus`: Alt на окне «Импорт текста» открывает его
+/// системное меню («Переместить, Размер…»), на документе — меню LibreOffice. Он и не нужен: ученик только что
+/// щёлкнул по окну теста (кнопка, вкладка), программа впереди, и Windows разрешает ей вывести вперёд другое окно.
+fn bring_forward(hwnd: isize) {
+    let hwnd = hwnd as HWND;
+    unsafe {
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        BringWindowToTop(hwnd);
+        SetForegroundWindow(hwnd);
+    }
 }
 
 /// Видимое окно с заголовком из нашего Job Object.
@@ -469,6 +507,24 @@ mod tests {
     }
 
     #[test]
+    fn each_student_has_own_folder() {
+        let root = std::env::temp_dir().join("student_app_office_students_test");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("profile")).unwrap();
+        let first = student_dir(&root, 7).join("3");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::write(first.join("Числа.xlsx"), "правки ученика 7").unwrap();
+        // тот же ученик (программа закрылась и открылась снова) — его файл на месте
+        assert!(student_dir(&root, 7).join("3").join("Числа.xlsx").exists());
+        // следующий ученик — своя пустая папка, файл прежнего удалён, профиль LibreOffice на месте
+        let next = student_dir(&root, 8);
+        assert!(!next.exists());
+        assert!(!root.join("ученик 7").exists());
+        assert!(root.join("profile").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn profile_url() {
         let url = file_url(Path::new(r"C:\Users\ученик\AppData\Local\Тестирование\office\profile"));
         assert!(url.starts_with("file:///C:/Users/%D1%83%D1%87"), "{url}");
@@ -493,31 +549,40 @@ mod tests {
         std::fs::write(&csv, "1;2\n3;4\n").unwrap();
         let profile = work_root().join("profile");
         prepare_profile(&profile);
-        let job = JobObject::create(None).unwrap();
-        let start = |args: &str| {
-            let command = format!(
-                "{} -env:UserInstallation={} --nologo --norestore {args}",
-                quote(&office.exe.to_string_lossy()),
-                file_url(&profile)
-            );
-            launch(&command, &dir, Some(job.handle())).unwrap();
-        };
-        let wait = |what: &dyn Fn(&Window) -> bool| {
+        // окно «Импорт текста» модальное: пока оно открыто, LibreOffice не берёт следующий файл (ученик сначала
+        // нажмёт «ОК») — поэтому каждая проверка в своём запуске
+        let phase = |args: &str, what: &dyn Fn(&Window) -> bool, why: &str| {
+            let job = JobObject::create(None).unwrap();
+            for args in ["--calc", args] {
+                let command = format!(
+                    "{} -env:UserInstallation={} --nologo --norestore {args}",
+                    quote(&office.exe.to_string_lossy()),
+                    file_url(&profile)
+                );
+                launch(&command, &dir, Some(job.handle())).unwrap();
+            }
+            let mut seen = Vec::new();
             for _ in 0..160 {
                 std::thread::sleep(Duration::from_millis(250));
-                if job_windows(job.handle()).iter().any(what) {
-                    return true;
+                seen = job_windows(job.handle());
+                if seen.iter().any(what) {
+                    break;
                 }
             }
-            false
+            let titles: Vec<String> = seen.iter().map(|w| w.title.clone()).collect();
+            job.terminate();
+            std::thread::sleep(Duration::from_millis(1500)); // профиль освобождается не сразу
+            assert!(job_windows(job.handle()).is_empty(), "{why}: не закрылось");
+            assert!(seen.iter().any(|w| w.document && w.title.contains("LibreOffice Calc")), "{why}: нет Calc: {titles:?}");
+            assert!(seen.iter().any(what), "{why}: {titles:?}");
+            assert!(!titles.iter().any(|t| t.contains("Writer")), "{why}: открылся Writer: {titles:?}");
         };
-        start("--calc");
-        assert!(wait(&|w| w.document && w.title.contains("LibreOffice Calc")), "нет окна нового документа Calc");
-        start(&quote(&csv.to_string_lossy()));
-        assert!(wait(&|w| !w.document && w.title.contains("Проба.csv")), "нет диалога импорта .csv");
-        job.terminate();
-        std::thread::sleep(Duration::from_millis(800));
-        assert!(job_windows(job.handle()).is_empty());
+        let txt = dir.join("Проба.txt");
+        std::fs::write(&txt, "12\n34\n").unwrap();
+        // .txt — в Calc (окно импорта или таблица), а не в Writer
+        phase(&format!("{}{}", calc_filter(&txt), quote(&txt.to_string_lossy())),
+              &|w| w.title.contains("Проба.txt"), ".txt");
+        phase(&quote(&csv.to_string_lossy()), &|w| !w.document && w.title.contains("Проба.csv"), ".csv: диалог импорта");
         assert!(profile.join("user").exists());
     }
 }
