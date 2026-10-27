@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -107,6 +108,30 @@ class PythonEditorTests(unittest.TestCase):
         page = self.exam_page(APP_UA)
         self.assertNotIn('class="py-task"', page)
         self.assertNotIn('codemirror.min.js', page)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js не установлен')
+    def test_insert_answer_fills_all_fields(self):
+        """«Вставить в ответ»: одно поле — последняя строка, несколько — по полям (строками или из одной строки)."""
+        script = os.path.join(os.path.dirname(server.__file__), 'static', 'js', 'py_editor.js')
+        cases = [
+            (['1', '1024'], 1, ['1024']),
+            (['6', '36'], 2, ['6', '36']),
+            (['отладка', '6', '36'], 2, ['6', '36']),
+            (['6 36'], 2, ['6', '36']),
+            (['12, 13'], 2, ['12', '13']),
+            (['12 13', '30 31'], 4, ['12', '13', '30', '31']),
+            (['5'], 4, ['5']),
+            (['12', '13', '14', '15'], 4, ['12', '13', '14', '15']),
+        ]
+        stub = ("globalThis.window = globalThis; globalThis.document = {querySelectorAll: () => []};"
+                "globalThis.addEventListener = () => {};")
+        check = 'console.log(JSON.stringify(%s.map(([l, n]) => window.studentPython.answerValues(l, n))));' % (
+            json.dumps([[lines, count] for lines, count, _ in cases], ensure_ascii=False))
+        with open(script, encoding='utf-8') as f:
+            code = stub + f.read() + check
+        result = subprocess.run([shutil.which('node'), '-e', code], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [expected for _, _, expected in cases])
 
     def test_static_files_exist(self):
         root = os.path.join(os.path.dirname(server.__file__), 'static')

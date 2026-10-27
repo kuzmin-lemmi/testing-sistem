@@ -43,6 +43,7 @@
 
     function setStatus(block, text, kind) {
         block.status.textContent = text;
+        block.status.title = text;  // в узкой колонке текст обрезается — целиком во всплывающей подсказке
         block.status.className = 'py-task-status' + (kind ? ' ' + kind : '');
     }
 
@@ -118,18 +119,37 @@
         if (active && active.taskId === taskId) send({ type: 'stop', run: active.run });
     }
 
+    // Что вставить в поля ответа из вывода программы (непустые строки lines), полей — count:
+    // одно поле — последняя строка; несколько — последние count строк по полям, а если строк меньше
+    // (print(a, b) — всё одной строкой) — значения из строк по пробелам и запятым; не хватает — сколько есть.
+    function answerValues(lines, count) {
+        if (count <= 1) return lines.slice(-1);
+        if (lines.length >= count) return lines.slice(-count);
+        const words = lines.join(' ').split(/[\s,;]+/).filter(Boolean);
+        if (words.length >= count) return words.slice(-count);
+        return lines;
+    }
+
     function insertAnswer(taskId) {
         const block = blocks[taskId];
         if (paused()) return;
         const lines = block.stdout.split('\n').map(line => line.trim()).filter(Boolean);
         if (!lines.length) { setStatus(block, 'Нечего вставлять: программа ничего не вывела', 'error'); return; }
-        const value = lines[lines.length - 1];
-        const field = document.querySelector(`textarea[data-task-id="${taskId}"][data-answer="text"]`)
-            || document.querySelector(`input[data-task-id="${taskId}"][data-answer="1"]`);
-        if (!field) return;
-        field.value = value;
-        if (typeof scheduleSave === 'function') scheduleSave(taskId);  // со страницы теста
-        setStatus(block, `В ответ вставлено: ${value}`);
+        // ответ в несколько строк (№ 25, 27) — весь вывод
+        const text = document.querySelector(`textarea[data-task-id="${taskId}"][data-answer="text"]`);
+        if (text) {
+            text.value = lines.join('\n');
+            if (typeof scheduleSave === 'function') scheduleSave(taskId);  // со страницы теста
+            setStatus(block, `В ответ вставлено строк: ${lines.length}`);
+            return;
+        }
+        const fields = [...document.querySelectorAll(`input[data-task-id="${taskId}"][data-answer]`)]
+            .sort((a, b) => Number(a.dataset.answer) - Number(b.dataset.answer));
+        if (!fields.length) return;
+        const values = answerValues(lines, fields.length);
+        values.forEach((value, i) => { fields[i].value = value; });
+        if (typeof scheduleSave === 'function') scheduleSave(taskId);
+        setStatus(block, `В ответ вставлено: ${values.join(' · ')}`);
     }
 
     function open(taskId, focus) {
@@ -188,6 +208,7 @@
     }
 
     window.studentPython = {
+        answerValues,  // для автотестов (tests/test_python_editor.py)
         ready(info) {
             python = info || { version: '' };
             Object.values(blocks).forEach(block => {
