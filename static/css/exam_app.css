@@ -263,3 +263,4 @@ body.app-layout .office-tab {
 }
 body.app-layout .office-tab:hover { background: rgba(255,255,255,0.28); }
 body.app-layout .office-tab.active { background: #fff; color: var(--primary); }
+body.app-layout .task-tools .office-open.busy { opacity: 1; cursor: progress; background: #fefce8; border-color: #fde047; color: #854d0e; }

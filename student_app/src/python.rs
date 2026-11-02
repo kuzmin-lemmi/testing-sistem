@@ -256,7 +256,7 @@ pub(crate) fn put_task_file(origin: &str, url: &str, name: &str, dir: &Path, kee
 }
 
 /// Имя файла без папок и запрещённых в Windows знаков. `None` — пустое, `..` или занято кодом ученика.
-fn safe_file_name(name: &str) -> Option<String> {
+pub(crate) fn safe_file_name(name: &str) -> Option<String> {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
     let clean: String =
         base.chars().map(|c| if "<>:\"|?*".contains(c) || (c as u32) < 0x20 { '_' } else { c }).collect();

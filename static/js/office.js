@@ -3,12 +3,14 @@
 // ставит под шапку теста, поэтому шапка с вкладками видна всегда; щелчок по шапке — впереди снова тест.
 //
 // Страница → программа: window.ipc.postMessage('office:' + JSON), где JSON —
-//   {type: 'hello', top}                       — чем открывать? top — низ шапки в пикселях экрана
+//   {type: 'hello', top, warm}                 — чем открывать? top — низ шапки в пикселях экрана;
+//                                                warm — в тесте есть файлы: запустить LibreOffice заранее
 //   {type: 'layout', top}                      — шапка поменяла высоту (размер окна)
 //   {type: 'open', task, student, file: {url, name}, top} — student: у каждого ученика своя папка файлов
 //   {type: 'show', id}                         — вкладка: id окна документа, 0 — тест
 // Программа → страница: window.studentOffice.ready({calc, writer}) — названия программ, '' — нечем
-//   | opened(task) | failed(task, message) | tabs([{id, name, kind: 'calc' | 'writer' | 'other', active}])
+//   | opened(task) — окно файла появилось на экране | slow(task) — запускается дольше обычного
+//   | failed(task, message) | tabs([{id, name, kind: 'calc' | 'writer' | 'other', active}])
 (function () {
     'use strict';
 
@@ -17,7 +19,7 @@
     const KIND = { xlsx: 'calc', xls: 'calc', xlsm: 'calc', ods: 'calc', csv: 'calc', txt: 'calc',
                    odt: 'writer', docx: 'writer', doc: 'writer', rtf: 'writer' };
     const ICON = { calc: '📊', writer: '📝', other: '📄' };
-    const buttons = {};  // task -> {button, status, link}
+    const buttons = {};  // task -> {button, status, link, name, label, busy, tabId}
     let tabsBox = null;
 
     // Работа в LibreOffice — не уход со страницы теста: это нужная для задания разрешённая программа.
@@ -50,12 +52,17 @@
             const status = document.createElement('span');
             status.className = 'office-status';
             link.before(button, status);
-            buttons[task] = { button, status, link, name, label: '' };
+            const entry = buttons[task] = { button, status, link, name, label: '', busy: false, tabId: null };
             button.addEventListener('click', () => {
-                button.disabled = true;
-                button.textContent = 'Открывается…';
+                if (entry.busy) return;  // LibreOffice уже запускается — ждём окно
                 status.textContent = '';
                 inOffice(true);
+                if (entry.tabId) {  // файл уже открыт — сразу его окно
+                    send({ type: 'show', id: entry.tabId });
+                    return;
+                }
+                entry.busy = true;
+                draw(entry, '⏳ LibreOffice запускается…');
                 send({ type: 'open', task, student: Number(document.body.dataset.studentId) || 0,
                        file: { url: link.getAttribute('href'), name }, top: top() });
             });
@@ -73,12 +80,17 @@
             send({ type: 'show', id: Number(tab.dataset.id) });
         });
 
-        send({ type: 'hello', top: top() });
+        send({ type: 'hello', top: top(), warm: Object.keys(buttons).length > 0 });
         window.addEventListener('resize', () => send({ type: 'layout', top: top() }));
     }
 
-    function label(entry) {
-        return `${ICON[entry.button.dataset.kind]} Открыть в ${entry.label}`;
+    // надпись кнопки: открывается — «запускается…» (кнопка не нажимается), открыт — «Показать», иначе «Открыть в …»
+    function draw(entry, waiting) {
+        const icon = ICON[entry.button.dataset.kind];
+        entry.button.disabled = entry.busy;
+        entry.button.classList.toggle('busy', entry.busy);
+        entry.button.textContent = entry.busy ? waiting || entry.button.textContent
+            : entry.tabId ? `${icon} Показать ${entry.name}` : `${icon} Открыть в ${entry.label}`;
     }
 
     window.studentOffice = {
@@ -87,7 +99,7 @@
                 const app = (apps || {})[entry.button.dataset.kind];
                 if (!app) return;  // нечем открыть — остаётся «Скачать файл данных»
                 entry.label = app;
-                entry.button.textContent = label(entry);
+                draw(entry);
                 entry.button.title = `Файл «${entry.name}» откроется поверх теста; вернуться — вкладка «Тест» вверху`;
                 entry.button.hidden = false;
                 entry.link.hidden = true;  // на столе теста скачанный файл открыть нечем
@@ -96,19 +108,29 @@
         opened(task) {
             const entry = buttons[task];
             if (!entry) return;
-            entry.button.disabled = false;
-            entry.button.textContent = label(entry);
+            entry.busy = false;
+            draw(entry);
+        },
+        slow(task) {
+            const entry = buttons[task];
+            if (entry && entry.busy) draw(entry, '⏳ Запускается дольше обычного — подождите');
         },
         failed(task, message) {
             inOffice(false);
             const entry = buttons[task];
             if (!entry) return;
-            entry.button.disabled = false;
-            entry.button.textContent = label(entry);
+            entry.busy = false;
+            draw(entry);
             entry.status.textContent = message;
         },
         tabs(list) {
             if (list.some(t => t.active)) inOffice(true);  // впереди документ (в том числе после Alt+Tab)
+            Object.values(buttons).forEach(entry => {
+                const tab = list.find(t => t.name === entry.name);
+                entry.tabId = tab ? tab.id : null;
+                if (tab) entry.busy = false;
+                if (entry.label) draw(entry);
+            });
             if (!tabsBox) return;
             tabsBox.textContent = '';
             tabsBox.hidden = !list.length;

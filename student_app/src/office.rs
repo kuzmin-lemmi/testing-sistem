@@ -8,15 +8,23 @@
 //! - Свой профиль LibreOffice на время теста: иначе файл уйдёт в уже запущенный LibreOffice на обычном
 //!   столе Windows, и ученик его не увидит. Заодно пустые «Недавние документы» и без «Совета дня».
 //! - Все процессы — в Job Object: закончился тест или вышла программа — LibreOffice закрывается.
+//! - LibreOffice стартует долго (на школьном компьютере — до 10 с), поэтому на время теста с файлами он
+//!   запущен заранее, без окон (`--nodefault`): файл открывается за доли секунды. Ученик закрыл последний
+//!   документ — LibreOffice завершается сам, и программа снова запускает его в фоне.
+//! - Кнопка на странице «запускается…», пока окно файла не появилось на экране; файл уже открыт — его окно
+//!   сразу вперёд, без нового запуска.
 //!
 //! Протокол — в начале `office.js`.
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM, RECT};
-use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, IsProcessInJob};
+use windows_sys::Win32::System::JobObjects::{
+    AssignProcessToJobObject, IsProcessInJob, JobObjectBasicAccountingInformation, QueryInformationJobObject,
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+};
 use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use windows_sys::Win32::System::Threading::{
     CreateProcessW, OpenProcess, ResumeThread, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION,
@@ -29,7 +37,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::json;
-use crate::python::{put_task_file, registry_string, JobObject, Page};
+use crate::python::{put_task_file, registry_string, safe_file_name, JobObject, Page};
 use crate::{debug_log, server};
 
 /// Чем открывать файлы задания.
@@ -63,7 +71,24 @@ struct State {
     tabs: Vec<Tab>,
     /// Окна, которые уже видели: новое окно (только что открыли файл) выводим вперёд один раз.
     seen: Vec<isize>,
+    /// Файлы, которые открываются: ждём их окна, чтобы сказать странице «открыто».
+    pending: Vec<Pending>,
+    /// В тесте есть файлы — держать LibreOffice запущенным заранее; когда запускали в последний раз.
+    warm: bool,
+    warmed_at: Option<Instant>,
 }
+
+struct Pending {
+    task: u64,
+    /// Имя файла: окно документа («задание1.xlsx — LibreOffice Calc») или импорта («Импорт текста - [Покупки.csv]»).
+    name: String,
+    since: Instant,
+    slow: bool,
+}
+
+/// Сколько ждать окно файла: дольше `SLOW` — «запускается дольше обычного», дольше `GIVE_UP` — не вышло.
+const SLOW: Duration = Duration::from_secs(25);
+const GIVE_UP: Duration = Duration::from_secs(120);
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 static TEST_WINDOW: AtomicIsize = AtomicIsize::new(0);
@@ -97,10 +122,15 @@ pub fn handle(message: &str, origin: &str, page: &Page) {
                 s.page = Some(page.clone());
                 s.tabs.clear(); // страница новая — вкладки нарисовать заново
             });
+            let warm = message.get("warm") == Some(&json::Json::Bool(true));
+            with_state(|s| s.warm = warm);
             let page = page.clone();
             std::thread::spawn(move || {
                 let office = find();
                 debug_log!("office: {office:?}");
+                if warm {
+                    prewarm();
+                }
                 let (calc, writer) = match office.as_ref().map(|o| &o.kind) {
                     Some(Kind::LibreOffice) => ("LibreOffice Calc", "LibreOffice Writer"),
                     Some(Kind::Excel) => ("Excel", ""),
@@ -114,10 +144,30 @@ pub fn handle(message: &str, origin: &str, page: &Page) {
             let student = message.id("student").unwrap_or(0);
             let Some(file) = message.get("file") else { return };
             let (Some(url), Some(name)) = (file.str("url"), file.str("name")) else { return };
+            let Some(file_name) = safe_file_name(name) else { return };
+            // файл уже открыт (окно документа или импорта) — сразу вперёд, LibreOffice не трогаем
+            if let Some(hwnd) = open_window(&file_name) {
+                show(hwnd);
+                script(page, format!("opened({task})"));
+                return;
+            }
+            let busy = with_state(|s| {
+                let busy = s.pending.iter().any(|p| p.task == task);
+                if !busy {
+                    s.pending.push(Pending { task, name: file_name.clone(), since: Instant::now(), slow: false });
+                }
+                busy
+            });
+            if busy {
+                return; // уже открывается — повторные нажатия ничего не делают
+            }
             let (url, name, origin, page) = (url.to_string(), name.to_string(), origin.to_string(), page.clone());
-            std::thread::spawn(move || match open(student, task, &url, &name, &origin) {
-                Ok(()) => script(&page, format!("opened({task})")),
-                Err(message) => script(&page, format!("failed({task}, {})", json::quote(&message))),
+            std::thread::spawn(move || {
+                // «открыто» скажет watch(), когда окно файла появится на экране
+                if let Err(message) = open(student, task, &url, &name, &origin) {
+                    with_state(|s| s.pending.retain(|p| p.task != task));
+                    script(&page, format!("failed({task}, {})", json::quote(&message)));
+                }
             });
         }
         Some("show") => match message.id("id") {
@@ -131,7 +181,11 @@ pub fn handle(message: &str, origin: &str, page: &Page) {
 
 /// Тест закончился (открылась оценка): закрыть LibreOffice вместе со всеми документами.
 pub fn close_all() {
-    if let Some(job) = with_state(|s| s.job.take()) {
+    if let Some(job) = with_state(|s| {
+        s.warm = false;
+        s.pending.clear();
+        s.job.take()
+    }) {
         job.terminate();
     }
 }
@@ -154,27 +208,78 @@ fn open(student: u64, task: u64, url: &str, name: &str, origin: &str) -> Result<
     let file = put_task_file(origin, url, name, &dir, true)?;
     let command = match office.kind {
         Kind::LibreOffice => {
-            let profile = work_root().join("profile");
-            prepare_profile(&profile);
-            format!(
-                "{} -env:UserInstallation={} --nologo --norestore {}{}",
-                quote(&office.exe.to_string_lossy()),
-                file_url(&profile),
-                calc_filter(&file),
-                quote(&file.to_string_lossy())
-            )
+            libre_office_command(&office, &format!("{}{}", calc_filter(&file), quote(&file.to_string_lossy())))
         }
         // /x — отдельный Excel: иначе файл уйдёт в Excel, уже открытый на обычном столе
         Kind::Excel => format!("{} /x {}", quote(&office.exe.to_string_lossy()), quote(&file.to_string_lossy())),
     };
     debug_log!("office: {command}");
-    let job = with_state(|s| {
+    launch(&command, &dir, Some(job()))
+}
+
+/// Команда LibreOffice в своём профиле.
+fn libre_office_command(office: &Office, args: &str) -> String {
+    let profile = work_root().join("profile");
+    prepare_profile(&profile);
+    format!(
+        "{} -env:UserInstallation={} --nologo --norestore {args}",
+        quote(&office.exe.to_string_lossy()),
+        file_url(&profile)
+    )
+}
+
+/// Job Object для LibreOffice: один на всю программу (до конца теста).
+fn job() -> HANDLE {
+    with_state(|s| {
         if s.job.is_none() {
             s.job = JobObject::create(None);
         }
-        s.job.as_ref().map(|j| j.handle() as isize)
-    });
-    launch(&command, &dir, job.map(|h| h as HANDLE))
+        s.job.as_ref().map(|j| j.handle()).unwrap_or(std::ptr::null_mut())
+    })
+}
+
+/// Сколько процессов сейчас в Job Object (0 — LibreOffice не запущен).
+fn running(job: HANDLE) -> u32 {
+    let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = unsafe { std::mem::zeroed() };
+    let ok = unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectBasicAccountingInformation,
+            &mut info as *mut _ as *mut _,
+            std::mem::size_of_val(&info) as u32,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 { 0 } else { info.ActiveProcesses }
+}
+
+/// LibreOffice заранее, без окон (`--nodefault`): потом файл открывается за доли секунды.
+/// (`--invisible` не годится — открытые потом документы тоже остаются невидимыми.)
+fn prewarm() {
+    let Some(office) = find().filter(|o| o.kind == Kind::LibreOffice) else { return };
+    let job = job();
+    if job.is_null() || running(job) > 0 {
+        return;
+    }
+    with_state(|s| s.warmed_at = Some(Instant::now()));
+    let command = libre_office_command(&office, "--nodefault");
+    debug_log!("office: заранее {command}");
+    let dir = work_root();
+    let _ = std::fs::create_dir_all(&dir);
+    if let Err(message) = launch(&command, &dir, Some(job)) {
+        debug_log!("office: {message}");
+    }
+}
+
+/// Окно уже открытого файла `name`: документ или окно импорта.
+fn open_window(name: &str) -> Option<isize> {
+    let job = with_state(|s| s.job.as_ref().map(|j| j.handle() as isize))?;
+    let windows = job_windows(job as HANDLE);
+    windows
+        .iter()
+        .find(|w| w.document && tab_name(&w.title).0 == name)
+        .or_else(|| windows.iter().find(|w| !w.document && w.title.contains(name)))
+        .map(|w| w.hwnd)
 }
 
 /// Папка ученика `student`. Первый файл нового ученика — папки прежних учеников больше не нужны
@@ -334,6 +439,40 @@ fn watch() {
         } else {
             bring_forward(window.hwnd);
         }
+    }
+    // открываемые файлы: окно появилось — «открыто»; долго — «запускается дольше обычного»; совсем долго — не вышло
+    let mut calls = Vec::new();
+    let (page, rewarm) = with_state(|s| {
+        s.pending.retain_mut(|p| {
+            let shown = all
+                .iter()
+                .any(|w| if w.document { tab_name(&w.title).0 == p.name } else { w.title.contains(&p.name) });
+            if shown {
+                calls.push(format!("opened({})", p.task));
+                return false;
+            }
+            if p.since.elapsed() > GIVE_UP {
+                calls.push(format!("failed({}, {})", p.task, json::quote("LibreOffice не открыл файл — нажмите ещё раз")));
+                return false;
+            }
+            if p.since.elapsed() > SLOW && !p.slow {
+                p.slow = true;
+                calls.push(format!("slow({})", p.task));
+            }
+            true
+        });
+        // ученик закрыл последний документ — LibreOffice завершился; снова запустить его заранее
+        let rewarm =
+            s.warm && s.pending.is_empty() && s.warmed_at.is_none_or(|t| t.elapsed() > Duration::from_secs(5));
+        (s.page.clone(), rewarm)
+    });
+    if let Some(page) = &page {
+        for call in calls {
+            script(page, call);
+        }
+    }
+    if rewarm && running(job as HANDLE) == 0 {
+        std::thread::spawn(prewarm);
     }
     let changed = with_state(|s| {
         if s.tabs == tabs {
@@ -504,6 +643,48 @@ mod tests {
         assert_eq!(tab_name("Числа.xlsx - Excel"), ("Числа.xlsx".to_string(), "calc"));
         assert_eq!(tab_name("Таблица - копия.ods - LibreOffice Calc"), ("Таблица - копия.ods".to_string(), "calc"));
         assert_eq!(tab_name("LibreOffice"), ("LibreOffice".to_string(), "other"));
+    }
+
+    /// Прогрев: LibreOffice заранее без окон (`--nodefault`) — файл потом открывается быстро и видимым окном;
+    /// закрыли документ — LibreOffice завершился (программа запустит его снова).
+    #[test]
+    fn warm_start() {
+        let Some(office) = find() else { return };
+        if office.kind != Kind::LibreOffice {
+            return;
+        }
+        let dir = std::env::temp_dir().join("student_app_office_warm_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Прогрев.csv");
+        std::fs::write(&file, "1,2\n3,4\n").unwrap();
+        let profile = dir.join("profile");
+        prepare_profile(&profile);
+        let job = JobObject::create(None).unwrap();
+        let command = |args: &str| {
+            format!("{} -env:UserInstallation={} --nologo --norestore {args}", quote(&office.exe.to_string_lossy()), file_url(&profile))
+        };
+        launch(&command("--nodefault"), &dir, Some(job.handle())).unwrap();
+        std::thread::sleep(Duration::from_secs(8));
+        assert!(running(job.handle()) > 0, "LibreOffice не работает в фоне");
+        assert!(job_windows(job.handle()).is_empty(), "у прогретого LibreOffice не должно быть окон");
+        let started = Instant::now();
+        launch(&command(&quote(&file.to_string_lossy())), &dir, Some(job.handle())).unwrap();
+        let mut shown = None;
+        while started.elapsed() < Duration::from_secs(20) {
+            if let Some(w) = job_windows(job.handle()).into_iter().find(|w| w.title.contains("Прогрев.csv")) {
+                shown = Some((w, started.elapsed()));
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        job.terminate();
+        let (window, time) = shown.expect("окно файла не появилось после прогрева");
+        eprintln!("после прогрева окно «{}» — за {:.1} с", window.title, time.as_secs_f64());
+        assert!(time < Duration::from_secs(5), "после прогрева дольше 5 с: {time:?}");
+        std::thread::sleep(Duration::from_millis(1500));
+        assert_eq!(running(job.handle()), 0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
